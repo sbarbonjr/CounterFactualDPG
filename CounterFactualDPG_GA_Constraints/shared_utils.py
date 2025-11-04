@@ -38,3 +38,35 @@ def setup_paths():
     constraints_dir = os.path.abspath(os.path.join(notebook_dir, '..', 'constraints'))
     PATH = constraints_dir + '/'
     return notebook_dir, constraints_dir, PATH
+
+
+# ============================================================================
+# Data Loading and Model Training
+# ============================================================================
+
+def load_and_train_model():
+    """
+    Load the Iris dataset, split it, and train a RandomForestClassifier.
+    
+    Returns:
+        tuple: (iris, X, y, X_train, X_test, y_train, y_test, model)
+            - iris: The Iris dataset object
+            - X: Feature data
+            - y: Target labels
+            - X_train, X_test: Training and test feature sets
+            - y_train, y_test: Training and test labels
+            - model: Trained RandomForestClassifier
+    """
+    # Load the Iris dataset
+    iris = load_iris()
+    X = iris.data
+    y = iris.target
+
+    # Split the dataset into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+    # Train a RandomForestClassifier with 3 base learners
+    model = RandomForestClassifier(n_estimators=3, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return iris, X, y, X_train, X_test, y_train, y_test, model
