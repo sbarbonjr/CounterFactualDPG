@@ -36,6 +36,7 @@ def plot_pca_with_counterfactual(model, dataset, target, sample, counterfactual)
 
     # Predict the class of the counterfactual
     counterfactual_class = model.predict(pd.DataFrame([counterfactual]))[0]
+    original_class = model.predict(pd.DataFrame([sample]))[0]
 
     # Plot the PCA results with class colors and 'x' marker for the counterfactual
     plt.figure(figsize=(10, 6))
@@ -52,7 +53,7 @@ def plot_pca_with_counterfactual(model, dataset, target, sample, counterfactual)
 
     plt.scatter(
         original_sample_pca[:, 0], original_sample_pca[:, 1],
-        color='red', label='Original Sample', edgecolor='black'
+        color='red', label='Original Sample', edgecolor=colors[original_class]
     )
     plt.scatter(
         counterfactual_pca[:, 0], counterfactual_pca[:, 1],
