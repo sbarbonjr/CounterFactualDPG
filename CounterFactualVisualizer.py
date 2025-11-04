@@ -14,6 +14,55 @@ plt.rcParams['xtick.labelsize'] = 12  # Font size for x-axis tick labels
 plt.rcParams['ytick.labelsize'] = 12  # Font size for y-axis tick labels
 
 
+def plot_pca_loadings(X, feature_names):
+    """
+    Plot PCA loadings to show feature contributions to principal components.
+    
+    Parameters:
+    -----------
+    X : array-like
+        The feature data
+    feature_names : list
+        Names of the features
+    """
+    # Perform PCA
+    pca = PCA(n_components=2)
+    pca.fit(X)
+    
+    # Get the loadings (components)
+    loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
+    
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Plot arrows for each feature
+    for i, feature in enumerate(feature_names):
+        ax.arrow(0, 0, loadings[i, 0], loadings[i, 1], 
+                head_width=0.05, head_length=0.05, fc='red', ec='red')
+        ax.text(loadings[i, 0] * 1.15, loadings[i, 1] * 1.15, 
+               feature, ha='center', va='center', fontsize=10)
+    
+    # Set plot properties
+    ax.set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.2%} variance)', fontsize=12)
+    ax.set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.2%} variance)', fontsize=12)
+    ax.set_title('PCA Loadings Plot', fontsize=14, fontweight='bold')
+    ax.axhline(y=0, color='k', linestyle='--', linewidth=0.5)
+    ax.axvline(x=0, color='k', linestyle='--', linewidth=0.5)
+    ax.grid(True, alpha=0.3)
+    
+    # Set equal aspect ratio
+    max_val = np.abs(loadings).max() * 1.3
+    ax.set_xlim(-max_val, max_val)
+    ax.set_ylim(-max_val, max_val)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Print explained variance
+    print(f"Explained variance by PC1: {pca.explained_variance_ratio_[0]:.2%}")
+    print(f"Explained variance by PC2: {pca.explained_variance_ratio_[1]:.2%}")
+    print(f"Total explained variance: {sum(pca.explained_variance_ratio_):.2%}")
+
 def plot_pca_with_counterfactual(model, dataset, target, sample, counterfactual):
     """
     Plot a PCA visualization of the dataset with the original sample and counterfactual.
