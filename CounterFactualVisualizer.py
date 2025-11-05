@@ -271,10 +271,10 @@ def plot_pca_with_counterfactual(model, dataset, target, sample, counterfactual)
 
 def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterfactual, class_colors_list=None):
     """
-    Plot a comprehensive comparison between original sample and counterfactual with three visualizations:
-    1. Original sample features as bar chart
-    2. Class probability comparison
-    3. Feature changes
+    Enhanced visualization combining original and counterfactual samples with:
+    1. Side-by-side feature comparison with arrows showing direction of change
+    2. Feature changes (signed changes)
+    3. Class probability comparison
     
     Args:
         model: Trained scikit-learn model
@@ -286,71 +286,122 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
     if class_colors_list is None:
         class_colors_list = ['purple', 'green', 'orange']
     
-    predicted_class = model.predict(sample_df)
-    counterfactual_class = model.predict(pd.DataFrame([counterfactual]))
+    predicted_class = model.predict(sample_df)[0]
+    counterfactual_class = model.predict(pd.DataFrame([counterfactual]))[0]
     
-    # Visualization
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-    # 1. Original Sample Features
+    # Calculate metrics
     feature_list = list(sample.keys())
-    original_values = list(sample.values())
-    colors_bar = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A']
-    axes[0].bar(range(len(feature_list)), original_values, color=colors_bar, alpha=0.7, edgecolor='black', linewidth=2)
-    axes[0].set_xticks(range(len(feature_list)))
-    axes[0].set_xticklabels([f.replace(' (cm)', '').replace('_', ' ') for f in feature_list], rotation=45, ha='right')
-    axes[0].set_ylabel('Value', fontsize=11, fontweight='bold')
-    axes[0].set_title(f'Original Sample\n(Predicted: Class {predicted_class[0]})', 
-                      fontsize=12, fontweight='bold', color=class_colors_list[predicted_class[0]])
-    axes[0].grid(axis='y', alpha=0.3, linestyle='--')
-
-    # 2. Class Probability Comparison
-    class_names = ['Class 0', 'Class 1', 'Class 2']
-    original_probs = model.predict_proba(sample_df)[0]
-    counterfactual_probs = model.predict_proba(pd.DataFrame([counterfactual]))[0]
-
-    x_pos = np.arange(3)
+    original_values = np.array(list(sample.values()))
+    counterfactual_values = np.array(list(counterfactual.values()))
+    changes = counterfactual_values - original_values
+    l2_distance = np.linalg.norm(changes)
+    l1_distance = np.sum(np.abs(changes))
+    
+    # Create figure with custom layout
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    
+    # 1. Combined Feature Comparison with Arrows
+    ax1 = axes[0]
+    x_pos = np.arange(len(feature_list))
     width = 0.35
-
-    bars1 = axes[1].bar(x_pos - width/2, original_probs, width, label='Original', 
-                        color=class_colors_list[predicted_class[0]], alpha=0.8, edgecolor='black', linewidth=1.5)
-    bars2 = axes[1].bar(x_pos + width/2, counterfactual_probs, width, label='Counterfactual', 
-                        color=class_colors_list[counterfactual_class[0]], alpha=0.8, edgecolor='black', linewidth=1.5)
-
-    axes[1].set_xticks(x_pos)
-    axes[1].set_xticklabels(class_names)
-    axes[1].set_ylabel('Probability', fontsize=11, fontweight='bold')
-    axes[1].set_title('Prediction Probabilities', fontsize=12, fontweight='bold')
-    axes[1].legend(loc='upper right', fontsize=10)
-    axes[1].set_ylim(0, 1)
-    axes[1].grid(axis='y', alpha=0.3, linestyle='--')
-
+    
+    # Bars for original and counterfactual
+    bars1 = ax1.barh(x_pos - width/2, original_values, width, 
+                     label='Original', color=class_colors_list[predicted_class], 
+                     alpha=0.7, edgecolor='black', linewidth=1.5)
+    bars2 = ax1.barh(x_pos + width/2, counterfactual_values, width, 
+                     label='Counterfactual', color=class_colors_list[counterfactual_class], 
+                     alpha=0.7, edgecolor='black', linewidth=1.5)
+    
+    # Add arrows showing direction of change
+    for i, (orig, cf, change) in enumerate(zip(original_values, counterfactual_values, changes)):
+        if abs(change) > 0.01:  # Only show arrow if change is significant
+            arrow_color = 'darkgreen' if change < 0 else 'darkred'
+            arrow_style = '<-' if change < 0 else '->'
+            ax1.annotate('', xy=(cf, i + width/2), xytext=(orig, i - width/2),
+                        arrowprops=dict(arrowstyle=arrow_style, color=arrow_color, 
+                                      lw=2, alpha=0.6))
+            # Add change value
+            mid_point = (orig + cf) / 2
+            ax1.text(mid_point, i, f'{change:+.2f}', 
+                    ha='center', va='bottom', fontsize=9, 
+                    fontweight='bold', color=arrow_color,
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
+    
     # Add value labels on bars
     for bars in [bars1, bars2]:
         for bar in bars:
-            height = bar.get_height()
-            axes[1].text(bar.get_x() + bar.get_width()/2., height,
-                        f'{height:.2f}', ha='center', va='bottom', fontsize=9)
-
-    # 3. Feature Changes
-    counterfactual_values = list(counterfactual.values())
-    changes = [cf - orig for cf, orig in zip(counterfactual_values, original_values)]
-    change_colors = ['green' if c < 0 else 'red' if c > 0 else 'gray' for c in changes]
-
-    axes[2].bar(range(len(feature_list)), changes, color=change_colors, alpha=0.7, edgecolor='black', linewidth=2)
-    axes[2].set_xticks(range(len(feature_list)))
-    axes[2].set_xticklabels([f.replace(' (cm)', '').replace('_', ' ') for f in feature_list], rotation=45, ha='right')
-    axes[2].set_ylabel('Change Value', fontsize=11, fontweight='bold')
-    axes[2].set_title(f'Feature Changes\n(Original → Class {predicted_class[0]} to Class {counterfactual_class[0]})', 
-                      fontsize=12, fontweight='bold')
-    axes[2].axhline(y=0, color='black', linestyle='-', linewidth=1)
-    axes[2].grid(axis='y', alpha=0.3, linestyle='--')
-
+            width_bar = bar.get_width()
+            ax1.text(width_bar, bar.get_y() + bar.get_height()/2,
+                    f'{width_bar:.2f}', ha='left', va='center', 
+                    fontsize=9, fontweight='bold')
+    
+    ax1.set_yticks(x_pos)
+    ax1.set_yticklabels([f.replace(' (cm)', '').replace('_', ' ') for f in feature_list])
+    ax1.set_xlabel('Feature Value', fontsize=12, fontweight='bold')
+    ax1.set_title(f'Feature Comparison\nClass {predicted_class} → Class {counterfactual_class}', 
+                 fontsize=13, fontweight='bold')
+    ax1.legend(loc='lower right', fontsize=10)
+    ax1.grid(axis='x', alpha=0.3, linestyle='--')
+    ax1.invert_yaxis()
+    
+    # 2. Feature Changes (Signed changes like original)
+    ax2 = axes[1]
+    changes_values = changes  # Already calculated as counterfactual - original
+    change_colors = ['green' if c < 0 else 'red' if c > 0 else 'gray' for c in changes_values]
+    
+    bars_change = ax2.barh(range(len(feature_list)), changes_values, 
+                           color=change_colors, alpha=0.7, edgecolor='black', linewidth=1.5)
+    ax2.set_yticks(range(len(feature_list)))
+    ax2.set_yticklabels([f.replace(' (cm)', '').replace('_', ' ') for f in feature_list])
+    ax2.set_xlabel('Change Value', fontsize=11, fontweight='bold')
+    ax2.set_title('Feature Changes', fontsize=12, fontweight='bold')
+    ax2.axvline(x=0, color='black', linestyle='-', linewidth=1)
+    ax2.grid(axis='x', alpha=0.3, linestyle='--')
+    ax2.invert_yaxis()
+    
     # Add value labels
-    for i, (change, feature) in enumerate(zip(changes, feature_list)):
-        axes[2].text(i, change, f'{change:+.2f}', ha='center', 
-                    va='bottom' if change >= 0 else 'top', fontsize=9, fontweight='bold')
-
+    for i, (bar, change) in enumerate(zip(bars_change, changes_values)):
+        if abs(change) > 0.01:
+            label = f'{change:+.2f}'
+            # Position text based on bar direction
+            x_pos = change
+            ha = 'left' if change > 0 else 'right'
+            ax2.text(x_pos, bar.get_y() + bar.get_height()/2,
+                    label, ha=ha, va='center', fontsize=9, fontweight='bold')
+    
+    # 3. Class Probability Comparison
+    ax3 = axes[2]
+    class_names = ['Class 0', 'Class 1', 'Class 2']
+    original_probs = model.predict_proba(sample_df)[0]
+    counterfactual_probs = model.predict_proba(pd.DataFrame([counterfactual]))[0]
+    
+    x_pos_prob = np.arange(3)
+    width_prob = 0.35
+    
+    bars1 = ax3.bar(x_pos_prob - width_prob/2, original_probs, width_prob, 
+                   label='Original', color=class_colors_list[predicted_class], 
+                   alpha=0.8, edgecolor='black', linewidth=1.5)
+    bars2 = ax3.bar(x_pos_prob + width_prob/2, counterfactual_probs, width_prob, 
+                   label='Counterfactual', color=class_colors_list[counterfactual_class], 
+                   alpha=0.8, edgecolor='black', linewidth=1.5)
+    
+    ax3.set_xticks(x_pos_prob)
+    ax3.set_xticklabels(class_names)
+    ax3.set_ylabel('Probability', fontsize=11, fontweight='bold')
+    ax3.set_title('Class Probabilities', fontsize=12, fontweight='bold')
+    ax3.legend(loc='upper right', fontsize=10)
+    ax3.set_ylim(0, 1.1)
+    ax3.grid(axis='y', alpha=0.3, linestyle='--')
+    
+    # Add value labels
+    for bars in [bars1, bars2]:
+        for bar in bars:
+            height = bar.get_height()
+            ax3.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{height:.2f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+    
+    plt.suptitle('Counterfactual Explanation Analysis', fontsize=16, fontweight='bold', y=0.98)
     plt.tight_layout()
     plt.show()
 
