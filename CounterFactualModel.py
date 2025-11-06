@@ -153,6 +153,8 @@ class CounterFactualModel:
         import re
         # Remove anything in parentheses (like units)
         feature = re.sub(r'\s*\([^)]*\)', '', feature)
+        # Normalize multiple spaces to single space
+        feature = re.sub(r'\s+', ' ', feature)
         # Strip whitespace and convert to lowercase
         return feature.strip().lower()
     
