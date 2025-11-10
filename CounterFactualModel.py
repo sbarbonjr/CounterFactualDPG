@@ -282,21 +282,15 @@ class CounterFactualModel:
             # Filter the constraints for the specified target class
             class_constraints = self.constraints.get(f"Class {target_class}", [])
 
-            # Find the constraints for this feature
-            for condition in class_constraints:
-                if self._features_match(condition["feature"], feature):
-                    operator = condition["operator"]
-                    constraint_value = condition["value"]
-
-                    # Update the min and max values based on the constraints
-                    if operator == "<":
-                        max_value = min(max_value, constraint_value - 1e-5)
-                    elif operator == "<=":
-                        max_value = min(max_value, constraint_value)
-                    elif operator == ">":
-                        min_value = max(min_value, constraint_value + 1e-5)
-                    elif operator == ">=":
-                        min_value = max(min_value, constraint_value)
+            # Find the constraints for this feature using direct lookup
+            matching_constraint = next(
+                (condition for condition in class_constraints if self._features_match(condition["feature"], feature)),
+                None
+            )
+            
+            if matching_constraint:
+                min_value = matching_constraint.get("min") if matching_constraint.get("min") is not None else -np.inf
+                max_value = matching_constraint.get("max") if matching_constraint.get("max") is not None else np.inf
 
             # Incorporate non-actionable constraints
             if self.dict_non_actionable and feature in self.dict_non_actionable:
