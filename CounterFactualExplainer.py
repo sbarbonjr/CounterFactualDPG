@@ -25,13 +25,21 @@ class CounterFactualExplainer:
         self.target_class = target_class
 
     def explain_feature_modifications(self):
+        """
+        Returns a list of dictionaries containing feature modification details.
+        Each dictionary contains: feature_name, old_value, new_value
+        """
         changes = []
         for feature in self.original_sample:
             original_value = self.original_sample[feature]
             new_value = self.counterfactual_sample.get(feature, original_value)
             if original_value != new_value:
-                changes.append(f"Feature '{feature}' changed from {original_value} to {new_value}.")
-        return "\n".join(changes)
+                changes.append({
+                    'feature_name': feature,
+                    'old_value': original_value,
+                    'new_value': new_value
+                })
+        return changes
 
     def check_constraints_respect(self):
         valid, penalty = self.model.validate_constraints(self.counterfactual_sample, self.original_sample, self.target_class)
