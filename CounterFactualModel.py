@@ -198,29 +198,24 @@ class CounterFactualModel:
             # Check if the feature value has changed
             if new_value != original_value:
                 # Validate numerical constraints specific to the target class
-                for condition in class_constraints:
-                    if self._features_match(condition["feature"], feature):
-                        operator = condition["operator"]
-                        constraint_value = condition["value"]
-
-                        #print("Feature:", feature)
-                        #print("Operator:", operator)
-                        #print("Constraint Value:", constraint_value)
-                        #print("New Value:", new_value)
-
-                        # Check if the new value violates any constraints
-                        if operator == "<" and not (new_value < constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == "<=" and not (new_value <= constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == ">" and not (new_value > constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == ">=" and not (new_value >= constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
+                matching_constraint = next(
+                    (condition for condition in class_constraints if self._features_match(condition["feature"], feature)),
+                    None
+                )
+                
+                if matching_constraint:
+                    min_val = matching_constraint.get("min")
+                    max_val = matching_constraint.get("max")
+                    
+                    # Check if the new value violates min constraint
+                    if min_val is not None and new_value < min_val:
+                        valid_change = False
+                        penalty += abs(new_value - min_val)
+                    
+                    # Check if the new value violates max constraint
+                    if max_val is not None and new_value > max_val:
+                        valid_change = False
+                        penalty += abs(new_value - max_val)
 
         # Collect all constraints that are NOT related to the target class
         non_target_class_constraints = [
@@ -236,24 +231,24 @@ class CounterFactualModel:
             # Check if the feature value has changed
             if new_value != original_value:
                 # Validate numerical constraints NOT related to the target class
-                for condition in non_target_class_constraints:
-                    if self._features_match(condition["feature"], feature):
-                        operator = condition["operator"]
-                        constraint_value = condition["value"]
-
-                        # Check if the new value violates any constraints
-                        if operator == "<" and (new_value < constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == "<=" and (new_value <= constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == ">" and (new_value > constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == ">=" and (new_value >= constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
+                matching_constraint = next(
+                    (condition for condition in non_target_class_constraints if self._features_match(condition["feature"], feature)),
+                    None
+                )
+                
+                if matching_constraint:
+                    min_val = matching_constraint.get("min")
+                    max_val = matching_constraint.get("max")
+                    
+                    # Check if the new value should NOT satisfy min constraint (inverse logic for non-target classes)
+                    if min_val is not None and new_value >= min_val:
+                        valid_change = False
+                        penalty += abs(new_value - min_val)
+                    
+                    # Check if the new value should NOT satisfy max constraint (inverse logic for non-target classes)
+                    if max_val is not None and new_value <= max_val:
+                        valid_change = False
+                        penalty += abs(new_value - max_val)
 
 
         #print('Total Penalty:', penalty)
