@@ -256,6 +256,8 @@ class CounterFactualModel:
 
 
     def get_valid_sample(self, sample, target_class):
+        print("Getting valid sample for target class:", target_class)
+        print("Original sample:", sample)
         """
         Generate a valid sample that meets all constraints for the specified target class
         while respecting actionable changes.
@@ -287,6 +289,8 @@ class CounterFactualModel:
                 min_value = matching_constraint.get("min") if matching_constraint.get("min") is not None else -np.inf
                 max_value = matching_constraint.get("max") if matching_constraint.get("max") is not None else np.inf
 
+            print(f"Feature: {feature}, Original Value: {original_value}, Min: {min_value}, Max: {max_value}")
+            
             # Incorporate non-actionable constraints
             if self.dict_non_actionable and feature in self.dict_non_actionable:
                 actionability = self.dict_non_actionable[feature]
@@ -305,7 +309,7 @@ class CounterFactualModel:
                 max_value = min_value + 10  # Default upper bound if no constraint is specified
 
             adjusted_sample[feature] = np.random.uniform(min_value, max_value)
-
+        print("Adjusted sample:", adjusted_sample)
         return adjusted_sample
 
     def calculate_sparsity(self, original_sample, counterfactual_sample):
