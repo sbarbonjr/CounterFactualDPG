@@ -289,19 +289,27 @@ class CounterFactualModel:
                 min_value = matching_constraint.get("min") if matching_constraint.get("min") is not None else -np.inf
                 max_value = matching_constraint.get("max") if matching_constraint.get("max") is not None else np.inf
 
-            print(f"Feature: {feature}, Original Value: {original_value}, Min: {min_value}, Max: {max_value}")
-
             # Incorporate non-actionable constraints
             if self.dict_non_actionable and feature in self.dict_non_actionable:
                 actionability = self.dict_non_actionable[feature]
+                
                 if actionability == "non_decreasing":
                     min_value = max(min_value, original_value)
+                    if min_value > max_value:
+                        max_value = min_value + min_value * 0.1  # Adjust to ensure valid range
                 elif actionability == "non_increasing":
                     max_value = min(max_value, original_value)
+                    if max_value < min_value:
+                        min_value = max_value + max_value * 0.1  # Adjust to ensure valid range
                 elif actionability == "no_change":
                     adjusted_sample[feature] = original_value
                     continue
 
+                if actionability != "no_change":
+                    print(f"Feature: {feature}, Original Value: {original_value}, Min: {min_value}, Max: {max_value}")
+                    print(f"- Actionability constraint for {feature}: {actionability}")
+                    print(f"- Adjusted Min: {min_value}, Adjusted Max: {max_value}")
+                
             # Generate a random value within the valid range
             if min_value == -np.inf:
                 min_value = 0  # Default lower bound if no constraint is specified
