@@ -8,7 +8,9 @@ from scipy.spatial.distance import euclidean, cityblock, cosine
 from scipy.spatial.distance import cdist
 
 class CounterFactualModel:
-    def __init__(self, model, constraints, dict_non_actionable=None, verbose=False):
+    def __init__(self, model, constraints, dict_non_actionable=None, verbose=False, 
+                 diversity_weight=0.5, repulsion_weight=4.0, boundary_weight=15.0, 
+                 distance_factor=2.0, sparsity_factor=1.0, constraints_factor=3.0):
         """
         Initialize the CounterFactualDPG object.
 
@@ -19,6 +21,12 @@ class CounterFactualModel:
               non_decreasing: feature cannot decrease
               non_increasing: feature cannot increase
               no_change: feature cannot change
+            diversity_weight (float): Weight for diversity bonus in fitness calculation.
+            repulsion_weight (float): Weight for repulsion bonus in fitness calculation.
+            boundary_weight (float): Weight for boundary proximity in fitness calculation.
+            distance_factor (float): Weight for distance component in fitness calculation.
+            sparsity_factor (float): Weight for sparsity component in fitness calculation.
+            constraints_factor (float): Weight for constraint violation component in fitness calculation.
         """
         self.model = model
         self.constraints = constraints
@@ -26,6 +34,12 @@ class CounterFactualModel:
         self.average_fitness_list = []
         self.best_fitness_list = []
         self.verbose = verbose
+        self.diversity_weight = diversity_weight
+        self.repulsion_weight = repulsion_weight
+        self.boundary_weight = boundary_weight
+        self.distance_factor = distance_factor
+        self.sparsity_factor = sparsity_factor
+        self.constraints_factor = constraints_factor
 
     def is_actionable_change(self, counterfactual_sample, original_sample):
       """
@@ -320,9 +334,84 @@ class CounterFactualModel:
         sparsity = unchanged_features / total_features
         return sparsity
 
-    def calculate_fitness(self, individual, original_features, sample, target_class, metric="cosine"):
+    def individual_diversity(self, individual, population):
+        """
+        Calculate the average distance from this individual to all others in the population.
+        
+        Args:
+            individual (dict): The individual to calculate diversity for.
+            population (list): List of all individuals in the population.
+            
+        Returns:
+            float: Average distance to other individuals.
+        """
+        if len(population) <= 1:
+            return 0.0
+        
+        ind_array = np.array([individual[key] for key in sorted(individual.keys())])
+        distances = []
+        
+        for other in population:
+            other_array = np.array([other[key] for key in sorted(other.keys())])
+            if not np.array_equal(ind_array, other_array):
+                distances.append(np.linalg.norm(ind_array - other_array))
+        
+        return np.mean(distances) if distances else 0.0
+
+    def min_distance_to_others(self, individual, population):
+        """
+        Calculate the minimum distance from this individual to any other in the population.
+        
+        Args:
+            individual (dict): The individual to calculate distance for.
+            population (list): List of all individuals in the population.
+            
+        Returns:
+            float: Minimum distance to nearest neighbor.
+        """
+        if len(population) <= 1:
+            return 0.0
+        
+        ind_array = np.array([individual[key] for key in sorted(individual.keys())])
+        distances = []
+        
+        for other in population:
+            other_array = np.array([other[key] for key in sorted(other.keys())])
+            if not np.array_equal(ind_array, other_array):
+                distances.append(np.linalg.norm(ind_array - other_array))
+        
+        return min(distances) if distances else 0.0
+
+    def distance_to_boundary_line(self, individual, target_class):
+        """
+        Calculate distance to decision boundary based on class probabilities.
+        
+        Args:
+            individual (dict): The individual to calculate boundary distance for.
+            target_class (int): The target class.
+            
+        Returns:
+            float: Distance to decision boundary.
+        """
+        features = np.array([individual[key] for key in sorted(individual.keys())]).reshape(1, -1)
+        
+        try:
+            probs = self.model.predict_proba(features)[0]
+            target_prob = probs[target_class]
+            other_probs = [p for i, p in enumerate(probs) if i != target_class]
+            max_other_prob = max(other_probs) if other_probs else 0.0
+            
+            # Distance to boundary is the difference between target and highest other class
+            boundary_distance = abs(target_prob - max_other_prob)
+            return boundary_distance
+        except:
+            # Fallback if model doesn't support predict_proba
+            return 0.05
+
+    def calculate_fitness(self, individual, original_features, sample, target_class, metric="cosine", population=None):
             """
-            Calculate the fitness score for an individual sample.
+            Calculate the fitness score for an individual sample using weighted components.
+            Based on the total_fitness logic from dpg_aug.ipynb.
 
             Args:
                 individual (dict): The individual sample with feature values.
@@ -330,43 +419,66 @@ class CounterFactualModel:
                 sample (dict): The original sample with feature values.
                 target_class (int): The desired class for the counterfactual.
                 metric (str): The distance metric to use for calculating distance.
+                population (list): The current population for diversity calculations.
 
             Returns:
-                float: The fitness score for the individual.
+                float: The fitness score for the individual (lower is better).
             """
-            #print('individual', individual)
-
+            INVALID_FITNESS = 1e6  # Large penalty for invalid samples
+            
             # Convert individual feature values to a numpy array
             features = np.array([individual[feature] for feature in sample.keys()]).reshape(1, -1)
 
+            # Check if the change is actionable
+            if not self.is_actionable_change(individual, sample):
+                return INVALID_FITNESS
+
             # Calculate validity score based on class
             is_valid_class = self.check_validity(features.flatten(), original_features.flatten(), target_class)
-            #print('is_valid_class', is_valid_class)
-
-            # Calculate distance score
-            distance_score = self.calculate_distance(original_features, features.flatten(), metric)
-
-            #Calculate sparcity (number of features modified)
-            sparsity_score = self.calculate_sparsity(sample, individual)
-
-            # Calculate_manufold_distance
-            #manifold_distance = self.calculate_manifold_distance(self.X, individual)
-            #print('calculate_manifold_distance', manifold_distance)
 
             # Check the constraints
             is_valid_constraint, penalty_constraints = self.validate_constraints(individual, sample, target_class)
 
-            # Check if the change is actionable
-            if not self.is_actionable_change(individual, sample) or not is_valid_class:
-                fitness = +np.inf
-                return fitness
-
-            if is_valid_class :
-                fitness = (2*distance_score) + penalty_constraints + sparsity_score
-            elif is_valid_constraint:
-                fitness = 5 * ((2*distance_score) + penalty_constraints + sparsity_score)  # High penalty for invalid samples
+            # Base fitness calculation
+            if not is_valid_class:
+                # If class is wrong, return high penalty
+                return INVALID_FITNESS
+            
+            # Calculate core components
+            distance_score = self.calculate_distance(original_features, features.flatten(), metric)
+            sparsity_score = self.calculate_sparsity(sample, individual)
+            
+            # Base fitness (minimize distance and sparsity, penalize constraint violations)
+            base_fitness = (self.distance_factor * distance_score + 
+                          self.sparsity_factor * sparsity_score + 
+                          self.constraints_factor * penalty_constraints)
+            
+            # If population is provided, add diversity and repulsion bonuses
+            if population is not None and len(population) > 1:
+                # Diversity bonus: reward being different from others
+                div = self.individual_diversity(individual, population)
+                div_bonus = self.diversity_weight * div
+                
+                # Repulsion bonus: reward having minimum distance to nearest neighbor
+                min_d = self.min_distance_to_others(individual, population)
+                rep_bonus = self.repulsion_weight * min_d
+                
+                # Boundary bonus: reward proximity to decision boundary
+                dist_line = self.distance_to_boundary_line(individual, target_class)
+                line_bonus = 1.0 / (1.0 + dist_line) * self.boundary_weight
+                
+                # Penalty for being too far from boundary
+                boundary_penalty = 50.0 if dist_line > 0.1 else 0.0
+                
+                # Total fitness (lower is better, so we subtract bonuses)
+                fitness = base_fitness - div_bonus - rep_bonus - line_bonus + boundary_penalty
             else:
-                fitness = 10 * ((2*distance_score) + penalty_constraints + sparsity_score)  # High penalty for invalid samples
+                # Without population, just use base fitness
+                fitness = base_fitness
+            
+            # Additional penalty for constraint violations
+            if not is_valid_constraint:
+                fitness *= 5.0  # Multiply penalty for constraint violations
 
             return fitness
 
@@ -390,9 +502,9 @@ class CounterFactualModel:
       for generation in range(generations):
           fitness_scores = []
 
-          # Calculate fitness for each individual
+          # Calculate fitness for each individual (pass population for diversity/repulsion)
           for individual in population:
-              fitness = self.calculate_fitness(individual, original_features, sample, target_class, metric)
+              fitness = self.calculate_fitness(individual, original_features, sample, target_class, metric, population)
               fitness_scores.append(fitness)
 
           # Find the best candidate and its fitness score
