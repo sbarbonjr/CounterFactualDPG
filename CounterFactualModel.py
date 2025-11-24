@@ -487,10 +487,9 @@ class CounterFactualModel:
             dict: A modified sample representing the counterfactual or None if not found.
         """
         sample_class = self.model.predict(pd.DataFrame([sample]))[0]
-        # Check if the predicted class matches the desired class
+
         if sample_class == target_class:
             raise ValueError("Target class need to be different from the predicted class label.")
-        #counterfactual = None
-        #while counterfactual is None:
+
         counterfactual = self.genetic_algorithm(sample, target_class, population_size, generations)
         return counterfactual
