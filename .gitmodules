@@ -4,3 +4,6 @@
 [submodule "Scamander"]
 	path = Scamander
 	url = https://github.com/Meta-Group/Scamander.git
+[submodule "ECE"]
+	path = ECE
+	url = https://github.com/Meta-Group/ECE.git
