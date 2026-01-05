@@ -7,6 +7,8 @@ import ast
 from scipy.spatial.distance import euclidean, cityblock, cosine
 from scipy.spatial.distance import cdist
 
+from deap import base, creator, tools, algorithms
+
 class CounterFactualModel:
     def __init__(self, model, constraints, dict_non_actionable=None, verbose=False, 
                  diversity_weight=0.5, repulsion_weight=4.0, boundary_weight=15.0, 
@@ -483,109 +485,151 @@ class CounterFactualModel:
             return fitness
 
 
+    def _create_deap_individual(self, sample_dict, feature_names):
+        """Create a DEAP individual from a dictionary."""
+        individual = creator.Individual(sample_dict)
+        return individual
+
+    def _mutate_individual(self, individual, sample, feature_names, mutation_rate):
+        """Custom mutation operator that respects actionability constraints."""
+        for feature in feature_names:
+            if np.random.rand() < mutation_rate:
+                # Apply mutation only if the feature is actionable
+                if self.dict_non_actionable and feature in self.dict_non_actionable:
+                    actionability = self.dict_non_actionable[feature]
+                    original_value = sample[feature]
+                    if actionability == "non_decreasing":
+                        mutation_value = np.random.uniform(0, 0.5)  # Only allow increase
+                        individual[feature] += mutation_value
+                    elif actionability == "non_increasing":
+                        mutation_value = np.random.uniform(-0.5, 0)  # Only allow decrease
+                        individual[feature] += mutation_value
+                    elif actionability == "no_change":
+                        individual[feature] = original_value  # Do not change
+                    else:
+                        # If no specific actionability rule, apply normal mutation
+                        individual[feature] += np.random.uniform(-0.5, 0.5)
+                else:
+                    # If the feature is not in the non-actionable list, apply normal mutation
+                    individual[feature] += np.random.uniform(-0.5, 0.5)
+
+                # Ensure offspring values stay within valid domain constraints
+                individual[feature] = np.round(max(0, individual[feature]), 2)
+        return individual,
+
     def genetic_algorithm(self, sample, target_class, population_size=100, generations=100, mutation_rate=0.8, metric="euclidean", delta_threshold=0.01, patience=10):
-      # Initialize population with random values within a reasonable range
-      population = []
-      feature_names = list(sample.keys())
-      previous_best_fitness = float('inf')
-      stable_generations = 0  # Counter for generations with minimal fitness improvement
-
-      for _ in range(population_size):
-          individual = self.get_valid_sample(sample, target_class)
-          population.append(individual)
-
-      original_features = np.array([sample[feature] for feature in feature_names])
-
-      self.best_fitness_list = []
-      self.average_fitness_list = []
-      # Main loop for generations
-      for generation in range(generations):
-          fitness_scores = []
-
-          # Calculate fitness for each individual (pass population for diversity/repulsion)
-          for individual in population:
-              fitness = self.calculate_fitness(individual, original_features, sample, target_class, metric, population)
-              fitness_scores.append(fitness)
-
-          # Find the best candidate and its fitness score
-          best_index = np.argmin(fitness_scores)
-          best_candidate = population[best_index]
-          best_fitness = fitness_scores[best_index]
-
-          # Check for convergence based on the fitness delta threshold
-          fitness_improvement = previous_best_fitness - best_fitness
-          if fitness_improvement < delta_threshold:
-              stable_generations += 1
-          else:
-              stable_generations = 0  # Reset if there's sufficient improvement
-
-          # Print the average fitness and the best candidate
-
-          finite_fitness_scores = np.array(fitness_scores)
-          finite_fitness_scores[np.isinf(finite_fitness_scores)] = np.nan
-          average_fitness = np.nanmean(finite_fitness_scores)
-          if self.verbose:
-            print(f"****** Generation {generation + 1}: Average Fitness = {average_fitness:.4f}, Best Fitness = {best_fitness:.4f}, fitness improvement = {fitness_improvement:.4f}")
-
-          previous_best_fitness = best_fitness
-          self.best_fitness_list.append(best_fitness)
-          self.average_fitness_list.append(average_fitness)
-
-          # Stop if improvement is less than the threshold for a consecutive number of generations
-          if stable_generations >= patience:
-              if self.verbose:
-                print(f"Convergence reached at generation {generation + 1}")
-              break
-
-            # Use tournament selection to choose parents
-          selected_parents = []
-          for _ in range(population_size):
-              tournament = np.random.choice(population, size=4, replace=False)
-              tournament_fitness = [fitness_scores[population.index(ind)] for ind in tournament]
-              selected_parents.append(tournament[np.argmin(tournament_fitness)])
-
-          # Generate new population using crossover and mutation
-          new_population = []
-          for parent in selected_parents:
-              offspring = parent.copy()
-              for feature in feature_names:
-                  if np.random.rand() < mutation_rate:
-                      # Apply mutation only if the feature is actionable
-                      if self.dict_non_actionable and feature in self.dict_non_actionable:
-                          actionability = self.dict_non_actionable[feature]
-                          original_value = parent[feature]
-                          if actionability == "non_decreasing":
-                              mutation_value = np.random.uniform(0, 0.5)  # Only allow increase
-                              offspring[feature] += mutation_value
-                          elif actionability == "non_increasing":
-                              mutation_value = np.random.uniform(-0.5, 0)  # Only allow decrease
-                              offspring[feature] += mutation_value
-                          elif actionability == "no_change":
-                              offspring[feature] = original_value  # Do not change
-                          else:
-                              # If no specific actionability rule, apply normal mutation
-                              offspring[feature] += np.random.uniform(-0.5, 0.5)
-                      else:
-                          # If the feature is not in the non-actionable list, apply normal mutation
-                          offspring[feature] += np.random.uniform(-0.5, 0.5)
-
-                      # Ensure offspring values stay within valid domain constraints
-                      offspring[feature] = np.round(max(0, offspring[feature]), 2)  # Adjust this based on domain-specific constraints
-              new_population.append(offspring)
-
-
-          # Reduce mutation rate over generations (adaptive mutation)
-          mutation_rate *= 0.99
-
-          # Update population
-          population = new_population
-
-      if best_fitness == np.inf:
-          return None
-
-      # Return the best individual based on the lowest fitness score
-      best_index = np.argmin(fitness_scores)
-      return population[best_index]
+        """Genetic algorithm implementation using DEAP framework."""
+        feature_names = list(sample.keys())
+        original_features = np.array([sample[feature] for feature in feature_names])
+        
+        # Reset DEAP classes if they already exist
+        if hasattr(creator, "FitnessMin"):
+            del creator.FitnessMin
+        if hasattr(creator, "Individual"):
+            del creator.Individual
+        
+        # Create DEAP types
+        creator.create("FitnessMin", base.Fitness, weights=(-1.0,))  # Minimize fitness
+        creator.create("Individual", dict, fitness=creator.FitnessMin)
+        
+        # Initialize toolbox
+        toolbox = base.Toolbox()
+        
+        # Register individual creation
+        toolbox.register("individual", self._create_deap_individual, 
+                        sample_dict=self.get_valid_sample(sample, target_class),
+                        feature_names=feature_names)
+        
+        # Register population creation
+        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+        
+        # Register genetic operators
+        toolbox.register("evaluate", lambda ind: (self.calculate_fitness(
+            ind, original_features, sample, target_class, metric, population),))
+        toolbox.register("select", tools.selTournament, tournsize=4)
+        toolbox.register("mutate", self._mutate_individual, 
+                        sample=sample, 
+                        feature_names=feature_names,
+                        mutation_rate=mutation_rate)
+        
+        # Create initial population
+        population = [self._create_deap_individual(self.get_valid_sample(sample, target_class), feature_names) 
+                     for _ in range(population_size)]
+        
+        # Setup statistics
+        stats = tools.Statistics(lambda ind: ind.fitness.values)
+        stats.register("avg", lambda x: np.nanmean([val[0] for val in x if not np.isinf(val[0])]))
+        stats.register("min", lambda x: np.nanmin([val[0] for val in x if not np.isinf(val[0])]) if any(not np.isinf(val[0]) for val in x) else np.inf)
+        
+        # Setup hall of fame to keep best individuals
+        hof = tools.HallOfFame(1)
+        
+        self.best_fitness_list = []
+        self.average_fitness_list = []
+        previous_best_fitness = float('inf')
+        stable_generations = 0
+        current_mutation_rate = mutation_rate
+        
+        # Evolution loop
+        for generation in range(generations):
+            # Evaluate the entire population
+            fitnesses = list(map(toolbox.evaluate, population))
+            for ind, fit in zip(population, fitnesses):
+                ind.fitness.values = fit
+            
+            # Update statistics and hall of fame
+            record = stats.compile(population)
+            hof.update(population)
+            
+            best_fitness = record["min"]
+            average_fitness = record["avg"]
+            
+            self.best_fitness_list.append(best_fitness)
+            self.average_fitness_list.append(average_fitness)
+            
+            # Check for convergence
+            fitness_improvement = previous_best_fitness - best_fitness
+            if fitness_improvement < delta_threshold:
+                stable_generations += 1
+            else:
+                stable_generations = 0
+            
+            if self.verbose:
+                print(f"****** Generation {generation + 1}: Average Fitness = {average_fitness:.4f}, Best Fitness = {best_fitness:.4f}, fitness improvement = {fitness_improvement:.4f}")
+            
+            previous_best_fitness = best_fitness
+            
+            # Stop if convergence reached
+            if stable_generations >= patience:
+                if self.verbose:
+                    print(f"Convergence reached at generation {generation + 1}")
+                break
+            
+            # Selection
+            offspring = toolbox.select(population, len(population))
+            offspring = [toolbox.clone(ind) for ind in offspring]
+            
+            # Mutation
+            for mutant in offspring:
+                toolbox.mutate(mutant)
+                del mutant.fitness.values
+            
+            # Reduce mutation rate over generations (adaptive mutation)
+            current_mutation_rate *= 0.99
+            toolbox.unregister("mutate")
+            toolbox.register("mutate", self._mutate_individual, 
+                           sample=sample, 
+                           feature_names=feature_names,
+                           mutation_rate=current_mutation_rate)
+            
+            # Replace population
+            population[:] = offspring
+        
+        # Return the best individual found
+        if hof[0].fitness.values[0] == np.inf:
+            return None
+        
+        return dict(hof[0])
 
     def generate_counterfactual(self, sample, target_class, population_size=100, generations=100 ):
         """
