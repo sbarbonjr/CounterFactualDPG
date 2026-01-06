@@ -517,6 +517,21 @@ class CounterFactualModel:
                 individual[feature] = np.round(max(0, individual[feature]), 2)
         return individual,
 
+    def _crossover_dict(self, ind1, ind2, indpb):
+        """Custom crossover operator for dict-based individuals.
+        
+        Args:
+            ind1, ind2: Parent individuals (dicts)
+            indpb: Probability of swapping each feature
+            
+        Returns:
+            Tuple of two offspring individuals
+        """
+        for key in ind1.keys():
+            if np.random.rand() < indpb:
+                ind1[key], ind2[key] = ind2[key], ind1[key]
+        return ind1, ind2
+
     def genetic_algorithm(self, sample, target_class, population_size=100, generations=100, mutation_rate=0.8, metric="euclidean", delta_threshold=0.01, patience=10, n_jobs=-1):
         """Genetic algorithm implementation using DEAP framework.
         
@@ -557,8 +572,8 @@ class CounterFactualModel:
         # Register population creation
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
         
-        # Register mating
-        toolbox.register("mate", tools.cxUniform, indpb=0.6)
+        # Register mating with custom dict crossover
+        toolbox.register("mate", self._crossover_dict, indpb=0.6)
 
         # Register genetic operators
         toolbox.register("evaluate", lambda ind: (self.calculate_fitness(
