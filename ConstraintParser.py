@@ -1,6 +1,9 @@
 import ast
 import re
 import json
+import os
+import sys
+import numpy as np
 
 class ConstraintParser:
     def __init__(self, filename=None):
@@ -151,3 +154,100 @@ class ConstraintParser:
                 except json.JSONDecodeError as e:
                     print(f"Error parsing JSON for {class_label}: {e}")
         return self.constraints_dict
+
+    @staticmethod
+    def extract_constraints_from_dataset(model, train_features, train_labels, feature_names):
+        """
+        Extract constraints from the dataset using Decision Predicate Graph (DPG).
+        
+        Args:
+            model: Trained sklearn model
+            train_features: Training features array
+            train_labels: Training labels array
+            feature_names: List of feature names
+            
+        Returns:
+            Dictionary mapping class labels to feature constraints (min/max format)
+        """
+        # Import DPG modules
+        sys.path.insert(0, os.path.abspath('DPG'))
+        from dpg.core import DecisionPredicateGraph
+        
+        # Build DPG from the trained model
+        config_path = os.path.join('DPG', 'config.yaml')
+        dpg = DecisionPredicateGraph(
+            model=model,
+            feature_names=feature_names,
+            target_names=np.unique(train_labels).astype(str).tolist(),
+            config_file=config_path
+        )
+        dot = dpg.fit(train_features)
+        
+        # Convert the Digraph object to string
+        dot_string = dot.source if hasattr(dot, 'source') else str(dot)
+        
+        # Extract decision rules from the graph
+        # Parse the graph to extract feature bounds per class
+        constraints_dict = {}
+        
+        # Parse DOT graph to extract constraints
+        for line in dot_string.split('\n'):
+            line = line.strip()
+            if '->' in line and '[label=' in line:
+                # Extract feature conditions from edges
+                try:
+                    label_start = line.find('[label="') + 8
+                    label_end = line.find('"]', label_start)
+                    if label_start > 7 and label_end > label_start:
+                        label = line[label_start:label_end]
+                        
+                        # Parse conditions like "feature <= value" or "feature > value"
+                        for condition in label.split('\\n'):
+                            condition = condition.strip()
+                            if '<=' in condition or '>' in condition or '<' in condition or '>=' in condition:
+                                for feat_name in feature_names:
+                                    if feat_name in condition:
+                                        # Will be processed in next step
+                                        pass
+                except:
+                    pass
+            elif 'label=' in line and 'Class' in line:
+                # Extract class nodes
+                try:
+                    label_start = line.find('label="') + 7
+                    label_end = line.find('"', label_start)
+                    if label_start > 6 and label_end > label_start:
+                        label = line[label_start:label_end]
+                        if 'Class' in label:
+                            class_name = label.replace('Class ', '').strip()
+                            if class_name not in constraints_dict:
+                                constraints_dict[class_name] = {}
+                except:
+                    pass
+        
+        # Initialize constraint structure for each class with feature bounds
+        for class_label in np.unique(train_labels):
+            class_str = str(class_label)
+            if class_str not in constraints_dict:
+                constraints_dict[class_str] = {}
+            
+            # For each feature, find min/max bounds from training data for this class
+            class_mask = train_labels == class_label
+            class_features = train_features[class_mask]
+            
+            for idx, feat_name in enumerate(feature_names):
+                feat_values = class_features[:, idx]
+                constraints_dict[class_str][feat_name] = {
+                    'min': float(np.percentile(feat_values, 5)),  # Use 5th percentile as lower bound
+                    'max': float(np.percentile(feat_values, 95))  # Use 95th percentile as upper bound
+                }
+        
+        # Convert to expected format: {class: [{'feature': name, 'min': val, 'max': val}, ...]}
+        formatted_constraints = {}
+        for class_label, feature_bounds in constraints_dict.items():
+            formatted_constraints[f"Class {class_label}"] = [
+                {'feature': feat_name, 'min': bounds['min'], 'max': bounds['max']}
+                for feat_name, bounds in feature_bounds.items()
+            ]
+        
+        return formatted_constraints
