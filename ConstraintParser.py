@@ -5,6 +5,14 @@ import os
 import sys
 import numpy as np
 
+# Add DPG to path for imports
+_dpg_path = os.path.join(os.path.dirname(__file__), 'DPG')
+if _dpg_path not in sys.path:
+    sys.path.insert(0, _dpg_path)
+
+from dpg.core import DecisionPredicateGraph
+from metrics.graph import GraphMetrics
+
 class ConstraintParser:
     def __init__(self, filename=None):
         self.filename = filename
@@ -171,13 +179,8 @@ class ConstraintParser:
         Returns:
             Dictionary mapping class labels to feature constraints (min/max format)
         """
-        # Import DPG modules
-        sys.path.insert(0, os.path.abspath('DPG'))
-        from dpg.core import DecisionPredicateGraph
-        from metrics.graph import GraphMetrics
-        
         # Build DPG from the trained model
-        config_path = os.path.join('DPG', 'config.yaml')
+        config_path = os.path.join(os.path.dirname(__file__), 'DPG', 'config.yaml')
         dpg = DecisionPredicateGraph(
             model=model,
             feature_names=feature_names,
