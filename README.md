@@ -11,7 +11,9 @@ For Linux/Mac Users:
   # Install DPG
   pip install -r ./requirements.txt
   ```
-nbstripout as a pre-commit hook is recommended to keep notebooks clean of output cells.
-```
-nbstripout --install
+nbstripout is recommended to keep notebooks clean of output cells. This one is better installed globally, then enabled as a hook in the repository:
+
+  ```bash
+  pip install nbstripout
+  nbstripout --install
 ```
