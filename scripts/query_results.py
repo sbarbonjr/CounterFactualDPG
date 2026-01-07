@@ -35,11 +35,12 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def list_runs(project: str, tags: Optional[List[str]] = None, limit: int = 50):
+def list_runs(project: str, entity: str = 'mllab-ts-universit-di-trieste', tags: Optional[List[str]] = None, limit: int = 50):
     """List all runs in a WandB project.
     
     Args:
         project: WandB project name
+        entity: WandB entity (username/team)
         tags: Optional list of tags to filter by
         limit: Maximum number of runs to return
     """
@@ -49,10 +50,10 @@ def list_runs(project: str, tags: Optional[List[str]] = None, limit: int = 50):
     if tags:
         filters["tags"] = {"$in": tags}
     
-    runs = api.runs(project, filters=filters)
+    runs = api.runs(f"{entity}/{project}", filters=filters)
     
     print(f"\n{'='*80}")
-    print(f"Runs in project: {project}")
+    print(f"Runs in project: {entity}/{project}")
     if tags:
         print(f"Filtered by tags: {tags}")
     print(f"{'='*80}\n")
@@ -83,12 +84,13 @@ def list_runs(project: str, tags: Optional[List[str]] = None, limit: int = 50):
     return df
 
 
-def compare_runs(project: str, run_ids: List[str], metrics: Optional[List[str]] = None):
+def compare_runs(project: str, run_ids: List[str], entity: str = 'mllab-ts-universit-di-trieste', metrics: Optional[List[str]] = None):
     """Compare specific runs by their metrics.
     
     Args:
         project: WandB project name
         run_ids: List of run IDs to compare
+        entity: WandB entity (username/team)
         metrics: Optional list of specific metrics to compare. If None, shows all.
     """
     api = wandb.Api()
@@ -101,7 +103,7 @@ def compare_runs(project: str, run_ids: List[str], metrics: Optional[List[str]] 
     
     for run_id in run_ids:
         try:
-            run = api.run(f"{project}/{run_id}")
+            run = api.run(f"{entity}/{project}/{run_id}")
             
             summary = run.summary._json_dict
             config = run.config
@@ -142,12 +144,13 @@ def compare_runs(project: str, run_ids: List[str], metrics: Optional[List[str]] 
     return df
 
 
-def export_runs(project: str, output_file: str, tags: Optional[List[str]] = None):
+def export_runs(project: str, output_file: str, entity: str = 'mllab-ts-universit-di-trieste', tags: Optional[List[str]] = None):
     """Export all runs to a CSV file.
     
     Args:
         project: WandB project name
         output_file: Path to output CSV file
+        entity: WandB entity (username/team)
         tags: Optional list of tags to filter by
     """
     api = wandb.Api()
@@ -156,7 +159,7 @@ def export_runs(project: str, output_file: str, tags: Optional[List[str]] = None
     if tags:
         filters["tags"] = {"$in": tags}
     
-    runs = api.runs(project, filters=filters)
+    runs = api.runs(f"{entity}/{project}", filters=filters)
     
     data = []
     for run in runs:
@@ -196,16 +199,17 @@ def export_runs(project: str, output_file: str, tags: Optional[List[str]] = None
     return df
 
 
-def get_best_run(project: str, metric: str, maximize: bool = True):
+def get_best_run(project: str, metric: str, entity: str = 'mllab-ts-universit-di-trieste', maximize: bool = True):
     """Get the best run according to a specific metric.
     
     Args:
         project: WandB project name
         metric: Metric to optimize for
+        entity: WandB entity (username/team)
         maximize: If True, get run with highest metric; if False, get lowest
     """
     api = wandb.Api()
-    runs = api.runs(project)
+    runs = api.runs(f"{entity}/{project}")
     
     best_run = None
     best_value = float('-inf') if maximize else float('inf')
@@ -256,24 +260,28 @@ def main():
     
     # List command
     list_parser = subparsers.add_parser('list', help='List all runs in a project')
+    list_parser.add_argument('--entity', type=str, default='mllab-ts-universit-di-trieste', help='WandB entity (username or team)')
     list_parser.add_argument('--project', type=str, default='counterfactual-dpg', help='WandB project name')
     list_parser.add_argument('--tags', nargs='+', help='Filter by tags')
     list_parser.add_argument('--limit', type=int, default=50, help='Maximum number of runs to show')
     
     # Compare command
     compare_parser = subparsers.add_parser('compare', help='Compare specific runs')
+    compare_parser.add_argument('--entity', type=str, default='mllab-ts-universit-di-trieste', help='WandB entity (username or team)')
     compare_parser.add_argument('--project', type=str, default='counterfactual-dpg', help='WandB project name')
     compare_parser.add_argument('--runs', nargs='+', required=True, help='Run IDs to compare')
     compare_parser.add_argument('--metrics', nargs='+', help='Specific metrics to compare')
     
     # Export command
     export_parser = subparsers.add_parser('export', help='Export runs to CSV')
+    export_parser.add_argument('--entity', type=str, default='mllab-ts-universit-di-trieste', help='WandB entity (username or team)')
     export_parser.add_argument('--project', type=str, default='counterfactual-dpg', help='WandB project name')
     export_parser.add_argument('--output', type=str, required=True, help='Output CSV file path')
     export_parser.add_argument('--tags', nargs='+', help='Filter by tags')
     
     # Best command
     best_parser = subparsers.add_parser('best', help='Get best run by metric')
+    best_parser.add_argument('--entity', type=str, default='mllab-ts-universit-di-trieste', help='WandB entity (username or team)')
     best_parser.add_argument('--project', type=str, default='counterfactual-dpg', help='WandB project name')
     best_parser.add_argument('--metric', type=str, required=True, help='Metric to optimize')
     best_parser.add_argument('--minimize', action='store_true', help='Minimize metric (default: maximize)')
@@ -289,16 +297,16 @@ def main():
     
     # Execute command
     if args.command == 'list':
-        list_runs(args.project, args.tags, args.limit)
+        list_runs(args.project, args.entity, args.tags, args.limit)
     
     elif args.command == 'compare':
-        compare_runs(args.project, args.runs, args.metrics)
+        compare_runs(args.project, args.runs, args.entity, args.metrics)
     
     elif args.command == 'export':
-        export_runs(args.project, args.output, args.tags)
+        export_runs(args.project, args.output, args.entity, args.tags)
     
     elif args.command == 'best':
-        get_best_run(args.project, args.metric, maximize=not args.minimize)
+        get_best_run(args.project, args.metric, args.entity, maximize=not args.minimize)
 
 
 if __name__ == '__main__':

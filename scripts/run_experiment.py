@@ -161,8 +161,12 @@ def init_wandb(config: DictConfig, resume_id: Optional[str] = None, offline: boo
     
     mode = "offline" if offline else "online"
     
+    # Allow optional entity (organization/team) to be specified in config
+    entity = getattr(config.experiment, 'entity', None)
+    
     if resume_id:
         run = wandb.init(
+            entity=entity,
             project=config.experiment.project,
             id=resume_id,
             resume="must",
@@ -170,11 +174,12 @@ def init_wandb(config: DictConfig, resume_id: Optional[str] = None, offline: boo
         )
     else:
         run = wandb.init(
+            entity=entity,
             project=config.experiment.project,
             name=config.experiment.name,
             config=config.to_dict(),
-            tags=config.experiment.tags,
-            notes=config.experiment.notes,
+            tags=getattr(config.experiment, 'tags', None),
+            notes=getattr(config.experiment, 'notes', None),
             mode=mode
         )
     
