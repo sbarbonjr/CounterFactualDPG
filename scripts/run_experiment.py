@@ -153,6 +153,85 @@ def apply_overrides(config: DictConfig, overrides: List[str]) -> DictConfig:
     return config
 
 
+def get_git_info(repo_path: Optional[str] = None) -> Optional[Dict[str, str]]:
+    """Collect git repository information using GitPython.
+
+    Returns a dict with keys: commit_sha, commit_sha_short, commit_message,
+    commit_author, commit_author_email, commit_date, branch, remote_url, commit_url
+    or None if information cannot be retrieved.
+    """
+    try:
+        import git
+    except Exception:
+        logger.warning("GitPython not available; skipping git info collection")
+        return None
+
+    from git import InvalidGitRepositoryError
+
+    try:
+        repo = git.Repo(repo_path or pathlib.Path(__file__).resolve().parent, search_parent_directories=True)
+    except InvalidGitRepositoryError:
+        logger.warning("Not a git repository; skipping git info collection")
+        return None
+    except Exception as exc:
+        logger.warning(f"Failed to access git repository: {exc}")
+        return None
+
+    try:
+        commit = repo.head.commit
+        sha = commit.hexsha
+        short = sha[:7]
+        message = commit.message.strip()
+        author = commit.author.name
+        email = commit.author.email
+        date = commit.committed_datetime.isoformat()
+        try:
+            branch = repo.active_branch.name
+        except Exception:
+            # Detached HEAD or other issues; fall back to rev-parse
+            try:
+                branch = repo.git.rev_parse('--abbrev-ref', 'HEAD')
+            except Exception:
+                branch = None
+
+        # Determine remote URL (prefer 'origin')
+        remote_url = None
+        try:
+            if 'origin' in repo.remotes:
+                remote_url = repo.remotes.origin.url
+            else:
+                remotes = list(repo.remotes)
+                remote_url = remotes[0].url if remotes else None
+        except Exception:
+            remote_url = None
+
+        commit_url = None
+        if remote_url:
+            url = remote_url
+            if url.endswith('.git'):
+                url = url[:-4]
+            if url.startswith('git@'):
+                # convert git@github.com:user/repo to https://github.com/user/repo
+                url = url.replace(':', '/')
+                url = url.replace('git@', 'https://')
+            commit_url = f"{url}/commit/{sha}"
+
+        return {
+            'commit_sha': sha,
+            'commit_sha_short': short,
+            'commit_message': message,
+            'commit_author': author,
+            'commit_author_email': email,
+            'commit_date': date,
+            'branch': branch,
+            'remote_url': remote_url,
+            'commit_url': commit_url,
+        }
+    except Exception as exc:
+        logger.warning(f"Failed to collect git info: {exc}")
+        return None
+
+
 def init_wandb(config: DictConfig, resume_id: Optional[str] = None, offline: bool = False):
     """Initialize Weights & Biases run."""
     if not WANDB_AVAILABLE:
@@ -182,6 +261,37 @@ def init_wandb(config: DictConfig, resume_id: Optional[str] = None, offline: boo
             notes=getattr(config.experiment, 'notes', None),
             mode=mode
         )
+
+    # Capture git information and attach to WandB run if available
+    try:
+        git_info = get_git_info()
+        if git_info:
+            try:
+                run.config['git'] = git_info
+            except Exception:
+                logger.warning("Unable to add git info to wandb config")
+
+            try:
+                # Add a summary entry with the git info
+                if hasattr(run, 'summary') and isinstance(run.summary, dict):
+                    # Older wandb versions may expose summary as a dict
+                    run.summary['git'] = git_info
+                else:
+                    run.summary.update({'git': git_info})
+            except Exception:
+                # Not critical
+                pass
+
+            try:
+                if git_info.get('commit_url'):
+                    run.log({
+                        "git/commit_url": wandb.Html(f"<a href='{git_info['commit_url']}' target='_blank'>{git_info['commit_url']}</a>")
+                    })
+            except Exception as exc:
+                logger.warning(f"Failed to log git commit url to wandb: {exc}")
+    except Exception:
+        # Best effort; do not fail initialization if git info can't be collected
+        logger.debug("Skipping git info collection")
     
     return run
 
