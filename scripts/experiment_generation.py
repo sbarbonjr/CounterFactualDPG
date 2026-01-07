@@ -186,7 +186,10 @@ def run_experiment(
             combo_copy['replication'].append(rep_copy)
         raw_data['visualizations_structure'].append(combo_copy)
 
-    raw_filepath = os.path.join(output_dir, f"sample_{SAMPLE_ID}_raw_counterfactuals.pkl")
+    # Ensure sample directory exists and write raw file inside it
+    sample_dir = os.path.join(output_dir, str(SAMPLE_ID))
+    os.makedirs(sample_dir, exist_ok=True)
+    raw_filepath = os.path.join(sample_dir, 'raw_counterfactuals.pkl')
     with open(raw_filepath, 'wb') as f:
         pickle.dump(raw_data, f)
 
@@ -236,14 +239,14 @@ def run_experiment(
                 'Final Results': explainer.summarize_final_results(),
             }
 
-    # Save visualizations data (pickle + the storage helper)
-    viz_filepath = os.path.join(output_dir, f"sample_{SAMPLE_ID}_after_viz_generation.pkl")
+    # Save visualizations data into the sample directory
+    viz_filepath = os.path.join(sample_dir, 'after_viz_generation.pkl')
     with open(viz_filepath, 'wb') as f:
         pickle.dump({'sample_id': SAMPLE_ID, 'visualizations': visualizations, 'original_sample': ORIGINAL_SAMPLE, 'features_names': FEATURES_NAMES, 'target_class': TARGET_CLASS}, f)
 
     # Use the storage helper to save a final structured file (as in the notebook)
     try:
-        save_visualizations_data(SAMPLE_ID, visualizations, ORIGINAL_SAMPLE, constraints, FEATURES_NAMES, TARGET_CLASS)
+        save_visualizations_data(SAMPLE_ID, visualizations, ORIGINAL_SAMPLE, constraints, FEATURES_NAMES, TARGET_CLASS, output_dir=output_dir)
     except Exception as exc:  # pragma: no cover - storage helper may write to a different location
         logger.warning("save_visualizations_data failed: %s", exc)
 
@@ -251,7 +254,7 @@ def run_experiment(
         logger.info("Saved raw counterfactuals data to %s", raw_filepath)
         logger.info("Saved visualization data to %s", viz_filepath)
 
-    return {'sample_id': SAMPLE_ID, 'raw_filepath': raw_filepath, 'viz_filepath': viz_filepath, 'output_dir': output_dir}
+    return {'sample_id': SAMPLE_ID, 'sample_dir': sample_dir, 'raw_filepath': raw_filepath, 'viz_filepath': viz_filepath, 'output_dir': output_dir}
 
 
 def main():

@@ -43,38 +43,18 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT_DIR = "experiment_results"
 
+# Use the central storage helpers implemented in utils.notebooks.experiment_storage
+from utils.notebooks.experiment_storage import list_available_samples as storage_list_available_samples, load_visualizations_data as storage_load_visualizations_data
+
 
 def list_available_samples(output_dir: str = DEFAULT_OUTPUT_DIR) -> Dict[int, Dict[str, Any]]:
-    """Return a dict mapping sample_id -> metadata loaded from sample_{id}_metadata.pkl"""
-    samples: Dict[int, Dict[str, Any]] = {}
-    if not os.path.isdir(output_dir):
-        return samples
-
-    for filename in os.listdir(output_dir):
-        if filename.startswith("sample_") and filename.endswith("_metadata.pkl"):
-            try:
-                sample_id = int(filename.split("_")[1])
-            except Exception:
-                continue
-            filepath = os.path.join(output_dir, filename)
-            try:
-                with open(filepath, 'rb') as f:
-                    metadata = pickle.load(f)
-                samples[sample_id] = metadata
-            except Exception as exc:
-                logger.warning("Failed to load metadata %s: %s", filepath, exc)
-    return dict(sorted(samples.items()))
+    """Delegate to utils.notebooks.experiment_storage.list_available_samples"""
+    return storage_list_available_samples(output_dir)
 
 
 def load_visualizations_data(sample_id: int, output_dir: str = DEFAULT_OUTPUT_DIR) -> Dict[str, Any]:
-    """Load the full visualizations data for a sample (from sample_{id}_visualizations.pkl)."""
-    filepath = os.path.join(output_dir, f"sample_{sample_id}_visualizations.pkl")
-    if not os.path.exists(filepath):
-        raise FileNotFoundError(f"Visualization file not found: {filepath}")
-
-    with open(filepath, 'rb') as f:
-        data = pickle.load(f)
-    return data
+    """Delegate to utils.notebooks.experiment_storage.load_visualizations_data"""
+    return storage_load_visualizations_data(sample_id, output_dir)
 
 
 def build_summary_table(visualizations_data: Dict[str, Any]) -> pd.DataFrame:
@@ -134,7 +114,8 @@ def export_plots_for_sample(visualizations_data: Dict[str, Any], sample_id: int,
     """
     saved_files: List[str] = []
     if export_dir is None:
-        export_dir = os.path.join(output_dir, f"sample_{sample_id}_plots")
+        # Place plots under the sample folder: experiment_results/<sample_id>/plots
+        export_dir = os.path.join(output_dir, str(sample_id), 'plots')
     os.makedirs(export_dir, exist_ok=True)
 
     def _try_save(fig, path):
@@ -269,8 +250,10 @@ def run_visualization(sample_id: Optional[int] = None,
     # Summary
     if save_summary:
         summary_df = build_summary_table(viz_data)
-        csv_path = os.path.join(output_dir, f"sample_{sample_id}_summary.csv")
-        html_path = os.path.join(output_dir, f"sample_{sample_id}_summary.html")
+        sample_dir = os.path.join(output_dir, str(sample_id))
+        os.makedirs(sample_dir, exist_ok=True)
+        csv_path = os.path.join(sample_dir, "summary.csv")
+        html_path = os.path.join(sample_dir, "summary.html")
         summary_df.to_csv(csv_path, index=False)
         try:
             summary_df.to_html(html_path, escape=False)
@@ -289,7 +272,9 @@ def run_visualization(sample_id: Optional[int] = None,
         try:
             metrics_df = compute_metrics_for_sample(viz_data, model, output_dir, sample_id)
             if metrics_df is not None:
-                metrics_csv = os.path.join(output_dir, f"sample_{sample_id}_metrics.csv")
+                sample_dir = os.path.join(output_dir, str(sample_id))
+                os.makedirs(sample_dir, exist_ok=True)
+                metrics_csv = os.path.join(sample_dir, "metrics.csv")
                 metrics_df.to_csv(metrics_csv, index=False)
                 results['metrics_csv'] = metrics_csv
             else:
