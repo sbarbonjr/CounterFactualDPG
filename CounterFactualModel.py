@@ -42,6 +42,8 @@ class CounterFactualModel:
         self.distance_factor = distance_factor
         self.sparsity_factor = sparsity_factor
         self.constraints_factor = constraints_factor
+        # Store feature names from the model if available
+        self.feature_names = getattr(model, 'feature_names_in_', None)
 
     def is_actionable_change(self, counterfactual_sample, original_sample):
       """
@@ -96,8 +98,12 @@ class CounterFactualModel:
             return False  # Return np.inf if the samples are identical
 
         # Predict the class for the counterfactual sample
-        #print('self.model.predict(counterfactual_sample)[0]', self.model.predict(counterfactual_sample)[0])
-        predicted_class = self.model.predict(counterfactual_sample)[0]
+        # Convert to DataFrame with feature names if available for model compatibility
+        if self.feature_names is not None:
+            counterfactual_df = pd.DataFrame(counterfactual_sample, columns=self.feature_names)
+            predicted_class = self.model.predict(counterfactual_df)[0]
+        else:
+            predicted_class = self.model.predict(counterfactual_sample)[0]
 
         # Check if the predicted class matches the desired class
         if predicted_class == desired_class:
@@ -398,7 +404,12 @@ class CounterFactualModel:
         features = np.array([individual[key] for key in sorted(individual.keys())]).reshape(1, -1)
         
         try:
-            probs = self.model.predict_proba(features)[0]
+            # Convert to DataFrame with feature names if available for model compatibility
+            if self.feature_names is not None:
+                features_df = pd.DataFrame(features, columns=self.feature_names)
+                probs = self.model.predict_proba(features_df)[0]
+            else:
+                probs = self.model.predict_proba(features)[0]
             target_prob = probs[target_class]
             other_probs = [p for i, p in enumerate(probs) if i != target_class]
             max_other_prob = max(other_probs) if other_probs else 0.0
