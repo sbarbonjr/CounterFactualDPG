@@ -48,7 +48,7 @@ from utils.notebooks.experiment_storage import (
 # Defaults (match notebook values unless overridden)
 DEFAULT_OUTPUT_DIR = "experiment_results"
 CLASS_COLORS_LIST = ["purple", "green", "orange"]
-RULES = ["none","no_change", "non_increasing", "non_decreasing"]
+RULES = ["none","no_change"]# "non_increasing", "non_decreasing"]
 
 logger = logging.getLogger(__name__)
 
