@@ -40,6 +40,7 @@ import pandas as pd
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
 
 try:
     import wandb
@@ -67,6 +68,80 @@ from utils.notebooks.experiment_storage import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def load_dataset(config: 'DictConfig'):
+    """Load dataset based on config specification.
+    
+    Returns:
+        dict with keys:
+            - features: numpy array of feature values
+            - labels: numpy array of target labels
+            - feature_names: list of feature names
+            - features_df: pandas DataFrame with feature names
+            - label_encoders: dict of LabelEncoder objects (for categorical features)
+    """
+    dataset_name = config.data.dataset.lower()
+    
+    if dataset_name == "iris":
+        logger.info("Loading Iris dataset...")
+        iris = load_iris()
+        features = iris.data
+        labels = iris.target
+        feature_names = list(iris.feature_names)
+        features_df = pd.DataFrame(features, columns=feature_names)
+        label_encoders = {}  # No categorical features in iris
+        
+        return {
+            'features': features,
+            'labels': labels,
+            'feature_names': feature_names,
+            'features_df': features_df,
+            'label_encoders': label_encoders,
+        }
+    
+    elif dataset_name == "german_credit":
+        logger.info("Loading German Credit dataset...")
+        
+        # Load CSV
+        dataset_path = config.data.dataset_path
+        if not os.path.isabs(dataset_path):
+            dataset_path = os.path.join(REPO_ROOT, dataset_path)
+        
+        df = pd.read_csv(dataset_path)
+        
+        # Extract target
+        target_column = config.data.target_column
+        labels = df[target_column].values
+        features_df = df.drop(columns=[target_column])
+        
+        # Encode categorical variables
+        label_encoders = {}
+        features_df_encoded = features_df.copy()
+        
+        for col in features_df.columns:
+            if features_df[col].dtype == 'object' or features_df[col].dtype.name == 'category':
+                logger.info(f"Encoding categorical feature: {col}")
+                le = LabelEncoder()
+                features_df_encoded[col] = le.fit_transform(features_df[col])
+                label_encoders[col] = le
+        
+        features = features_df_encoded.values
+        feature_names = list(features_df_encoded.columns)
+        
+        logger.info(f"Loaded {len(df)} samples with {len(feature_names)} features")
+        logger.info(f"Encoded {len(label_encoders)} categorical features")
+        
+        return {
+            'features': features,
+            'labels': labels,
+            'feature_names': feature_names,
+            'features_df': features_df_encoded,
+            'label_encoders': label_encoders,
+        }
+    
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}. Supported: iris, german_credit")
 
 
 class DictConfig:
@@ -301,23 +376,36 @@ def run_single_sample(
     config: DictConfig,
     model,
     constraints: Dict,
-    iris_data: Dict,
+    dataset_data: Dict,
     class_colors_list: List[str],
     wandb_run=None
 ) -> Dict[str, Any]:
-    """Run counterfactual generation for a single sample with WandB logging."""
+    """Run counterfactual generation for a single sample with WandB logging.
     
-    IRIS_FEATURES = iris_data['features']
-    IRIS_LABELS = iris_data['labels']
-    IRIS_FEATURE_NAMES = iris_data['feature_names']
-    TRAIN_FEATURES = iris_data['train_features']
-    TRAIN_LABELS = iris_data['train_labels']
+    Args:
+        sample_index: Index of the sample in the dataset
+        config: Experiment configuration
+        model: Trained classifier model
+        constraints: Feature constraints from DPG
+        dataset_data: Dict containing features, labels, feature_names, train_features, train_labels
+        class_colors_list: List of colors for visualization
+        wandb_run: WandB run object for logging
+        
+    Returns:
+        Dict with results including sample_id, success_rate, and file paths
+    """
+    
+    FEATURES = dataset_data['features']
+    LABELS = dataset_data['labels']
+    FEATURE_NAMES = dataset_data['feature_names']
+    TRAIN_FEATURES = dataset_data['train_features']
+    TRAIN_LABELS = dataset_data['train_labels']
     
     output_dir = config.output.local_dir
     
     # Get original sample
-    original_sample_values = IRIS_FEATURES[sample_index]
-    ORIGINAL_SAMPLE = dict(zip(IRIS_FEATURE_NAMES, map(float, original_sample_values)))
+    original_sample_values = FEATURES[sample_index]
+    ORIGINAL_SAMPLE = dict(zip(FEATURE_NAMES, map(float, original_sample_values)))
     SAMPLE_DATAFRAME = pd.DataFrame([ORIGINAL_SAMPLE])
     ORIGINAL_SAMPLE_PREDICTED_CLASS = int(model.predict(SAMPLE_DATAFRAME)[0])
     
@@ -331,7 +419,7 @@ def run_single_sample(
         num_combinations_to_test = int(len(RULES_COMBINATIONS) / 2)
     
     # Choose target class
-    n_classes = len(np.unique(IRIS_LABELS))
+    n_classes = len(np.unique(LABELS))
     TARGET_CLASS = 0 if ORIGINAL_SAMPLE_PREDICTED_CLASS != 0 else (ORIGINAL_SAMPLE_PREDICTED_CLASS + 1) % n_classes
     
     # Save sample metadata
@@ -568,17 +656,16 @@ def run_experiment(config: DictConfig, wandb_run=None):
     # Set random seed
     np.random.seed(config.experiment_params.seed)
     
-    # Load data
-    logger.info("Loading dataset...")
-    IRIS = load_iris()
-    IRIS_FEATURES = IRIS.data
-    IRIS_LABELS = IRIS.target
+    # Load data using flexible loader
+    dataset_info = load_dataset(config)
     
-    # Create DataFrame with feature names for consistent handling
-    IRIS_FEATURES_DF = pd.DataFrame(IRIS_FEATURES, columns=IRIS.feature_names)
+    FEATURES = dataset_info['features']
+    LABELS = dataset_info['labels']
+    FEATURE_NAMES = dataset_info['feature_names']
+    FEATURES_DF = dataset_info['features_df']
     
     TRAIN_FEATURES, TEST_FEATURES, TRAIN_LABELS, TEST_LABELS = train_test_split(
-        IRIS_FEATURES_DF, IRIS_LABELS, 
+        FEATURES_DF, LABELS, 
         test_size=config.data.test_size, 
         random_state=config.data.random_state
     )
@@ -586,32 +673,50 @@ def run_experiment(config: DictConfig, wandb_run=None):
     # Train model
     logger.info("Training model...")
     if config.model.type == "RandomForestClassifier":
-        model = RandomForestClassifier(
-            n_estimators=config.model.n_estimators,
-            random_state=config.model.random_state
-        )
+        model_params = {
+            'n_estimators': config.model.n_estimators,
+            'random_state': config.model.random_state
+        }
+        # Add optional parameters if they exist in config
+        if hasattr(config.model, 'max_depth') and config.model.max_depth is not None:
+            model_params['max_depth'] = config.model.max_depth
+        
+        model = RandomForestClassifier(**model_params)
     else:
         raise ValueError(f"Unknown model type: {config.model.type}")
     
     # Train model with DataFrame (preserves feature names)
     model.fit(TRAIN_FEATURES, TRAIN_LABELS)
     
+    # Log model performance
+    train_score = model.score(TRAIN_FEATURES, TRAIN_LABELS)
+    test_score = model.score(TEST_FEATURES, TEST_LABELS)
+    logger.info(f"Model trained - Train accuracy: {train_score:.4f}, Test accuracy: {test_score:.4f}")
+    
+    if wandb_run:
+        wandb.log({
+            "model/train_accuracy": train_score,
+            "model/test_accuracy": test_score,
+        })
+    
     # Extract constraints (pass numpy array for DPG compatibility)
     logger.info("Extracting constraints...")
     constraints = ConstraintParser.extract_constraints_from_dataset(
-        model, TRAIN_FEATURES.values, TRAIN_LABELS, IRIS.feature_names
+        model, TRAIN_FEATURES.values, TRAIN_LABELS, FEATURE_NAMES
     )
     
-    # Prepare iris data dict
-    iris_data = {
-        'features': IRIS_FEATURES,
-        'labels': IRIS_LABELS,
-        'feature_names': list(IRIS.feature_names),
+    # Prepare data dict (renamed from iris_data for generality)
+    dataset_data = {
+        'features': FEATURES,
+        'labels': LABELS,
+        'feature_names': FEATURE_NAMES,
         'train_features': TRAIN_FEATURES,
         'train_labels': TRAIN_LABELS,
     }
     
-    class_colors_list = ["purple", "green", "orange"]
+    # Determine number of classes for color assignment
+    n_classes = len(np.unique(LABELS))
+    class_colors_list = ["purple", "green", "orange", "red", "blue", "yellow", "pink", "cyan"][:n_classes]
     
     # Determine sample indices to process
     if config.experiment_params.sample_indices is not None:
@@ -619,8 +724,8 @@ def run_experiment(config: DictConfig, wandb_run=None):
     else:
         # Select random samples
         sample_indices = np.random.choice(
-            len(IRIS_FEATURES),
-            size=min(config.experiment_params.num_samples, len(IRIS_FEATURES)),
+            len(FEATURES),
+            size=min(config.experiment_params.num_samples, len(FEATURES)),
             replace=False
         ).tolist()
     
@@ -634,7 +739,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
             config,
             model,
             constraints,
-            iris_data,
+            dataset_data,
             class_colors_list,
             wandb_run
         )
