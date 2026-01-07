@@ -25,6 +25,10 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import numpy as np
+import matplotlib
+# Use non-interactive backend to avoid blocking on figure rendering when running as a script
+matplotlib.use('Agg')
+import time
 
 # Attempt to import optional metric helpers
 try:
@@ -107,54 +111,107 @@ def build_summary_table(visualizations_data: Dict[str, Any]) -> pd.DataFrame:
     return summary_df
 
 
-def export_plots_for_sample(visualizations_data: Dict[str, Any], sample_id: int, output_dir: str, export_dir: Optional[str] = None) -> List[str]:
-    """Save any matplotlib figures found in the visualizations data to PNG files.
+def export_plots_for_sample(visualizations_data: Dict[str, Any], sample_id: int, output_dir: str, export_dir: Optional[str] = None, save_plots: bool = False) -> List[str]:
+    """Export plots for a sample.
 
-    Returns list of saved file paths.
+    By default this function will *not* write PNG files to disk; instead it writes
+    a small index (`plots_index.json`) under the sample folder that describes which
+    plots are available and where they would be saved. Set `save_plots=True` to
+    actually write PNG files (this can be slow for many combinations).
+
+    Returns list of saved file paths (or the generated index file path when not saving PNGs).
     """
     saved_files: List[str] = []
-    if export_dir is None:
-        # Place plots under the sample folder: experiment_results/<sample_id>/plots
-        export_dir = os.path.join(output_dir, str(sample_id), 'plots')
-    os.makedirs(export_dir, exist_ok=True)
+
+    sample_dir = os.path.join(output_dir, str(sample_id))
+    plots_dir = export_dir if export_dir is not None else os.path.join(sample_dir, 'plots')
+    os.makedirs(sample_dir, exist_ok=True)
+
+    # Index of plots (will be written to sample_dir/plots_index.json)
+    index = {
+        'sample_id': sample_id,
+        'plots': []
+    }
 
     def _try_save(fig, path):
+        """Attempt to save a visualization object to disk.
+
+        Handles matplotlib Figure/Axes, some plotly objects (best-effort), and falls back
+        to pickling unknown objects. Measures elapsed time and logs slow saves.
+        """
         try:
-            # Matplotlib figures have savefig
+            start = time.monotonic()
+
+            # Matplotlib Figure
             if hasattr(fig, 'savefig'):
                 fig.savefig(path, bbox_inches='tight')
-                return True
-            # Some objects are matplotlib.Figure with canvas
-            if hasattr(fig, 'canvas') and hasattr(fig, 'savefig'):
-                fig.savefig(path, bbox_inches='tight')
-                return True
-            # As fallback try to pickle
-            with open(path + '.pkl', 'wb') as f:
-                pickle.dump(fig, f)
+            # Matplotlib Axes -> get the parent Figure
+            elif hasattr(fig, 'figure') and hasattr(fig.figure, 'savefig'):
+                fig.figure.savefig(path, bbox_inches='tight')
+            else:
+                # Try plotly static export if available
+                try:
+                    import plotly.io as pio
+                    # Some plotly objects are Figures/dicts
+                    pio.write_image(fig, path)
+                except Exception:
+                    # Fallback: pickle the object so it is not lost
+                    with open(path + '.pkl', 'wb') as f:
+                        pickle.dump(fig, f)
+
+            elapsed = time.monotonic() - start
+            if elapsed > 10:
+                logger.warning("Saving figure to %s took %.2fs", path, elapsed)
+            else:
+                logger.info("Saved figure to %s (%.2fs)", path, elapsed)
             return True
         except Exception as exc:
             logger.warning("Failed to save figure to %s: %s", path, exc)
             return False
 
-    # Combination-level (pca/pairwise)
-    for combo_idx, combination_viz in enumerate(visualizations_data['visualizations']):
-        combo_dir = os.path.join(export_dir, f"combination_{combo_idx+1}")
-        os.makedirs(combo_dir, exist_ok=True)
+    # Iterate combinations and build index (or save files if requested)
+    for combo_idx, combination_viz in enumerate(visualizations_data.get('visualizations', [])):
+        combo_rel = f"combination_{combo_idx+1}"
+        combo_dir = os.path.join(plots_dir, combo_rel)
+        if save_plots:
+            os.makedirs(combo_dir, exist_ok=True)
 
         for name in ('pca', 'pairwise'):
             fig = combination_viz.get(name)
             if fig is not None:
-                ext_path = os.path.join(combo_dir, f"{name}.png")
-                if _try_save(fig, ext_path):
-                    saved_files.append(ext_path)
+                rel_path = os.path.join(combo_rel, f"{name}.png")
+                abs_path = os.path.join(plots_dir, rel_path)
+                if save_plots:
+                    if _try_save(fig, abs_path):
+                        saved_files.append(abs_path)
+                index['plots'].append({'type': name, 'combination': combo_idx+1, 'path': rel_path})
 
-        for rep_idx, replication_viz in enumerate(combination_viz['replication']):
-            rep_dir = os.path.join(combo_dir, f"replication_{rep_idx+1}")
-            os.makedirs(rep_dir, exist_ok=True)
+        for rep_idx, replication_viz in enumerate(combination_viz.get('replication', [])):
+            rep_rel = os.path.join(combo_rel, f"replication_{rep_idx+1}")
+            rep_dir = os.path.join(plots_dir, rep_rel)
+            if save_plots:
+                os.makedirs(rep_dir, exist_ok=True)
             for viz_idx, viz in enumerate(replication_viz.get('visualizations', [])):
-                ext_path = os.path.join(rep_dir, f"viz_{viz_idx+1}.png")
-                if _try_save(viz, ext_path):
-                    saved_files.append(ext_path)
+                rel_path = os.path.join(rep_rel, f"viz_{viz_idx+1}.png")
+                abs_path = os.path.join(plots_dir, rel_path)
+                logger.info("Processing combination %d replication %d viz %d -> %s", combo_idx+1, rep_idx+1, viz_idx+1, rel_path)
+                if save_plots:
+                    success = _try_save(viz, abs_path)
+                    if success:
+                        saved_files.append(abs_path)
+                    else:
+                        logger.warning("Failed to save combination %d replication %d viz %d", combo_idx+1, rep_idx+1, viz_idx+1)
+                index['plots'].append({'type': 'replication_viz', 'combination': combo_idx+1, 'replication': rep_idx+1, 'viz_idx': viz_idx+1, 'path': rel_path})
+
+    # Always write a small index manifest so plots can be regenerated on demand
+    try:
+        import json
+        index_path = os.path.join(sample_dir, 'plots_index.json')
+        with open(index_path, 'w') as f:
+            json.dump(index, f, indent=2)
+        saved_files.append(index_path)
+    except Exception as exc:
+        logger.warning("Failed to write plots index to %s: %s", index_path, exc)
 
     return saved_files
 
@@ -219,12 +276,17 @@ def compute_metrics_for_sample(visualizations_data: Dict[str, Any], model, outpu
 def run_visualization(sample_id: Optional[int] = None,
                       output_dir: str = DEFAULT_OUTPUT_DIR,
                       export_plots: bool = False,
+                      save_plots: bool = False,
                       save_summary: bool = True,
                       save_metrics: bool = True,
                       export_dir: Optional[str] = None,
                       model=None,
                       verbose: bool = False) -> Dict[str, Any]:
     """Main entrypoint. Loads a sample and optionally exports summary/plots/metrics.
+
+    Notes:
+    - `export_plots` controls whether an index of available plots is generated.
+    - `save_plots` controls whether PNGs are actually written to disk (default: False).
 
     If sample_id is None, the latest available sample will be chosen.
     """
@@ -264,7 +326,7 @@ def run_visualization(sample_id: Optional[int] = None,
 
     # Plots
     if export_plots:
-        saved = export_plots_for_sample(viz_data, sample_id, output_dir, export_dir=export_dir)
+        saved = export_plots_for_sample(viz_data, sample_id, output_dir, export_dir=export_dir, save_plots=save_plots)
         results['saved_plots'] = saved
 
     # Metrics
@@ -290,7 +352,8 @@ def main():
     parser = argparse.ArgumentParser(description="Export visualizations summary and plots for an experiment sample")
     parser.add_argument('--sample-id', type=int, default=None)
     parser.add_argument('--output-dir', type=str, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument('--export-plots', action='store_true')
+    parser.add_argument('--export-plots', action='store_true', help='Generate an index of available plots for the sample')
+    parser.add_argument('--save-plots', action='store_true', help='Actually write PNG files to disk (slow). If not set, an index is written instead')
     parser.add_argument('--no-summary', dest='save_summary', action='store_false')
     parser.add_argument('--no-metrics', dest='save_metrics', action='store_false')
     parser.add_argument('--export-dir', type=str, default=None)
@@ -325,7 +388,7 @@ def main():
         model = None
 
     result = run_visualization(sample_id=args.sample_id, output_dir=args.output_dir, export_plots=args.export_plots,
-                               save_summary=args.save_summary, save_metrics=args.save_metrics, export_dir=args.export_dir, model=model, verbose=args.verbose)
+                               save_plots=args.save_plots, save_summary=args.save_summary, save_metrics=args.save_metrics, export_dir=args.export_dir, model=model, verbose=args.verbose)
 
     print(f"Visualization export complete: {result}")
 
