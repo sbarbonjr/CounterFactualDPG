@@ -380,7 +380,9 @@ def main():
             from sklearn.model_selection import train_test_split
             from sklearn.ensemble import RandomForestClassifier
             iris = load_iris()
-            X_train, X_test, y_train, y_test = train_test_split(iris.data, iris.target, test_size=0.3, random_state=42)
+            # Create DataFrame with feature names for consistent handling
+            iris_df = pd.DataFrame(iris.data, columns=iris.feature_names)
+            X_train, X_test, y_train, y_test = train_test_split(iris_df, iris.target, test_size=0.3, random_state=42)
             model = RandomForestClassifier(n_estimators=3, random_state=42)
             model.fit(X_train, y_train)
     except Exception as exc:

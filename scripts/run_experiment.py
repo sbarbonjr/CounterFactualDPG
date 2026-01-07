@@ -464,8 +464,11 @@ def run_experiment(config: DictConfig, wandb_run=None):
     IRIS_FEATURES = IRIS.data
     IRIS_LABELS = IRIS.target
     
+    # Create DataFrame with feature names for consistent handling
+    IRIS_FEATURES_DF = pd.DataFrame(IRIS_FEATURES, columns=IRIS.feature_names)
+    
     TRAIN_FEATURES, TEST_FEATURES, TRAIN_LABELS, TEST_LABELS = train_test_split(
-        IRIS_FEATURES, IRIS_LABELS, 
+        IRIS_FEATURES_DF, IRIS_LABELS, 
         test_size=config.data.test_size, 
         random_state=config.data.random_state
     )
@@ -480,12 +483,13 @@ def run_experiment(config: DictConfig, wandb_run=None):
     else:
         raise ValueError(f"Unknown model type: {config.model.type}")
     
+    # Train model with DataFrame (preserves feature names)
     model.fit(TRAIN_FEATURES, TRAIN_LABELS)
     
-    # Extract constraints
+    # Extract constraints (pass numpy array for DPG compatibility)
     logger.info("Extracting constraints...")
     constraints = ConstraintParser.extract_constraints_from_dataset(
-        model, TRAIN_FEATURES, TRAIN_LABELS, IRIS.feature_names
+        model, TRAIN_FEATURES.values, TRAIN_LABELS, IRIS.feature_names
     )
     
     # Prepare iris data dict

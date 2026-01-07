@@ -32,8 +32,11 @@ IRIS: Bunch = cast(Bunch, load_iris())
 IRIS_FEATURES = IRIS.data
 IRIS_LABELS = IRIS.target
 
+# Create DataFrame with feature names for consistent handling
+IRIS_FEATURES_DF = pd.DataFrame(IRIS_FEATURES, columns=IRIS.feature_names)
+
 TRAIN_FEATURES, TEST_FEATURES, TRAIN_LABELS, TEST_LABELS = train_test_split(
-    IRIS_FEATURES, IRIS_LABELS, test_size=0.3, random_state=42
+    IRIS_FEATURES_DF, IRIS_LABELS, test_size=0.3, random_state=42
 )
 
 MODEL = RandomForestClassifier(n_estimators=3, random_state=42)
