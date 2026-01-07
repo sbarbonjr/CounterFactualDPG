@@ -110,11 +110,13 @@ def run_experiment(
     if num_combinations_to_test is None:
         num_combinations_to_test = int(len(RULES_COMBINATIONS) / 2)
 
-    TARGET_CLASS = 0
+    # Choose a target class different from the predicted class (to ensure counterfactual search makes sense)
+    n_classes = len(np.unique(IRIS_LABELS))
+    TARGET_CLASS = 0 if ORIGINAL_SAMPLE_PREDICTED_CLASS != 0 else (ORIGINAL_SAMPLE_PREDICTED_CLASS + 1) % n_classes
 
-    # Save sample metadata
+    # Save sample metadata (respect output_dir)
     SAMPLE_ID = get_sample_id(sample_index)
-    save_sample_metadata(SAMPLE_ID, ORIGINAL_SAMPLE, ORIGINAL_SAMPLE_PREDICTED_CLASS, TARGET_CLASS, sample_index)
+    save_sample_metadata(SAMPLE_ID, ORIGINAL_SAMPLE, ORIGINAL_SAMPLE_PREDICTED_CLASS, TARGET_CLASS, sample_index, output_dir=output_dir)
 
     if verbose:
         logger.info(f"Sample ID: {SAMPLE_ID} (dataset index: {sample_index})")
