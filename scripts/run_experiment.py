@@ -77,7 +77,8 @@ from utils.notebooks.experiment_storage import (
     get_sample_id,
     save_sample_metadata,
     save_visualizations_data,
-)
+    _get_sample_dir as get_sample_dir,
+) 
 
 
 def load_dataset(config: 'DictConfig'):
@@ -331,7 +332,8 @@ def run_single_sample(
     
     # Save sample metadata
     SAMPLE_ID = get_sample_id(sample_index)
-    save_sample_metadata(SAMPLE_ID, ORIGINAL_SAMPLE, ORIGINAL_SAMPLE_PREDICTED_CLASS, TARGET_CLASS, sample_index, output_dir=output_dir)
+    configname = getattr(config.experiment, 'name', None)
+    save_sample_metadata(SAMPLE_ID, ORIGINAL_SAMPLE, ORIGINAL_SAMPLE_PREDICTED_CLASS, TARGET_CLASS, sample_index, configname=configname, output_dir=output_dir) 
     
     print(f"INFO: Processing Sample ID: {SAMPLE_ID} (dataset index: {sample_index})")
     print(f"INFO: Original Predicted Class: {ORIGINAL_SAMPLE_PREDICTED_CLASS}, Target Class: {TARGET_CLASS}, combinations to test: {num_combinations_to_test}/{len(RULES_COMBINATIONS)}")
@@ -547,11 +549,11 @@ def run_single_sample(
         raw_data['visualizations_structure'].append(combo_copy)
     
     # Save to disk
-    sample_dir = os.path.join(output_dir, str(SAMPLE_ID))
+    sample_dir = get_sample_dir(SAMPLE_ID, output_dir=output_dir, configname=configname)
     os.makedirs(sample_dir, exist_ok=True)
     raw_filepath = os.path.join(sample_dir, 'raw_counterfactuals.pkl')
     with open(raw_filepath, 'wb') as f:
-        pickle.dump(raw_data, f)
+        pickle.dump(raw_data, f) 
     
     # Save normalized DPG constraints in sample folder
     if normalized_constraints:
@@ -776,7 +778,7 @@ def run_single_sample(
     
     # Use the storage helper to save structured data (as in experiment_generation.py)
     try:
-        save_visualizations_data(SAMPLE_ID, visualizations, ORIGINAL_SAMPLE, constraints, FEATURES_NAMES, TARGET_CLASS, output_dir=output_dir)
+        save_visualizations_data(SAMPLE_ID, visualizations, ORIGINAL_SAMPLE, constraints, FEATURES_NAMES, TARGET_CLASS, configname=configname, output_dir=output_dir)
     except Exception as exc:
         print(f"WARNING: save_visualizations_data failed: {exc}")
     
