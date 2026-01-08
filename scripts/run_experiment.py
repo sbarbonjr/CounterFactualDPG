@@ -49,6 +49,18 @@ except ImportError:
     WANDB_AVAILABLE = False
     print("Warning: wandb not available. Install with: pip install wandb")
 
+try:
+    from cf_eval.metrics import (
+        nbr_valid_cf,
+        perc_valid_cf,
+        continuous_distance,
+        avg_nbr_changes_per_cf,
+        nbr_changes_per_cf,
+    )
+    CF_EVAL_AVAILABLE = True
+except ImportError:
+    CF_EVAL_AVAILABLE = False
+
 from CounterFactualModel import CounterFactualModel
 from ConstraintParser import ConstraintParser
 from CounterFactualExplainer import CounterFactualExplainer
@@ -406,6 +418,23 @@ def run_single_sample(
             explainer = CounterFactualExplainer(cf_model, ORIGINAL_SAMPLE, counterfactual, TARGET_CLASS)
             metrics = explainer.get_all_metrics()
             
+            # Compute cf_eval metrics if available
+            cf_eval_metrics = {}
+            if CF_EVAL_AVAILABLE:
+                try:
+                    x_original = np.array([ORIGINAL_SAMPLE[feat] for feat in FEATURES_NAMES])
+                    cf_array = np.array([[counterfactual[feat] for feat in FEATURES_NAMES]])
+                    continuous_features = list(range(len(FEATURES_NAMES)))
+                    
+                    cf_eval_metrics = {
+                        'cf_eval/is_valid': int(nbr_valid_cf(cf_array, model, ORIGINAL_SAMPLE_PREDICTED_CLASS, y_desidered=TARGET_CLASS)),
+                        'cf_eval/euclidean_distance': float(continuous_distance(x_original, cf_array, continuous_features, metric='euclidean')),
+                        'cf_eval/manhattan_distance': float(continuous_distance(x_original, cf_array, continuous_features, metric='manhattan')),
+                        'cf_eval/num_changes': float(avg_nbr_changes_per_cf(x_original, cf_array, continuous_features)),
+                    }
+                except Exception as exc:
+                    print(f"WARNING: cf_eval metrics computation failed: {exc}")
+            
             # Log replication metrics to WandB
             if wandb_run:
                 best_fitness = cf_model.best_fitness_list[-1] if cf_model.best_fitness_list else None
@@ -426,6 +455,9 @@ def run_single_sample(
                     if isinstance(value, (int, float, bool)):
                         log_data[f"metrics/{key}"] = value
                 
+                # Add cf_eval metrics
+                log_data.update(cf_eval_metrics)
+                
                 wandb.log(log_data)
                 
                 # Log fitness curve
@@ -443,6 +475,36 @@ def run_single_sample(
         if counterfactuals_df_replications:
             counterfactuals_df_replications = pd.DataFrame(counterfactuals_df_replications)
             counterfactuals_df_combinations.extend(counterfactuals_df_replications.to_dict('records'))
+        
+        # Compute combination-level cf_eval metrics
+        if combination_viz['replication'] and CF_EVAL_AVAILABLE and wandb_run:
+            try:
+                x_original = np.array([ORIGINAL_SAMPLE[feat] for feat in FEATURES_NAMES])
+                cf_list = [np.array([rep['counterfactual'][feat] for feat in FEATURES_NAMES]) 
+                          for rep in combination_viz['replication']]
+                cf_array = np.array(cf_list)
+                continuous_features = list(range(len(FEATURES_NAMES)))
+                
+                num_valid = int(nbr_valid_cf(cf_array, model, ORIGINAL_SAMPLE_PREDICTED_CLASS, y_desidered=TARGET_CLASS))
+                pct_valid = float(perc_valid_cf(cf_array, model, ORIGINAL_SAMPLE_PREDICTED_CLASS, y_desidered=TARGET_CLASS))
+                avg_distance = float(continuous_distance(x_original, cf_array, continuous_features, metric='euclidean'))
+                min_distance = float(continuous_distance(x_original, cf_array, continuous_features, metric='euclidean', agg='min'))
+                max_distance = float(continuous_distance(x_original, cf_array, continuous_features, metric='euclidean', agg='max'))
+                avg_changes = float(avg_nbr_changes_per_cf(x_original, cf_array, continuous_features))
+                
+                wandb.log({
+                    "combination/sample_id": SAMPLE_ID,
+                    "combination/combination": str(combination),
+                    "combination/num_cfs": len(cf_list),
+                    "combination/valid_cfs": num_valid,
+                    "combination/validity_pct": pct_valid * 100,
+                    "combination/avg_euclidean_distance": avg_distance,
+                    "combination/min_euclidean_distance": min_distance,
+                    "combination/max_euclidean_distance": max_distance,
+                    "combination/avg_num_changes": avg_changes,
+                })
+            except Exception as exc:
+                print(f"WARNING: Combination-level cf_eval metrics failed: {exc}")
         
         if combination_viz['replication']:
             visualizations.append(combination_viz)
