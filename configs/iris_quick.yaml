@@ -39,7 +39,7 @@ counterfactual:
 experiment_params:
   seed: 42
   sample_indices: null
-  num_samples: 2  # Just 2 samples for quick test
+  num_samples: 1  # Just 2 samples for quick test
   num_combinations_to_test: 1  # Only 1 combination
   num_replications: 2  # Only 2 replications
 

@@ -40,7 +40,7 @@ counterfactual:
 experiment_params:
   seed: 42
   sample_indices: null  # null = random, or list like [0, 5, 10]
-  num_samples: 5  # number of samples to process if sample_indices is null
+  num_samples: 1 # number of samples to process if sample_indices is null
   num_combinations_to_test: null  # null = test half of all combinations
   num_replications: 3
 
