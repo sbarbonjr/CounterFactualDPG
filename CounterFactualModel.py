@@ -601,9 +601,11 @@ class CounterFactualModel:
                      for _ in range(population_size)]
         
         # Setup statistics
+        # Define INVALID_FITNESS threshold for filtering statistics
+        INVALID_FITNESS = 1e6
         stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("avg", lambda x: np.nanmean([val[0] for val in x if not np.isinf(val[0])]))
-        stats.register("min", lambda x: np.nanmin([val[0] for val in x if not np.isinf(val[0])]) if any(not np.isinf(val[0]) for val in x) else np.inf)
+        stats.register("avg", lambda x: np.nanmean([val[0] for val in x if not np.isinf(val[0]) and val[0] < INVALID_FITNESS]))
+        stats.register("min", lambda x: np.nanmin([val[0] for val in x if not np.isinf(val[0]) and val[0] < INVALID_FITNESS]) if any(not np.isinf(val[0]) and val[0] < INVALID_FITNESS for val in x) else np.inf)
         
         # Setup hall of fame to keep best individuals
         hof = tools.HallOfFame(1)
