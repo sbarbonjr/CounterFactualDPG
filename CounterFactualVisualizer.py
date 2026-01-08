@@ -370,7 +370,7 @@ def plot_pca_with_counterfactual(model, dataset, target, sample, counterfactual)
     )
     plt.scatter(
         counterfactual_pca[:, 0], counterfactual_pca[:, 1],
-        color=colors[counterfactual_class], marker='x', s=100, label='Counterfactual', edgecolor='black'
+        color=colors[counterfactual_class], marker='x', s=100, label='Counterfactual', linewidths=1.5
     )
 
     plt.xlabel('PCA Component 1')
@@ -846,7 +846,7 @@ def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactual
                 plt.scatter(
                     coords[0], coords[1],
                     color=color, marker='x', s=size,
-                    alpha=alpha, edgecolor='black', linewidths=0.5,
+                    alpha=alpha, linewidths=1.5,
                     zorder=5
                 )
 
