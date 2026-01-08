@@ -29,13 +29,13 @@ counterfactual:
   
   # Runtime parameters
   population_size: 20
-  max_generations: 60
+  max_generations: 50
   mutation_rate: 0.8
   delta_threshold: 0.01
   patience: 10
   
   # Actionability rules to test
-  rules: ["none", "no_change"]  # "non_increasing", "non_decreasing"
+  rules: ["none"] # , "no_change"]  # "non_increasing", "non_decreasing"
 
 experiment_params:
   seed: 42
