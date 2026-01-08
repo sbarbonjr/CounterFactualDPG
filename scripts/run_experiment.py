@@ -427,7 +427,7 @@ def run_single_sample(
     save_sample_metadata(SAMPLE_ID, ORIGINAL_SAMPLE, ORIGINAL_SAMPLE_PREDICTED_CLASS, TARGET_CLASS, sample_index, output_dir=output_dir)
     
     logger.info(f"Processing Sample ID: {SAMPLE_ID} (dataset index: {sample_index})")
-    logger.info(f"Original Predicted Class: {ORIGINAL_SAMPLE_PREDICTED_CLASS}, Target Class: {TARGET_CLASS}")
+    logger.info(f"Original Predicted Class: {ORIGINAL_SAMPLE_PREDICTED_CLASS}, Target Class: {TARGET_CLASS}, combinations to test: {num_combinations_to_test}/{len(RULES_COMBINATIONS)}")
     
     # Log sample info to WandB
     if wandb_run:
