@@ -772,7 +772,7 @@ def run_single_sample(
                                     # Save feature values for original, all generations, and final counterfactuals
                                     feature_rows = []
                                     # Add original sample
-                                    orig_row = {'replication': 'original', 'generation': 0}
+                                    orig_row = {'replication': 'original', 'generation': 0, 'predicted_class': ORIGINAL_SAMPLE_PREDICTED_CLASS}
                                     orig_row.update({f: ORIGINAL_SAMPLE[f] for f in FEATURE_NAMES_LOCAL})
                                     feature_rows.append(orig_row)
                                     
@@ -780,7 +780,11 @@ def run_single_sample(
                                         evolution_history = rep.get('evolution_history', [])
                                         if evolution_history:
                                             for gen_idx, gen_sample in enumerate(evolution_history):
-                                                gen_row = {'replication': rep_idx, 'generation': gen_idx + 1}
+                                                # Predict class for this generation
+                                                gen_sample_df = pd.DataFrame([gen_sample])[FEATURE_NAMES_LOCAL]
+                                                gen_pred_class = int(model.predict(gen_sample_df)[0])
+                                                
+                                                gen_row = {'replication': rep_idx, 'generation': gen_idx + 1, 'predicted_class': gen_pred_class}
                                                 gen_row.update({f: gen_sample.get(f, np.nan) for f in FEATURE_NAMES_LOCAL})
                                                 feature_rows.append(gen_row)
                                     
@@ -793,7 +797,34 @@ def run_single_sample(
                                         n_features = len(FEATURE_NAMES_LOCAL)
                                         fig_4d, axes = plt.subplots(n_features, n_features, figsize=(14, 14))
                                         
-                                        colors_rep = ['blue', 'red', 'green', 'orange', 'purple', 'brown']
+                                        # Use class colors from the main visualization
+                                        orig_class_color = class_colors_list[ORIGINAL_SAMPLE_PREDICTED_CLASS % len(class_colors_list)]
+                                        target_class_color = class_colors_list[TARGET_CLASS % len(class_colors_list)]
+                                        
+                                        # Extract DPG constraints for original and target classes
+                                        orig_class_key = f"Class {ORIGINAL_SAMPLE_PREDICTED_CLASS}"
+                                        target_class_key = f"Class {TARGET_CLASS}"
+                                        
+                                        orig_constraints = {}
+                                        target_constraints = {}
+                                        
+                                        if orig_class_key in constraints:
+                                            for constraint in constraints[orig_class_key]:
+                                                feat = constraint.get('feature')
+                                                if feat:
+                                                    orig_constraints[feat] = {
+                                                        'min': constraint.get('min'),
+                                                        'max': constraint.get('max')
+                                                    }
+                                        
+                                        if target_class_key in constraints:
+                                            for constraint in constraints[target_class_key]:
+                                                feat = constraint.get('feature')
+                                                if feat:
+                                                    target_constraints[feat] = {
+                                                        'min': constraint.get('min'),
+                                                        'max': constraint.get('max')
+                                                    }
                                         
                                         for i, feat_y in enumerate(FEATURE_NAMES_LOCAL):
                                             for j, feat_x in enumerate(FEATURE_NAMES_LOCAL):
@@ -808,9 +839,44 @@ def run_single_sample(
                                                     ax.axis('off')
                                                 else:
                                                     # Off-diagonal: scatter plot
-                                                    # Plot original sample
+                                                    # Plot constraint lines/regions
+                                                    # Original class constraints (dashed)
+                                                    if feat_x in orig_constraints:
+                                                        x_min = orig_constraints[feat_x].get('min')
+                                                        x_max = orig_constraints[feat_x].get('max')
+                                                        if x_min is not None:
+                                                            ax.axvline(x=x_min, color=orig_class_color, linestyle='--', linewidth=1, alpha=0.5, zorder=1)
+                                                        if x_max is not None:
+                                                            ax.axvline(x=x_max, color=orig_class_color, linestyle='--', linewidth=1, alpha=0.5, zorder=1)
+                                                    
+                                                    if feat_y in orig_constraints:
+                                                        y_min = orig_constraints[feat_y].get('min')
+                                                        y_max = orig_constraints[feat_y].get('max')
+                                                        if y_min is not None:
+                                                            ax.axhline(y=y_min, color=orig_class_color, linestyle='--', linewidth=1, alpha=0.5, zorder=1)
+                                                        if y_max is not None:
+                                                            ax.axhline(y=y_max, color=orig_class_color, linestyle='--', linewidth=1, alpha=0.5, zorder=1)
+                                                    
+                                                    # Target class constraints (solid)
+                                                    if feat_x in target_constraints:
+                                                        x_min = target_constraints[feat_x].get('min')
+                                                        x_max = target_constraints[feat_x].get('max')
+                                                        if x_min is not None:
+                                                            ax.axvline(x=x_min, color=target_class_color, linestyle='-', linewidth=1.5, alpha=0.6, zorder=2)
+                                                        if x_max is not None:
+                                                            ax.axvline(x=x_max, color=target_class_color, linestyle='-', linewidth=1.5, alpha=0.6, zorder=2)
+                                                    
+                                                    if feat_y in target_constraints:
+                                                        y_min = target_constraints[feat_y].get('min')
+                                                        y_max = target_constraints[feat_y].get('max')
+                                                        if y_min is not None:
+                                                            ax.axhline(y=y_min, color=target_class_color, linestyle='-', linewidth=1.5, alpha=0.6, zorder=2)
+                                                        if y_max is not None:
+                                                            ax.axhline(y=y_max, color=target_class_color, linestyle='-', linewidth=1.5, alpha=0.6, zorder=2)
+                                                    
+                                                    # Plot original sample with its class color
                                                     ax.scatter(ORIGINAL_SAMPLE[feat_x], ORIGINAL_SAMPLE[feat_y], 
-                                                             marker='o', s=200, c='black', edgecolors='black', 
+                                                             marker='o', s=200, c=orig_class_color, edgecolors='black', 
                                                              linewidths=2, zorder=10, alpha=0.7)
                                                     ax.text(ORIGINAL_SAMPLE[feat_x], ORIGINAL_SAMPLE[feat_y], 'S',
                                                            ha='center', va='center', fontsize=8, color='white', 
@@ -820,17 +886,20 @@ def run_single_sample(
                                                     for rep_idx, rep in enumerate(combination_viz['replication']):
                                                         evolution_history = rep.get('evolution_history', [])
                                                         if evolution_history:
-                                                            color = colors_rep[rep_idx % len(colors_rep)]
-                                                            
-                                                            # Plot path
+                                                            # Plot path (use target class color)
                                                             x_vals = [gen_sample.get(feat_x, np.nan) for gen_sample in evolution_history]
                                                             y_vals = [gen_sample.get(feat_y, np.nan) for gen_sample in evolution_history]
-                                                            ax.plot(x_vals, y_vals, color=color, alpha=0.4, linewidth=1, zorder=3)
+                                                            ax.plot(x_vals, y_vals, color=target_class_color, alpha=0.3, linewidth=1, zorder=3)
                                                             
-                                                            # Plot generation points
+                                                            # Plot generation points colored by predicted class
                                                             for gen_idx, gen_sample in enumerate(evolution_history):
                                                                 x_val = gen_sample.get(feat_x, np.nan)
                                                                 y_val = gen_sample.get(feat_y, np.nan)
+                                                                
+                                                                # Predict class for this generation
+                                                                gen_sample_df = pd.DataFrame([gen_sample])[FEATURE_NAMES_LOCAL]
+                                                                gen_pred_class = int(model.predict(gen_sample_df)[0])
+                                                                gen_color = class_colors_list[gen_pred_class % len(class_colors_list)]
                                                                 
                                                                 # Determine if this is the last generation (final counterfactual)
                                                                 is_final = (gen_idx == len(evolution_history) - 1)
@@ -838,13 +907,13 @@ def run_single_sample(
                                                                 alpha = 1.0 if is_final else 0.3 + (0.5 * gen_idx / max(1, len(evolution_history) - 1))
                                                                 
                                                                 ax.scatter(x_val, y_val, marker='o', s=marker_size, 
-                                                                         c='none', edgecolors=color, linewidths=1.5 if is_final else 1, 
+                                                                         c='none', edgecolors=gen_color, linewidths=1.5 if is_final else 1, 
                                                                          alpha=alpha, zorder=5)
                                                                 
                                                                 # Add label
                                                                 label = 'C' if is_final else str(gen_idx + 1)
                                                                 ax.text(x_val, y_val, label, ha='center', va='center',
-                                                                       fontsize=7 if is_final else 6, color=color, 
+                                                                       fontsize=7 if is_final else 6, color=gen_color, 
                                                                        weight='bold', zorder=6, alpha=alpha)
                                                     
                                                     ax.set_xlabel(feat_x if i == n_features - 1 else '', fontsize=8)
