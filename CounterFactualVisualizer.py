@@ -851,36 +851,46 @@ def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactual
             for gen_idx, (coords, gen_class) in enumerate(zip(history_pca, history_classes)):
                 # Opacity increases from ~0.1 to 1.0
                 alpha = 0.1 + (0.9 * gen_idx / max(1, num_generations - 1))
-                # Size decreases for intermediate generations
+                # Size for circle outline
                 size = 60 if gen_idx < num_generations - 1 else 100
                 # Use class color
                 color = colors[gen_class % len(colors)]
 
-                # Plot the cross marker
+                # Plot circle outline marker
                 plt.scatter(
                     coords[0], coords[1],
-                    color=color, marker='x', s=size,
+                    facecolors='none', edgecolors=color, marker='o', s=size,
                     alpha=alpha, linewidths=1.5,
                     zorder=5
                 )
 
-                # Add circle around final generation (thinner & slightly smaller)
+                # Add generation number as text inside the circle
+                plt.text(
+                    coords[0], coords[1], str(gen_idx + 1),
+                    ha='center', va='center', fontsize=7 if gen_idx < num_generations - 1 else 9,
+                    color=color, alpha=alpha, weight='bold',
+                    zorder=6
+                )
+
+                # Add thicker circle around final generation
                 if gen_idx == num_generations - 1:
                     plt.scatter(
                         coords[0], coords[1],
                         facecolors='none', edgecolors=color,
-                        s=int(size * 2), linewidths=1.25, alpha=1.0,
+                        s=int(size * 1.3), linewidths=2.5, alpha=1.0,
                         zorder=6
                     )
 
-            # Draw a thin line connecting first and last generation for this replication
+            # Draw a line connecting all generations in sequence (first to last)
             try:
-                start_coords = history_pca[0]
-                end_coords = history_pca[-1]
-                final_class = history_classes[-1]
-                line_color = colors[final_class % len(colors)]
-                plt.plot([start_coords[0], end_coords[0]], [start_coords[1], end_coords[1]],
-                         color=line_color, linewidth=1.0, alpha=0.6, zorder=4)
+                if len(history_pca) > 1:
+                    final_class = history_classes[-1]
+                    line_color = colors[final_class % len(colors)]
+                    # Extract all x and y coordinates for the path
+                    x_coords = history_pca[:, 0]
+                    y_coords = history_pca[:, 1]
+                    plt.plot(x_coords, y_coords,
+                             color=line_color, linewidth=1.0, alpha=0.6, zorder=4)
             except Exception:
                 pass
     else:
@@ -900,8 +910,8 @@ def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactual
     legend_elements = [
         Line2D([0], [0], marker='o', color='w', markerfacecolor=colors[original_class % len(colors)], markersize=10, 
                markeredgecolor='black', markeredgewidth=1.5, label='Original Sample'),
-        Line2D([0], [0], marker='x', color='w', markerfacecolor='gray', markersize=8,
-               markeredgecolor='black', label='GA Evolution (faint→solid)')
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='none', markersize=8,
+               markeredgecolor='gray', markeredgewidth=1.5, label='GA Evolution (faint→solid)')
     ]
     plt.legend(handles=legend_elements, loc='best')
     plt.close(fig)
