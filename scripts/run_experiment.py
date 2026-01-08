@@ -745,6 +745,29 @@ def run_single_sample(
                                     coords_df = pd.DataFrame(coords_rows)
                                     coords_df.to_csv(os.path.join(sample_dir, f'pca_coords_combo_{combination_idx}.csv'), index=False)
 
+                                    # Save all generations evolution data
+                                    gen_rows = []
+                                    gen_rows.append({'replication': 'original', 'generation': 0, 'pc1': float(sample_coords[0,0]), 'pc2': float(sample_coords[0,1])})
+                                    
+                                    for rep_idx, rep in enumerate(combination_viz['replication']):
+                                        evolution_history = rep.get('evolution_history', [])
+                                        if evolution_history:
+                                            history_df = pd.DataFrame(evolution_history)
+                                            history_numeric = history_df[FEATURE_NAMES_LOCAL].select_dtypes(include=[np.number])
+                                            history_scaled = scaler.transform(history_numeric)
+                                            history_pca = pca_local.transform(history_scaled)
+                                            
+                                            for gen_idx, coords in enumerate(history_pca):
+                                                gen_rows.append({
+                                                    'replication': rep_idx,
+                                                    'generation': gen_idx + 1,
+                                                    'pc1': float(coords[0]),
+                                                    'pc2': float(coords[1])
+                                                })
+                                    
+                                    gen_df = pd.DataFrame(gen_rows)
+                                    gen_df.to_csv(os.path.join(sample_dir, f'pca_generations_combo_{combination_idx}.csv'), index=False)
+
                                     # Save loadings
                                     loadings = pca_local.components_.T * (pca_local.explained_variance_**0.5)
                                     loadings_df = pd.DataFrame(loadings, index=FEATURE_NAMES_LOCAL, columns=['pc1_loading','pc2_loading'])
