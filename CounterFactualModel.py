@@ -336,12 +336,26 @@ class CounterFactualModel:
         return adjusted_sample
 
     def calculate_sparsity(self, original_sample, counterfactual_sample):
-        total_features = len(original_sample)
-        unchanged_features = sum(
-            original_sample[feature]*3 for feature in original_sample if original_sample[feature] != counterfactual_sample[feature]
-        )
-        sparsity = unchanged_features / total_features
-        return sparsity
+        """
+        Calculate sparsity as the ratio of changed features.
+        
+        Args:
+            original_sample: dict of feature values
+            counterfactual_sample: dict of feature values
+        
+        Returns:
+            float: Ratio of changed features (0=no changes, 1=all changed)
+        """
+        # Convert dicts to arrays in consistent order
+        feature_names = list(original_sample.keys())
+        original_array = np.array([original_sample[f] for f in feature_names])
+        counterfactual_array = np.array([counterfactual_sample[f] for f in feature_names])
+        
+        # Count how many features differ
+        changed_features = np.sum(original_array != counterfactual_array)
+        
+        # Return ratio of changed features
+        return changed_features / len(feature_names)
 
     def individual_diversity(self, individual, population):
         """
