@@ -516,31 +516,104 @@ class CounterFactualModel:
         individual = creator.Individual(sample_dict)
         return individual
 
-    def _mutate_individual(self, individual, sample, feature_names, mutation_rate):
-        """Custom mutation operator that respects actionability constraints."""
+    def _mutate_individual(self, individual, sample, feature_names, mutation_rate, target_class=None):
+        """Custom mutation operator that respects actionability and DPG constraint boundaries.
+        
+        Args:
+            individual: The individual to mutate
+            sample: Original sample
+            feature_names: List of feature names
+            mutation_rate: Probability of mutating each feature
+            target_class: Target class for constraint-aware mutation
+        """
+        # Get target class constraints if available
+        target_constraints = None
+        if target_class is not None and self.constraints:
+            target_constraints = self.constraints.get(f"Class {target_class}", {})
+        
         for feature in feature_names:
             if np.random.rand() < mutation_rate:
+                # Determine mutation bounds based on constraints
+                mutation_min, mutation_max = -0.5, 0.5  # Default mutation range
+                feature_min, feature_max = None, None
+                
+                # Get DPG constraint boundaries for this feature and target class
+                if target_constraints and feature in target_constraints:
+                    constraint = target_constraints[feature]
+                    feature_min = constraint.get('min')
+                    feature_max = constraint.get('max')
+                
                 # Apply mutation only if the feature is actionable
                 if self.dict_non_actionable and feature in self.dict_non_actionable:
                     actionability = self.dict_non_actionable[feature]
                     original_value = sample[feature]
+                    
                     if actionability == "non_decreasing":
-                        mutation_value = np.random.uniform(0, 0.5)  # Only allow increase
-                        individual[feature] += mutation_value
+                        # Only allow increase
+                        if feature_max is not None:
+                            # Mutate towards the upper bound
+                            mutation_range = min(0.5, (feature_max - individual[feature]) * 0.1)
+                        else:
+                            mutation_range = 0.5
+                        individual[feature] += np.random.uniform(0, mutation_range)
+                        
                     elif actionability == "non_increasing":
-                        mutation_value = np.random.uniform(-0.5, 0)  # Only allow decrease
-                        individual[feature] += mutation_value
+                        # Only allow decrease
+                        if feature_min is not None:
+                            # Mutate towards the lower bound
+                            mutation_range = min(0.5, (individual[feature] - feature_min) * 0.1)
+                        else:
+                            mutation_range = 0.5
+                        individual[feature] += np.random.uniform(-mutation_range, 0)
+                        
                     elif actionability == "no_change":
                         individual[feature] = original_value  # Do not change
                     else:
-                        # If no specific actionability rule, apply normal mutation
-                        individual[feature] += np.random.uniform(-0.5, 0.5)
+                        # Constraint-aware mutation within DPG boundaries
+                        if feature_min is not None and feature_max is not None:
+                            # Both bounds exist - mutate within range, scaled by 10% of range
+                            range_size = feature_max - feature_min
+                            mutation_range = range_size * 0.1
+                            individual[feature] += np.random.uniform(-mutation_range, mutation_range)
+                        elif feature_min is not None:
+                            # Only min bound - prefer moving towards it
+                            mutation_range = max(0.5, (individual[feature] - feature_min) * 0.1)
+                            individual[feature] += np.random.uniform(-mutation_range, mutation_range * 0.5)
+                        elif feature_max is not None:
+                            # Only max bound - prefer moving towards it
+                            mutation_range = max(0.5, (feature_max - individual[feature]) * 0.1)
+                            individual[feature] += np.random.uniform(-mutation_range * 0.5, mutation_range)
+                        else:
+                            # No constraints - use default mutation
+                            individual[feature] += np.random.uniform(-0.5, 0.5)
                 else:
-                    # If the feature is not in the non-actionable list, apply normal mutation
-                    individual[feature] += np.random.uniform(-0.5, 0.5)
-
-                # Ensure offspring values stay within valid domain constraints
+                    # Feature not in actionable list - apply constraint-aware mutation
+                    if feature_min is not None and feature_max is not None:
+                        # Both bounds exist - mutate within range
+                        range_size = feature_max - feature_min
+                        mutation_range = range_size * 0.1
+                        individual[feature] += np.random.uniform(-mutation_range, mutation_range)
+                    elif feature_min is not None:
+                        # Only min bound
+                        mutation_range = max(0.5, (individual[feature] - feature_min) * 0.1)
+                        individual[feature] += np.random.uniform(-mutation_range, mutation_range * 0.5)
+                    elif feature_max is not None:
+                        # Only max bound
+                        mutation_range = max(0.5, (feature_max - individual[feature]) * 0.1)
+                        individual[feature] += np.random.uniform(-mutation_range * 0.5, mutation_range)
+                    else:
+                        # No constraints - use default mutation
+                        individual[feature] += np.random.uniform(-0.5, 0.5)
+                
+                # Clip to constraint boundaries if they exist
+                if feature_min is not None:
+                    individual[feature] = max(feature_min, individual[feature])
+                if feature_max is not None:
+                    individual[feature] = min(feature_max, individual[feature])
+                
+                # Ensure non-negative values and round
                 individual[feature] = np.round(max(0, individual[feature]), 2)
+                
         return individual,
 
     def _crossover_dict(self, ind1, ind2, indpb):
@@ -606,7 +679,8 @@ class CounterFactualModel:
         toolbox.register("mutate", self._mutate_individual, 
                         sample=sample, 
                         feature_names=feature_names,
-                        mutation_rate=mutation_rate)
+                        mutation_rate=mutation_rate,
+                        target_class=target_class)
         
         # Create initial population
         population = [self._create_deap_individual(self.get_valid_sample(sample, target_class), feature_names) 
@@ -694,7 +768,8 @@ class CounterFactualModel:
             toolbox.register("mutate", self._mutate_individual, 
                            sample=sample, 
                            feature_names=feature_names,
-                           mutation_rate=current_mutation_rate)
+                           mutation_rate=current_mutation_rate,
+                           target_class=target_class)
             
             # Elitism: Preserve best individuals from current population
             # Keep top 10% of current population (minimum 1, maximum 5)
