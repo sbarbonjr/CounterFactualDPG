@@ -696,8 +696,17 @@ class CounterFactualModel:
                            feature_names=feature_names,
                            mutation_rate=current_mutation_rate)
             
-            # Replace population
-            population[:] = offspring
+            # Elitism: Preserve best individuals from current population
+            # Keep top 10% of current population (minimum 1, maximum 5)
+            elite_size = max(1, min(5, int(0.1 * population_size)))
+            
+            # Sort current population by fitness (best first for minimization)
+            sorted_population = sorted(population, key=lambda ind: ind.fitness.values[0])
+            elites = sorted_population[:elite_size]
+            
+            # Replace population with offspring, but keep elites
+            # Replace worst individuals in offspring with elites
+            population[:] = offspring[:-elite_size] + elites
         
         # Clean up multiprocessing pool if used
         if n_jobs != 1:
