@@ -587,9 +587,7 @@ class CounterFactualModel:
         # Register mating with custom dict crossover
         toolbox.register("mate", self._crossover_dict, indpb=0.6)
 
-        # Register genetic operators
-        toolbox.register("evaluate", lambda ind: (self.calculate_fitness(
-            ind, original_features, sample, target_class, metric, population),))
+        # Register selection and mutation operators
         toolbox.register("select", tools.selTournament, tournsize=4)
         toolbox.register("mutate", self._mutate_individual, 
                         sample=sample, 
@@ -599,6 +597,10 @@ class CounterFactualModel:
         # Create initial population
         population = [self._create_deap_individual(self.get_valid_sample(sample, target_class), feature_names) 
                      for _ in range(population_size)]
+        
+        # Register evaluate operator after population creation so it can capture population in closure
+        toolbox.register("evaluate", lambda ind: (self.calculate_fitness(
+            ind, original_features, sample, target_class, metric, population),))
         
         # Setup statistics
         # Define INVALID_FITNESS threshold for filtering statistics
