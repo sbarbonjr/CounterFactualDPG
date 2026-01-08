@@ -572,6 +572,13 @@ def run_single_sample(
         try:
             with open(dpg_json_path, 'w') as jf:
                 json.dump(normalized_constraints, jf, indent=2, sort_keys=True)
+            
+            # Log to wandb as an artifact
+            if wandb_run:
+                artifact = wandb.Artifact(f'dpg_constraints_{SAMPLE_ID}', type='dpg_constraints')
+                artifact.add_file(dpg_json_path)
+                wandb.log_artifact(artifact)
+                
         except Exception as exc:
             print(f"WARNING: Failed to save DPG constraints to sample folder: {exc}")
     
@@ -986,6 +993,32 @@ def run_single_sample(
                             log_dict["visualizations/pairwise"] = wandb.Image(pairwise_fig)
                         if pca_fig:
                             log_dict["visualizations/pca"] = wandb.Image(pca_fig)
+                        
+                        # Log 4D feature evolution plot
+                        feature_4d_path = os.path.join(sample_dir, f'feature_evolution_4d_combo_{combination_idx}.png')
+                        if os.path.exists(feature_4d_path):
+                            log_dict["visualizations/feature_evolution_4d"] = wandb.Image(feature_4d_path)
+                        
+                        # Log CSV files as wandb Tables
+                        pca_coords_path = os.path.join(sample_dir, f'pca_coords_combo_{combination_idx}.csv')
+                        if os.path.exists(pca_coords_path):
+                            pca_coords_table = wandb.Table(dataframe=pd.read_csv(pca_coords_path))
+                            log_dict["data/pca_coords"] = pca_coords_table
+                        
+                        pca_generations_path = os.path.join(sample_dir, f'pca_generations_combo_{combination_idx}.csv')
+                        if os.path.exists(pca_generations_path):
+                            pca_generations_table = wandb.Table(dataframe=pd.read_csv(pca_generations_path))
+                            log_dict["data/pca_generations"] = pca_generations_table
+                        
+                        feature_values_path = os.path.join(sample_dir, f'feature_values_generations_combo_{combination_idx}.csv')
+                        if os.path.exists(feature_values_path):
+                            feature_values_table = wandb.Table(dataframe=pd.read_csv(feature_values_path))
+                            log_dict["data/feature_values_generations"] = feature_values_table
+                        
+                        pca_loadings_path = os.path.join(sample_dir, f'pca_loadings_combo_{combination_idx}.csv')
+                        if os.path.exists(pca_loadings_path):
+                            pca_loadings_table = wandb.Table(dataframe=pd.read_csv(pca_loadings_path))
+                            log_dict["data/pca_loadings"] = pca_loadings_table
                         
                         wandb.log(log_dict)
                         
