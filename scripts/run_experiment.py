@@ -31,7 +31,7 @@ sys.path.insert(0, str(REPO_ROOT))
 import os
 import pickle
 import argparse
-import logging
+import traceback
 from typing import Any, Dict, List, Optional
 
 import yaml
@@ -67,8 +67,6 @@ from utils.notebooks.experiment_storage import (
     save_visualizations_data,
 )
 
-logger = logging.getLogger(__name__)
-
 
 def load_dataset(config: 'DictConfig'):
     """Load dataset based on config specification.
@@ -84,7 +82,7 @@ def load_dataset(config: 'DictConfig'):
     dataset_name = config.data.dataset.lower()
     
     if dataset_name == "iris":
-        logger.info("Loading Iris dataset...")
+        print("INFO: Loading Iris dataset...")
         iris = load_iris()
         features = iris.data
         labels = iris.target
@@ -101,7 +99,7 @@ def load_dataset(config: 'DictConfig'):
         }
     
     elif dataset_name == "german_credit":
-        logger.info("Loading German Credit dataset...")
+        print("INFO: Loading German Credit dataset...")
         
         # Load CSV
         dataset_path = config.data.dataset_path
@@ -121,7 +119,7 @@ def load_dataset(config: 'DictConfig'):
         
         for col in features_df.columns:
             if features_df[col].dtype == 'object' or features_df[col].dtype.name == 'category':
-                logger.info(f"Encoding categorical feature: {col}")
+                print(f"INFO: Encoding categorical feature: {col}")
                 le = LabelEncoder()
                 features_df_encoded[col] = le.fit_transform(features_df[col])
                 label_encoders[col] = le
@@ -129,8 +127,8 @@ def load_dataset(config: 'DictConfig'):
         features = features_df_encoded.values
         feature_names = list(features_df_encoded.columns)
         
-        logger.info(f"Loaded {len(df)} samples with {len(feature_names)} features")
-        logger.info(f"Encoded {len(label_encoders)} categorical features")
+        print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
+        print(f"INFO: Encoded {len(label_encoders)} categorical features")
         
         return {
             'features': features,
@@ -194,7 +192,7 @@ def apply_overrides(config: DictConfig, overrides: List[str]) -> DictConfig:
     
     for override in overrides:
         if '=' not in override:
-            logger.warning(f"Invalid override format: {override}. Expected 'key=value'")
+            print(f"WARNING: Invalid override format: {override}. Expected 'key=value'")
             continue
         
         key_path, value_str = override.split('=', 1)
@@ -213,7 +211,7 @@ def apply_overrides(config: DictConfig, overrides: List[str]) -> DictConfig:
             if hasattr(current, key):
                 current = getattr(current, key)
             else:
-                logger.warning(f"Config key not found: {key_path}")
+                print(f"WARNING: Config key not found: {key_path}")
                 break
         else:
             # Set the final value
@@ -221,9 +219,9 @@ def apply_overrides(config: DictConfig, overrides: List[str]) -> DictConfig:
             if hasattr(current, final_key):
                 setattr(current, final_key, value)
                 current._config[final_key] = value
-                logger.info(f"Override applied: {key_path} = {value}")
+                print(f"INFO: Override applied: {key_path} = {value}")
             else:
-                logger.warning(f"Config key not found: {key_path}")
+                print(f"WARNING: Config key not found: {key_path}")
     
     return config
 
@@ -238,7 +236,7 @@ def get_git_info(repo_path: Optional[str] = None) -> Optional[Dict[str, str]]:
     try:
         import git
     except Exception:
-        logger.warning("GitPython not available; skipping git info collection")
+        print("WARNING: GitPython not available; skipping git info collection")
         return None
 
     from git import InvalidGitRepositoryError
@@ -246,10 +244,10 @@ def get_git_info(repo_path: Optional[str] = None) -> Optional[Dict[str, str]]:
     try:
         repo = git.Repo(repo_path or pathlib.Path(__file__).resolve().parent, search_parent_directories=True)
     except InvalidGitRepositoryError:
-        logger.warning("Not a git repository; skipping git info collection")
+        print("WARNING: Not a git repository; skipping git info collection")
         return None
     except Exception as exc:
-        logger.warning(f"Failed to access git repository: {exc}")
+        print(f"WARNING: Failed to access git repository: {exc}")
         return None
 
     try:
@@ -303,14 +301,14 @@ def get_git_info(repo_path: Optional[str] = None) -> Optional[Dict[str, str]]:
             'commit_url': commit_url,
         }
     except Exception as exc:
-        logger.warning(f"Failed to collect git info: {exc}")
+        print(f"WARNING: Failed to collect git info: {exc}")
         return None
 
 
 def init_wandb(config: DictConfig, resume_id: Optional[str] = None, offline: bool = False):
     """Initialize Weights & Biases run."""
     if not WANDB_AVAILABLE:
-        logger.warning("WandB not available, skipping initialization")
+        print("WARNING: WandB not available, skipping initialization")
         return None
     
     mode = "offline" if offline else "online"
@@ -344,7 +342,7 @@ def init_wandb(config: DictConfig, resume_id: Optional[str] = None, offline: boo
             try:
                 run.config['git'] = git_info
             except Exception:
-                logger.warning("Unable to add git info to wandb config")
+                print("WARNING: Unable to add git info to wandb config")
 
             try:
                 # Add a summary entry with the git info
@@ -363,10 +361,10 @@ def init_wandb(config: DictConfig, resume_id: Optional[str] = None, offline: boo
                         "git/commit_url": wandb.Html(f"<a href='{git_info['commit_url']}' target='_blank'>{git_info['commit_url']}</a>")
                     })
             except Exception as exc:
-                logger.warning(f"Failed to log git commit url to wandb: {exc}")
+                print(f"WARNING: Failed to log git commit url to wandb: {exc}")
     except Exception:
         # Best effort; do not fail initialization if git info can't be collected
-        logger.debug("Skipping git info collection")
+        print("DEBUG: Skipping git info collection")
     
     return run
 
@@ -426,8 +424,8 @@ def run_single_sample(
     SAMPLE_ID = get_sample_id(sample_index)
     save_sample_metadata(SAMPLE_ID, ORIGINAL_SAMPLE, ORIGINAL_SAMPLE_PREDICTED_CLASS, TARGET_CLASS, sample_index, output_dir=output_dir)
     
-    logger.info(f"Processing Sample ID: {SAMPLE_ID} (dataset index: {sample_index})")
-    logger.info(f"Original Predicted Class: {ORIGINAL_SAMPLE_PREDICTED_CLASS}, Target Class: {TARGET_CLASS}, combinations to test: {num_combinations_to_test}/{len(RULES_COMBINATIONS)}")
+    print(f"INFO: Processing Sample ID: {SAMPLE_ID} (dataset index: {sample_index})")
+    print(f"INFO: Original Predicted Class: {ORIGINAL_SAMPLE_PREDICTED_CLASS}, Target Class: {TARGET_CLASS}, combinations to test: {num_combinations_to_test}/{len(RULES_COMBINATIONS)}")
     
     # Log sample info to WandB
     if wandb_run:
@@ -617,7 +615,7 @@ def run_single_sample(
                     
                     replication_viz['visualizations'] = [fitness_fig] if fitness_fig else []
                 except Exception as exc:
-                    logger.warning(f"Visualization generation failed: {exc}")
+                    print(f"WARNING: Visualization generation failed: {exc}")
     
     # Save visualizations data
     viz_filepath = os.path.join(sample_dir, 'after_viz_generation.pkl')
@@ -637,7 +635,7 @@ def run_single_sample(
         artifact.add_file(viz_filepath)
         wandb.log_artifact(artifact)
     
-    logger.info(f"Completed sample {SAMPLE_ID}: {valid_counterfactuals}/{total_replications} successful counterfactuals")
+    print(f"INFO: Completed sample {SAMPLE_ID}: {valid_counterfactuals}/{total_replications} successful counterfactuals")
     
     return {
         'sample_id': SAMPLE_ID,
@@ -671,7 +669,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
     )
     
     # Train model
-    logger.info("Training model...")
+    print("INFO: Training model...")
     if config.model.type == "RandomForestClassifier":
         model_params = {
             'n_estimators': config.model.n_estimators,
@@ -691,7 +689,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
     # Log model performance
     train_score = model.score(TRAIN_FEATURES, TRAIN_LABELS)
     test_score = model.score(TEST_FEATURES, TEST_LABELS)
-    logger.info(f"Model trained - Train accuracy: {train_score:.4f}, Test accuracy: {test_score:.4f}")
+    print(f"INFO: Model trained - Train accuracy: {train_score:.4f}, Test accuracy: {test_score:.4f}")
     
     if wandb_run:
         wandb.log({
@@ -700,7 +698,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
         })
     
     # Extract constraints (pass numpy array for DPG compatibility)
-    logger.info("Extracting constraints...")
+    print("INFO: Extracting constraints...")
     constraints = ConstraintParser.extract_constraints_from_dataset(
         model, TRAIN_FEATURES.values, TRAIN_LABELS, FEATURE_NAMES
     )
@@ -710,7 +708,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
         try:
             # If constraints are empty, log and skip heavy logging
             if not constraints:
-                logger.info("No DPG constraints extracted; skipping detailed WandB logging for DPG")
+                print("INFO: No DPG constraints extracted; skipping detailed WandB logging for DPG")
             else:
                 import json
 
@@ -744,7 +742,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
                     except Exception:
                         wandb_run.config.update({'dpg': normalized})
                 except Exception:
-                    logger.warning("Unable to add normalized DPG constraints to wandb config")
+                    print("WARNING: Unable to add normalized DPG constraints to wandb config")
 
                 # Add a compact summary into the run summary (best-effort)
                 try:
@@ -755,7 +753,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
                     else:
                         wandb_run.summary.update({'dpg': summary_entry})
                 except Exception:
-                    logger.warning("Unable to add DPG summary to wandb summary")
+                    print("WARNING: Unable to add DPG summary to wandb summary")
 
                 # Log a tidy table with one row per (class, feature, min, max) for easy visual comparison
                 try:
@@ -769,7 +767,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
                     table = wandb.Table(columns=["class", "feature", "min", "max"], data=table_rows)
                     wandb.log({"dpg/constraints_table": table})
                 except Exception as exc:
-                    logger.warning(f"Failed to log normalized DPG constraints table to WandB: {exc}")
+                    print(f"WARNING: Failed to log normalized DPG constraints table to WandB: {exc}")
 
                 # Save normalized constraints to a JSON file and add as a WandB artifact for inspection
                 try:
@@ -782,9 +780,9 @@ def run_experiment(config: DictConfig, wandb_run=None):
                     artifact.add_file(dpg_json_path)
                     wandb.log_artifact(artifact)
                 except Exception as exc:
-                    logger.warning(f"Failed to save or log normalized DPG constraints artifact: {exc}")
+                    print(f"WARNING: Failed to save or log normalized DPG constraints artifact: {exc}")
         except Exception as exc:
-            logger.warning(f"Failed to log DPG constraints to WandB: {exc}")
+            print(f"WARNING: Failed to log DPG constraints to WandB: {exc}")
     # -----------------------------------------------------------------------
     
     # Prepare data dict (renamed from iris_data for generality)
@@ -811,7 +809,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
             replace=False
         ).tolist()
     
-    logger.info(f"Processing {len(sample_indices)} samples: {sample_indices}")
+    print(f"INFO: Processing {len(sample_indices)} samples: {sample_indices}")
     
     # Process each sample
     results = []
@@ -832,13 +830,13 @@ def run_experiment(config: DictConfig, wandb_run=None):
     total_valid = sum(r['valid_counterfactuals'] for r in results)
     total_replications = sum(r['total_replications'] for r in results)
     
-    logger.info(f"\n{'='*60}")
-    logger.info(f"Experiment Complete!")
-    logger.info(f"{'='*60}")
-    logger.info(f"Samples processed: {len(results)}")
-    logger.info(f"Total valid counterfactuals: {total_valid}/{total_replications}")
-    logger.info(f"Overall success rate: {total_success_rate:.2%}")
-    logger.info(f"{'='*60}\n")
+    print(f"\n{'='*60}")
+    print("Experiment Complete!")
+    print(f"{'='*60}")
+    print(f"Samples processed: {len(results)}")
+    print(f"Total valid counterfactuals: {total_valid}/{total_replications}")
+    print(f"Overall success rate: {total_success_rate:.2%}")
+    print(f"{'='*60}\n")
     
     if wandb_run:
         wandb.log({
@@ -905,28 +903,24 @@ def main():
     
     args = parser.parse_args()
     
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO if args.verbose else logging.WARNING,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+
     
     # Load config
-    logger.info(f"Loading config from {args.config}")
+    print(f"INFO: Loading config from {args.config}")
     config = load_config(args.config)
     
     # Apply overrides
     if args.overrides:
-        logger.info(f"Applying {len(args.overrides)} config overrides")
+        print(f"INFO: Applying {len(args.overrides)} config overrides")
         config = apply_overrides(config, args.overrides)
     
     # Initialize WandB
     wandb_run = None
     if WANDB_AVAILABLE:
-        logger.info("Initializing Weights & Biases...")
+        print("INFO: Initializing Weights & Biases...")
         wandb_run = init_wandb(config, resume_id=args.resume, offline=args.offline)
     else:
-        logger.warning("WandB not available. Running without experiment tracking.")
+        print("WARNING: WandB not available. Running without experiment tracking.")
     
     try:
         # Run experiment
@@ -939,7 +933,8 @@ def main():
         return results
     
     except Exception as e:
-        logger.error(f"Experiment failed: {e}", exc_info=True)
+        print(f"ERROR: Experiment failed: {e}")
+        traceback.print_exc()
         if wandb_run:
             wandb.finish(exit_code=1)
         raise
