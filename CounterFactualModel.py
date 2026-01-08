@@ -326,11 +326,11 @@ class CounterFactualModel:
                     adjusted_sample[feature] = original_value
                     continue
 
-            # Generate a random value within the valid range
+            # If no explicit min/max constraints, generate values near the original value
             if min_value == -np.inf:
-                min_value = 0  # Default lower bound if no constraint is specified
+                min_value = original_value - 0.5 * (abs(original_value) + 1.0)
             if max_value == np.inf:
-                max_value = min_value + 10  # Default upper bound if no constraint is specified
+                max_value = original_value + 0.5 * (abs(original_value) + 1.0)
 
             adjusted_sample[feature] = np.random.uniform(min_value, max_value)
         return adjusted_sample
@@ -692,7 +692,7 @@ class CounterFactualModel:
         
         return dict(hof[0])
 
-    def generate_counterfactual(self, sample, target_class, population_size=100, generations=100, n_jobs=-1):
+    def generate_counterfactual(self, sample, target_class, population_size=100, generations=100, mutation_rate=0.8, n_jobs=-1):
         """
         Generate a counterfactual for the given sample and target class using a genetic algorithm.
 
@@ -701,6 +701,7 @@ class CounterFactualModel:
             target_class (int): The desired class for the counterfactual.
             population_size (int): Size of the population for the genetic algorithm.
             generations (int): Number of generations to run.
+            mutation_rate (float): Per-feature mutation probability.
             n_jobs (int): Number of parallel jobs. -1=all CPUs (default), 1=sequential.
 
         Returns:
@@ -711,5 +712,5 @@ class CounterFactualModel:
         if sample_class == target_class:
             raise ValueError("Target class need to be different from the predicted class label.")
 
-        counterfactual = self.genetic_algorithm(sample, target_class, population_size, generations, n_jobs=n_jobs)
+        counterfactual = self.genetic_algorithm(sample, target_class, population_size, generations, mutation_rate=mutation_rate, n_jobs=n_jobs)
         return counterfactual
