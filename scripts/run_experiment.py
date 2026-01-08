@@ -400,10 +400,12 @@ def run_single_sample(
             
             valid_counterfactuals += 1
             
-            # Store replication data
+            # Store replication data with evolution history
+            evolution_history = getattr(cf_model, 'evolution_history', [])
             replication_viz = {
                 'counterfactual': counterfactual,
                 'cf_model': cf_model,
+                'evolution_history': evolution_history,  # Store evolution for PCA visualization
                 'visualizations': [],
                 'explanations': {}
             }
@@ -648,6 +650,9 @@ def run_single_sample(
                     counterfactuals_list = [rep['counterfactual'] for rep in combination_viz['replication']]
                     cf_features_df = pd.DataFrame(counterfactuals_list)
                     
+                    # Collect all evolution histories for visualization
+                    evolution_histories = [rep.get('evolution_history', []) for rep in combination_viz['replication']]
+                    
                     # Create combination-level visualizations
                     pairwise_fig = plot_pairwise_with_counterfactual_df(
                         model,
@@ -662,7 +667,8 @@ def run_single_sample(
                         pd.DataFrame(FEATURES, columns=FEATURE_NAMES),
                         LABELS,
                         ORIGINAL_SAMPLE,
-                        cf_features_df
+                        cf_features_df,
+                        evolution_histories=evolution_histories  # Pass evolution data
                     )
                     
                     combination_viz['pairwise'] = pairwise_fig
