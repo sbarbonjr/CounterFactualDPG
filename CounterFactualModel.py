@@ -35,6 +35,7 @@ class CounterFactualModel:
         self.dict_non_actionable = dict_non_actionable #non_decreasing, non_increasing, no_change
         self.average_fitness_list = []
         self.best_fitness_list = []
+        self.evolution_history = []  # Store best individual per generation for visualization
         self.verbose = verbose
         self.diversity_weight = diversity_weight
         self.repulsion_weight = repulsion_weight
@@ -609,6 +610,7 @@ class CounterFactualModel:
         
         self.best_fitness_list = []
         self.average_fitness_list = []
+        self.evolution_history = []  # Reset evolution history for this run
         previous_best_fitness = float('inf')
         stable_generations = 0
         current_mutation_rate = mutation_rate
@@ -623,6 +625,10 @@ class CounterFactualModel:
             # Update statistics and hall of fame
             record = stats.compile(population)
             hof.update(population)
+            
+            # Store best individual for this generation (deep copy to preserve state)
+            if hof[0].fitness.values[0] != np.inf:
+                self.evolution_history.append(dict(hof[0]))
             
             best_fitness = record["min"]
             average_fitness = record["avg"]
