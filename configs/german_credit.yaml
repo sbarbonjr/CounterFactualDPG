@@ -15,6 +15,10 @@ data:
   target_column: "default"
   test_size: 0.3
   random_state: 42
+  # Feature type specifications (optional - will auto-detect if not specified)
+  # continuous_features: ["duration", "amount", "installment_rate", "residence_since", "age", "existing_credits", "liable_people"]
+  # categorical_features: ["status", "credit_history", "purpose", "savings", "employment_duration", "sex", "other_debtors", "property", "other_installment_plans", "housing", "job", "telephone", "foreign_worker"]
+  # variable_features: null  # null = all features actionable, or list specific actionable features
 
 model:
   type: "RandomForestClassifier"
@@ -48,6 +52,7 @@ experiment_params:
   num_samples: 1  # Process 10 samples from the dataset
   num_combinations_to_test: null  # null = test half of all combinations
   num_replications: 3
+  compute_comprehensive_metrics: true  # Enable comprehensive ECE-style metrics
 
 output:
   local_dir: "experiment_results/german_credit"

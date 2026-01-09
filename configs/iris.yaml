@@ -12,6 +12,10 @@ data:
   dataset: "iris"  # Support for future datasets
   test_size: 0.3
   random_state: 42
+  # Feature type specifications (optional - will auto-detect if not specified)
+  # continuous_features: ["sepal length (cm)", "sepal width (cm)", "petal length (cm)", "petal width (cm)"]
+  # categorical_features: []
+  # variable_features: null  # null = all features are actionable
 
 model:
   type: "RandomForestClassifier"
@@ -43,6 +47,7 @@ experiment_params:
   num_samples: 1 
   num_combinations_to_test: 1 
   num_replications: 1
+  compute_comprehensive_metrics: true  # Enable comprehensive ECE-style metrics
 
 output:
   local_dir: "experiment_results"
