@@ -697,8 +697,62 @@ class CounterFactualModel:
         # Register mating with custom dict crossover
         toolbox.register("mate", self._crossover_dict, indpb=0.6)
 
-        # Register selection and mutation operators
-        toolbox.register("select", tools.selTournament, tournsize=4)
+        # Define diversity-aware selection function
+        def select_diverse(individuals, k):
+            """
+            Select k individuals balancing fitness quality and diversity.
+            This prevents selection from collapsing to clones of the best individual.
+            """
+            selected = []
+            remaining = list(individuals)
+            
+            if not remaining:
+                return selected
+            
+            # Always include the best individual first
+            remaining_sorted = sorted(remaining, key=lambda x: x.fitness.values[0] if x.fitness.valid else 1e9)
+            best = remaining_sorted[0]
+            selected.append(best)
+            remaining.remove(best)
+            
+            # Select remaining individuals balancing fitness and diversity
+            while len(selected) < k and remaining:
+                best_candidate = None
+                best_score = float('inf')
+                
+                for candidate in remaining:
+                    # Get fitness (lower is better)
+                    fitness_val = candidate.fitness.values[0] if candidate.fitness.valid else 1e9
+                    
+                    # Calculate minimum distance to already selected individuals
+                    cand_array = np.array([candidate[key] for key in sorted(candidate.keys())])
+                    min_dist = float('inf')
+                    for sel in selected:
+                        sel_array = np.array([sel[key] for key in sorted(sel.keys())])
+                        dist = np.linalg.norm(cand_array - sel_array)
+                        min_dist = min(min_dist, dist)
+                    
+                    # Score combines fitness and diversity (lower is better)
+                    # Give 30% weight to diversity bonus
+                    diversity_bonus = -0.3 * min_dist  # Negative because we want to minimize
+                    score = fitness_val + diversity_bonus
+                    
+                    if score < best_score:
+                        best_score = score
+                        best_candidate = candidate
+                
+                if best_candidate:
+                    selected.append(best_candidate)
+                    remaining.remove(best_candidate)
+                else:
+                    # If no candidate found, fill with random from remaining
+                    if remaining:
+                        selected.append(remaining.pop(0))
+            
+            return selected
+
+        # Register diversity-aware selection instead of tournament selection
+        toolbox.register("select", select_diverse)
         toolbox.register("mutate", self._mutate_individual, 
                         sample=sample, 
                         feature_names=feature_names,
