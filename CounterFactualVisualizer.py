@@ -80,7 +80,7 @@ def plot_constraints(constraints, overlapping=False, class_colors=None, class_co
     if class_colors is None:
         class_colors = {}
     if class_colors_list is None:
-        class_colors_list = ['purple', 'green', 'orange']
+        class_colors_list = ['purple', 'green', 'orange', 'red', 'blue', 'yellow', 'pink', 'cyan']
     
     # Extract unique features
     features = []
@@ -353,7 +353,9 @@ def plot_pca_with_counterfactual(model, dataset, target, sample, counterfactual)
 
     # Plot the PCA results with class colors and 'x' marker for the counterfactual
     plt.figure(figsize=(10, 6))
-    colors = ['purple', 'green', 'orange']  # Colors for the classes
+    n_unique_classes = len(np.unique(target))
+    default_palette = ['purple', 'green', 'orange', 'red', 'blue', 'yellow', 'pink', 'cyan']
+    colors = default_palette[:n_unique_classes]  # Colors for the classes
 
     for class_value in np.unique(target):
         plt.scatter(
@@ -547,11 +549,12 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
     
     # 3. Class Probability Comparison
     ax3 = axes[2]
-    class_names = ['Class 0', 'Class 1', 'Class 2']
     original_probs = model.predict_proba(sample_df)[0]
     counterfactual_probs = model.predict_proba(pd.DataFrame([counterfactual]))[0]
+    n_classes = len(original_probs)
+    class_names = [f'Class {i}' for i in range(n_classes)]
     
-    x_pos_prob = np.arange(3)
+    x_pos_prob = np.arange(n_classes)
     width_prob = 0.35
     
     bars1 = ax3.bar(x_pos_prob - width_prob/2, original_probs, width_prob, 
@@ -610,7 +613,8 @@ def plot_pairwise_with_counterfactual(model, dataset, target, sample, counterfac
 
     # Determine the class color for the original sample
     original_class = model.predict(pd.DataFrame([sample]))[0]
-    colors = ['purple', 'green', 'orange']
+    default_palette = ['purple', 'green', 'orange', 'red', 'blue', 'yellow', 'pink', 'cyan']
+    colors = default_palette
 
     # Plot the pairplot with Seaborn using the class color for the original sample
     sns.pairplot(combined_df, hue='label', palette={'Dataset': 'gray', 'Original Sample': colors[original_class % len(colors)], 'Counterfactual': 'blue'})
