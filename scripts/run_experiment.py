@@ -33,6 +33,8 @@ import pickle
 import argparse
 import traceback
 from typing import Any, Dict, List, Optional
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing
 
 import yaml
 import numpy as np
@@ -337,6 +339,94 @@ def init_wandb(config: DictConfig, resume_id: Optional[str] = None, offline: boo
     return run
 
 
+def _run_single_replication(args):
+    """Helper function to run a single replication in parallel.
+    
+    Args:
+        args: Tuple containing (replication_num, ORIGINAL_SAMPLE, TARGET_CLASS, 
+              FEATURES_NAMES, dict_non_actionable, config_dict, model, constraints)
+    
+    Returns:
+        Dict with replication results or None if failed
+    """
+    (
+        replication_num,
+        ORIGINAL_SAMPLE,
+        TARGET_CLASS,
+        FEATURES_NAMES,
+        dict_non_actionable,
+        config_dict,
+        model,
+        constraints,
+    ) = args
+    
+    # Reconstruct config from dict
+    config = DictConfig(config_dict)
+    
+    try:
+        # Create CF model with config parameters
+        cf_model = CounterFactualModel(
+            model, 
+            constraints,
+            dict_non_actionable=dict_non_actionable,
+            verbose=False,
+            diversity_weight=config.counterfactual.diversity_weight,
+            repulsion_weight=config.counterfactual.repulsion_weight,
+            boundary_weight=config.counterfactual.boundary_weight,
+            distance_factor=config.counterfactual.distance_factor,
+            sparsity_factor=config.counterfactual.sparsity_factor,
+            constraints_factor=config.counterfactual.constraints_factor,
+        )
+        
+        counterfactual = cf_model.generate_counterfactual(
+            ORIGINAL_SAMPLE, 
+            TARGET_CLASS, 
+            config.counterfactual.population_size,
+            config.counterfactual.max_generations,
+            mutation_rate=config.counterfactual.mutation_rate
+        )
+        
+        if counterfactual is None:
+            return None
+        
+        # Ensure evolution_history includes final counterfactual for visualization
+        if counterfactual is not None:
+            try:
+                if not getattr(cf_model, 'evolution_history', []):
+                    cf_model.evolution_history = [counterfactual.copy() if isinstance(counterfactual, dict) else dict(counterfactual)]
+            except Exception:
+                pass
+        
+        # Extract data needed for later processing
+        # Note: We return serializable data, but also keep a reference to constraints and model
+        # for validate_constraints to work
+        evolution_history = getattr(cf_model, 'evolution_history', [])
+        best_fitness_list = getattr(cf_model, 'best_fitness_list', [])
+        average_fitness_list = getattr(cf_model, 'average_fitness_list', [])
+        
+        return {
+            'replication_num': replication_num,
+            'counterfactual': counterfactual,
+            'evolution_history': evolution_history,
+            'best_fitness_list': best_fitness_list,
+            'average_fitness_list': average_fitness_list,
+            'dict_non_actionable': dict_non_actionable,
+            # Store serializable versions of model properties needed later
+            'constraints': constraints,
+            'feature_names': getattr(cf_model, 'feature_names', None),
+            'diversity_weight': cf_model.diversity_weight,
+            'repulsion_weight': cf_model.repulsion_weight,
+            'boundary_weight': cf_model.boundary_weight,
+            'distance_factor': cf_model.distance_factor,
+            'sparsity_factor': cf_model.sparsity_factor,
+            'constraints_factor': cf_model.constraints_factor,
+        }
+        
+    except Exception as exc:
+        print(f"WARNING: Replication {replication_num} failed: {exc}")
+        return None
+
+
 def run_single_sample(
     sample_index: int,
     config: DictConfig,
@@ -430,6 +520,12 @@ def run_single_sample(
     valid_counterfactuals = 0
     total_replications = 0
     
+    # Determine parallelization settings
+    use_parallel = getattr(config.experiment_params, 'parallel_replications', True)
+    max_workers = getattr(config.experiment_params, 'max_workers', None)
+    if max_workers is None:
+        max_workers = max(1, multiprocessing.cpu_count() - 1)
+    
     # Loop through combinations
     for combination_num, combination in enumerate(RULES_COMBINATIONS[:num_combinations_to_test]):
         dict_non_actionable = dict(zip(FEATURES_NAMES, combination))
@@ -438,64 +534,96 @@ def run_single_sample(
         
         skip_combination = False
         
-        for replication in range(config.experiment_params.num_replications):
-            total_replications += 1
-            
-            if skip_combination:
-                break
-            
-            # Create CF model with config parameters
-            cf_model = CounterFactualModel(
-                model, 
+        # Prepare arguments for parallel execution
+        replication_args = [
+            (
+                replication,
+                ORIGINAL_SAMPLE,
+                TARGET_CLASS,
+                FEATURES_NAMES,
+                dict_non_actionable,
+                config.to_dict(),
+                model,
                 constraints,
-                dict_non_actionable=dict_non_actionable,
-                verbose=False,
-                diversity_weight=config.counterfactual.diversity_weight,
-                repulsion_weight=config.counterfactual.repulsion_weight,
-                boundary_weight=config.counterfactual.boundary_weight,
-                distance_factor=config.counterfactual.distance_factor,
-                sparsity_factor=config.counterfactual.sparsity_factor,
-                constraints_factor=config.counterfactual.constraints_factor,
             )
-            
-            counterfactual = cf_model.generate_counterfactual(
-                ORIGINAL_SAMPLE, 
-                TARGET_CLASS, 
-                config.counterfactual.population_size,
-                config.counterfactual.max_generations,
-                mutation_rate=config.counterfactual.mutation_rate
-            )
-            
-            if counterfactual is None:
-                if replication == (config.experiment_params.num_replications - 1):
-                    skip_combination = True
+            for replication in range(config.experiment_params.num_replications)
+        ]
+        
+        # Run replications in parallel or sequential based on config
+        replication_results = []
+        if use_parallel and config.experiment_params.num_replications > 1:
+            print(f"INFO: Running {config.experiment_params.num_replications} replications in parallel (max_workers={max_workers})")
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(_run_single_replication, args): args[0] 
+                          for args in replication_args}
                 
-                # Log failed replication
-                if wandb_run:
+                for future in as_completed(futures):
+                    replication_num = futures[future]
+                    total_replications += 1
+                    try:
+                        result = future.result()
+                        if result is not None:
+                            replication_results.append(result)
+                    except Exception as exc:
+                        print(f"WARNING: Replication {replication_num} failed with exception: {exc}")
+                        if wandb_run:
+                            wandb.log({
+                                "replication/sample_id": SAMPLE_ID,
+                                "replication/combination": str(combination),
+                                "replication/replication_num": replication_num,
+                                "replication/success": False,
+                            })
+        else:
+            # Sequential execution for backward compatibility or when parallel is disabled
+            for args in replication_args:
+                replication_num = args[0]
+                total_replications += 1
+                result = _run_single_replication(args)
+                if result is not None:
+                    replication_results.append(result)
+                elif wandb_run:
                     wandb.log({
                         "replication/sample_id": SAMPLE_ID,
                         "replication/combination": str(combination),
-                        "replication/replication_num": replication,
+                        "replication/replication_num": replication_num,
                         "replication/success": False,
                     })
-                continue
-            
+        
+        # Process results from all replications
+        if not replication_results:
+            skip_combination = True
+        
+        for result in replication_results:
             valid_counterfactuals += 1
+            counterfactual = result['counterfactual']
+            evolution_history = result['evolution_history']
+            best_fitness_list = result['best_fitness_list']
+            average_fitness_list = result['average_fitness_list']
+            replication_num = result['replication_num']
             
-            # Ensure evolution_history includes final counterfactual for visualization
-            if counterfactual is not None:
-                try:
-                    if not getattr(cf_model, 'evolution_history', []):
-                        cf_model.evolution_history = [counterfactual.copy() if isinstance(counterfactual, dict) else dict(counterfactual)]
-                except Exception:
-                    pass
-
+            # Recreate cf_model with stored parameters
+            cf_model = CounterFactualModel(
+                model,
+                constraints,
+                dict_non_actionable=dict_non_actionable,
+                verbose=False,
+                diversity_weight=result.get('diversity_weight', 0.5),
+                repulsion_weight=result.get('repulsion_weight', 4.0),
+                boundary_weight=result.get('boundary_weight', 15.0),
+                distance_factor=result.get('distance_factor', 2.0),
+                sparsity_factor=result.get('sparsity_factor', 1.0),
+                constraints_factor=result.get('constraints_factor', 3.0),
+            )
+            # Restore fitness history
+            cf_model.best_fitness_list = best_fitness_list
+            cf_model.average_fitness_list = average_fitness_list
+            cf_model.evolution_history = evolution_history
+            
             # Store replication data with evolution history
-            evolution_history = getattr(cf_model, 'evolution_history', [])
             replication_viz = {
                 'counterfactual': counterfactual,
                 'cf_model': cf_model,
-                'evolution_history': evolution_history,  # Store evolution for PCA visualization
+                'evolution_history': evolution_history,
                 'visualizations': [],
                 'explanations': {}
             }
@@ -503,7 +631,7 @@ def run_single_sample(
             
             cf_data = counterfactual.copy()
             cf_data.update({'Rule_' + k: v for k, v in dict_non_actionable.items()})
-            cf_data['Replication'] = replication + 1
+            cf_data['Replication'] = replication_num + 1
             counterfactuals_df_replications.append(cf_data)
             
             # Get metrics from explainer with comprehensive evaluation
@@ -548,7 +676,7 @@ def run_single_sample(
                 log_data = {
                     "replication/sample_id": SAMPLE_ID,
                     "replication/combination": str(combination),
-                    "replication/replication_num": replication,
+                    "replication/replication_num": replication_num,
                     "replication/success": True,
                     "replication/final_fitness": best_fitness,
                     "replication/generations_to_converge": len(cf_model.best_fitness_list),
@@ -575,7 +703,7 @@ def run_single_sample(
                             "fitness/average": avg,
                             "fitness/sample_id": SAMPLE_ID,
                             "fitness/combination": str(combination),
-                            "fitness/replication": replication,
+                            "fitness/replication": replication_num,
                         })
                 
                 # Save fitness data locally as CSV
@@ -590,7 +718,7 @@ def run_single_sample(
                                 'average_fitness': avg
                             })
                         fitness_df = pd.DataFrame(fitness_data)
-                        fitness_csv_path = os.path.join(sample_dir, f'fitness_combo_{combination_num}_rep_{replication}.csv')
+                        fitness_csv_path = os.path.join(sample_dir, f'fitness_combo_{combination_num}_rep_{replication_num}.csv')
                         fitness_df.to_csv(fitness_csv_path, index=False)
         
         if counterfactuals_df_replications:
