@@ -36,7 +36,7 @@ counterfactual:
   constraints_factor: 3.0
   
   # Runtime parameters
-  population_size: 30  # Larger population for more features
+  population_size: 40  # Larger population for more features
   max_generations: 100  # More generations for complex feature space
   mutation_rate: 0.8
   delta_threshold: 0.01
@@ -50,8 +50,8 @@ experiment_params:
   seed: 42
   sample_indices: null  # null = random, or list like [0, 5, 10]
   num_samples: 1  # Process 10 samples from the dataset
-  num_combinations_to_test: null  # null = test half of all combinations
-  num_replications: 3
+  num_combinations_to_test: 1  # null = test half of all combinations
+  num_replications: 5
   compute_comprehensive_metrics: true  # Enable comprehensive ECE-style metrics
   parallel_replications: true  # Enable parallel execution of replications
   max_workers: null  # null = use (CPU_count - 1), or specify a number
