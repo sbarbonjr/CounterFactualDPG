@@ -505,14 +505,12 @@ def run_single_sample(
     print(f"INFO: Processing Sample ID: {SAMPLE_ID} (dataset index: {sample_index})")
     print(f"INFO: Original Predicted Class: {ORIGINAL_SAMPLE_PREDICTED_CLASS}, Target Class: {TARGET_CLASS}, combinations to test: {num_combinations_to_test}/{len(RULES_COMBINATIONS)}")
     
-    # Log sample info to WandB
+    # Log sample info to WandB as summary (these are single values per sample, not time series)
     if wandb_run:
-        wandb.log({
-            "sample/sample_id": SAMPLE_ID,
-            "sample/sample_index": sample_index,
-            "sample/original_class": ORIGINAL_SAMPLE_PREDICTED_CLASS,
-            "sample/target_class": TARGET_CLASS,
-        })
+        wandb.run.summary[f"sample_{SAMPLE_ID}/sample_index"] = sample_index
+        wandb.run.summary[f"sample_{SAMPLE_ID}/original_class"] = ORIGINAL_SAMPLE_PREDICTED_CLASS
+        wandb.run.summary[f"sample_{SAMPLE_ID}/target_class"] = TARGET_CLASS
+        wandb.run.summary[f"sample_{SAMPLE_ID}/num_combinations_tested"] = num_combinations_to_test
     
     counterfactuals_df_combinations = []
     visualizations = []
@@ -601,6 +599,9 @@ def run_single_sample(
             average_fitness_list = result['average_fitness_list']
             replication_num = result['replication_num']
             
+            # Calculate final best fitness
+            best_fitness = best_fitness_list[-1] if best_fitness_list else 0.0
+            
             # Recreate cf_model with stored parameters
             cf_model = CounterFactualModel(
                 model,
@@ -625,7 +626,11 @@ def run_single_sample(
                 'cf_model': cf_model,
                 'evolution_history': evolution_history,
                 'visualizations': [],
-                'explanations': {}
+                'explanations': {},
+                'replication_num': replication_num,
+                'success': True,
+                'best_fitness': best_fitness,
+                'best_fitness_list': cf_model.best_fitness_list if hasattr(cf_model, 'best_fitness_list') else [],
             }
             combination_viz['replication'].append(replication_viz)
             
@@ -651,6 +656,7 @@ def run_single_sample(
             
             # Store metrics in replication for later aggregation
             replication_viz['metrics'] = metrics
+            replication_viz['num_feature_changes'] = metrics.get('num_feature_changes', 0)
             
             # Compute cf_eval metrics if available (for backwards compatibility)
             cf_eval_metrics = {}
@@ -694,17 +700,23 @@ def run_single_sample(
                 
                 wandb.log(log_data)
                 
-                # Log fitness curve
+                # Log fitness evolution with generation as x-axis
+                # Create separate series per replication for better comparison
                 if cf_model.best_fitness_list and cf_model.average_fitness_list:
+                    replication_key = f"s{SAMPLE_ID}_c{combination_num}_r{replication_num}"
                     for gen, (best, avg) in enumerate(zip(cf_model.best_fitness_list, cf_model.average_fitness_list)):
                         wandb.log({
-                            "fitness/generation": gen,
-                            "fitness/best": best,
-                            "fitness/average": avg,
-                            "fitness/sample_id": SAMPLE_ID,
-                            "fitness/combination": str(combination),
-                            "fitness/replication": replication_num,
+                            "generation": gen,
+                            f"fitness/best_{replication_key}": best,
+                            f"fitness/avg_{replication_key}": avg,
                         })
+                        
+                    # Also log metadata about this fitness series to summary
+                    wandb.run.summary[f"fitness_metadata/{replication_key}/sample_id"] = SAMPLE_ID
+                    wandb.run.summary[f"fitness_metadata/{replication_key}/combination"] = str(combination)
+                    wandb.run.summary[f"fitness_metadata/{replication_key}/replication"] = replication_num
+                    wandb.run.summary[f"fitness_metadata/{replication_key}/final_fitness"] = best_fitness
+                    wandb.run.summary[f"fitness_metadata/{replication_key}/generations"] = len(cf_model.best_fitness_list)
                 
                 # Save fitness data locally as CSV
                 if getattr(config.output, 'save_visualization_images', False):
@@ -804,11 +816,34 @@ def run_single_sample(
     success_rate = valid_counterfactuals / total_replications if total_replications > 0 else 0.0
     
     if wandb_run:
-        wandb.log({
-            "sample/num_valid_counterfactuals": valid_counterfactuals,
-            "sample/total_replications": total_replications,
-            "sample/success_rate": success_rate,
-        })
+        # Log sample-level summary statistics (single values per sample)
+        wandb.run.summary[f"sample_{SAMPLE_ID}/num_valid_counterfactuals"] = valid_counterfactuals
+        wandb.run.summary[f"sample_{SAMPLE_ID}/total_replications"] = total_replications
+        wandb.run.summary[f"sample_{SAMPLE_ID}/success_rate"] = success_rate
+        
+        # Create a table of all replications for this sample (structured view)
+        try:
+            replication_table_data = []
+            for combination_viz in visualizations:
+                for rep_viz in combination_viz['replication']:
+                    replication_table_data.append([
+                        SAMPLE_ID,
+                        combination_viz['label'],
+                        rep_viz['replication_num'],
+                        rep_viz.get('success', False),
+                        rep_viz.get('best_fitness', 'N/A'),
+                        len(rep_viz.get('best_fitness_list', [])),
+                        rep_viz.get('num_feature_changes', 'N/A'),
+                    ])
+            
+            if replication_table_data:
+                replication_table = wandb.Table(
+                    columns=["Sample ID", "Combination", "Replication", "Success", "Final Fitness", "Generations", "Feature Changes"],
+                    data=replication_table_data
+                )
+                wandb.log({f"tables/sample_{SAMPLE_ID}_replications": replication_table})
+        except Exception as exc:
+            print(f"WARNING: Failed to create replication table: {exc}")
     
     # Save raw data
     raw_data = {
@@ -1605,12 +1640,11 @@ def run_experiment(config: DictConfig, wandb_run=None):
     print(f"{'='*60}\n")
     
     if wandb_run:
-        wandb.log({
-            "experiment/total_samples": len(results),
-            "experiment/total_valid_counterfactuals": total_valid,
-            "experiment/total_replications": total_replications,
-            "experiment/overall_success_rate": total_success_rate,
-        })
+        # Log experiment-level summary (single values for the entire run)
+        wandb.run.summary["experiment/total_samples"] = len(results)
+        wandb.run.summary["experiment/total_valid_counterfactuals"] = total_valid
+        wandb.run.summary["experiment/total_replications"] = total_replications
+        wandb.run.summary["experiment/overall_success_rate"] = total_success_rate
         
         # Create summary table
         summary_data = []
@@ -1742,6 +1776,19 @@ def main():
     if WANDB_AVAILABLE:
         print("INFO: Initializing Weights & Biases...")
         wandb_run = init_wandb(config, resume_id=args.resume, offline=args.offline)
+        
+        # Define metric step relationships for proper chart grouping
+        if wandb_run:
+            # Fitness metrics use generation as the step (for proper x-axis alignment)
+            wandb.define_metric("generation")
+            wandb.define_metric("fitness/*", step_metric="generation")
+            
+            # Replication and combination metrics use default step (sequential logging)
+            wandb.define_metric("replication/*")
+            wandb.define_metric("combination/*")
+            wandb.define_metric("combo_metrics/*")
+            
+            print("INFO: Configured WandB metric definitions for improved visualization")
     else:
         print("WARNING: WandB not available. Running without experiment tracking.")
     
