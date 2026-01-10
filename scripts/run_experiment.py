@@ -527,6 +527,19 @@ def run_single_sample(
     # Loop through combinations
     for combination_num, combination in enumerate(RULES_COMBINATIONS[:num_combinations_to_test]):
         dict_non_actionable = dict(zip(FEATURES_NAMES, combination))
+        
+        # Force non-actionable features (not in VARIABLE_INDICES) to "no_change"
+        # This ensures they remain frozen during counterfactual generation
+        for idx, feature_name in enumerate(FEATURES_NAMES):
+            if idx not in VARIABLE_INDICES:
+                dict_non_actionable[feature_name] = "no_change"
+        
+        # Log non-actionable features on first iteration
+        if combination_num == 0:
+            frozen_features = [f for idx, f in enumerate(FEATURES_NAMES) if idx not in VARIABLE_INDICES]
+            if frozen_features:
+                print(f"INFO: Freezing {len(frozen_features)} non-actionable features: {frozen_features}")
+        
         counterfactuals_df_replications = []
         combination_viz = {'label': combination, 'pairwise': None, 'pca': None, 'replication': []}
         
