@@ -440,7 +440,7 @@ def run_single_sample(
     """Run counterfactual generation for a single sample with WandB logging.
     
     Args:
-        sample_index: Index of the sample in the dataset
+        sample_index: Index of the sample in the training split
         config: Experiment configuration
         model: Trained classifier model
         constraints: Feature constraints from DPG
@@ -474,8 +474,8 @@ def run_single_sample(
     
     output_dir = config.output.local_dir
     
-    # Get original sample
-    original_sample_values = FEATURES[sample_index]
+    # Get original sample from training split
+    original_sample_values = TRAIN_FEATURES.iloc[sample_index].values if hasattr(TRAIN_FEATURES, 'iloc') else TRAIN_FEATURES[sample_index]
     ORIGINAL_SAMPLE = dict(zip(FEATURE_NAMES, map(float, original_sample_values)))
     SAMPLE_DATAFRAME = pd.DataFrame([ORIGINAL_SAMPLE])
     ORIGINAL_SAMPLE_PREDICTED_CLASS = int(model.predict(SAMPLE_DATAFRAME)[0])
@@ -1563,14 +1563,14 @@ def run_experiment(config: DictConfig, wandb_run=None):
     n_classes = len(np.unique(LABELS))
     class_colors_list = ["purple", "green", "orange", "red", "blue", "yellow", "pink", "cyan"][:n_classes]
     
-    # Determine sample indices to process
+    # Determine sample indices to process (always from training split)
     if config.experiment_params.sample_indices is not None:
         sample_indices = config.experiment_params.sample_indices
     else:
-        # Select random samples
+        # Select random samples from training split
         sample_indices = np.random.choice(
-            len(FEATURES),
-            size=min(config.experiment_params.num_samples, len(FEATURES)),
+            len(TRAIN_FEATURES),
+            size=min(config.experiment_params.num_samples, len(TRAIN_FEATURES)),
             replace=False
         ).tolist()
     
