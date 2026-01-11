@@ -1862,6 +1862,12 @@ def main():
         action='store_true',
         help='Enable verbose logging'
     )
+    parser.add_argument(
+        '--comment',
+        type=str,
+        default=None,
+        help='Optional comment to log with this experiment run'
+    )
     
     args = parser.parse_args()
     
@@ -1875,6 +1881,14 @@ def main():
     if args.overrides:
         print(f"INFO: Applying {len(args.overrides)} config overrides")
         config = apply_overrides(config, args.overrides)
+    
+    # Apply command-line comment
+    if args.comment:
+        if not hasattr(config, 'experiment'):
+            config.experiment = {}
+        config.experiment.notes = args.comment
+        if args.verbose:
+            print(f"INFO: Logging comment: {args.comment}")
     
     # Initialize WandB
     wandb_run = None
