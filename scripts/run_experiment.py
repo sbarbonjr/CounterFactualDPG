@@ -89,7 +89,49 @@ from utils.notebooks.experiment_storage import (
     save_sample_metadata,
     save_visualizations_data,
     _get_sample_dir as get_sample_dir,
-) 
+)
+
+
+def build_dict_non_actionable(config, feature_names, variable_indices):
+    """Build dict_non_actionable from config, supporting per-feature rules.
+    
+    Args:
+        config: Experiment configuration
+        feature_names: List of all feature names
+        variable_indices: Indices of features that are actionable (from config)
+        
+    Returns:
+        dict: Mapping of feature names to actionability rules
+              ("none", "non_increasing", "non_decreasing", "no_change")
+    """
+    dict_non_actionable = {}
+    
+    # Check if per-feature rules are specified in config
+    feature_rules_config = getattr(config.counterfactual, 'feature_rules', None)
+    
+    # Convert DictConfig to regular dict if needed
+    if feature_rules_config is not None:
+        if hasattr(feature_rules_config, '_config'):
+            feature_rules = feature_rules_config._config
+        elif hasattr(feature_rules_config, 'to_dict'):
+            feature_rules = feature_rules_config.to_dict()
+        else:
+            feature_rules = dict(feature_rules_config) if feature_rules_config else {}
+    else:
+        feature_rules = {}
+    
+    for idx, feature_name in enumerate(feature_names):
+        if idx not in variable_indices:
+            # Non-variable features are frozen
+            dict_non_actionable[feature_name] = "no_change"
+        elif feature_rules and feature_name in feature_rules:
+            # Use specified per-feature rule
+            dict_non_actionable[feature_name] = feature_rules[feature_name]
+        else:
+            # Default: no restriction
+            dict_non_actionable[feature_name] = "none"
+    
+    return dict_non_actionable 
 
 
 def determine_feature_types(features_df, config=None):
@@ -482,12 +524,23 @@ def run_single_sample(
     
     # Prepare CF parameters
     FEATURES_NAMES = list(ORIGINAL_SAMPLE.keys())
-    RULES = config.counterfactual.rules
-    RULES_COMBINATIONS = list(__import__('itertools').product(RULES, repeat=len(FEATURES_NAMES)))
     
-    num_combinations_to_test = config.experiment_params.num_combinations_to_test
-    if num_combinations_to_test is None:
-        num_combinations_to_test = int(len(RULES_COMBINATIONS) / 2)
+    # Check if using per-feature rules (preferred) or legacy rule combinations
+    use_feature_rules = hasattr(config.counterfactual, 'feature_rules') and config.counterfactual.feature_rules
+    
+    if use_feature_rules:
+        # Use per-feature rules directly (no combination testing)
+        RULES_COMBINATIONS = [None]  # Single run
+        num_combinations_to_test = 1
+        print(f"INFO: Using per-feature actionability rules from config")
+    else:
+        # Legacy: test combinations of rules across all features
+        RULES = config.counterfactual.rules
+        RULES_COMBINATIONS = list(__import__('itertools').product(RULES, repeat=len(FEATURES_NAMES)))
+        num_combinations_to_test = config.experiment_params.num_combinations_to_test
+        if num_combinations_to_test is None:
+            num_combinations_to_test = int(len(RULES_COMBINATIONS) / 2)
+        print(f"INFO: Testing {num_combinations_to_test} rule combinations (legacy mode)")
     
     # Choose target class
     n_classes = len(np.unique(LABELS))
@@ -524,24 +577,42 @@ def run_single_sample(
     if max_workers is None:
         max_workers = max(1, multiprocessing.cpu_count() - 1)
     
+    # Helper to get a descriptive label for logging
+    def get_combination_label(combination, dict_non_actionable):
+        """Get a descriptive label for logging purposes."""
+        if combination is not None:
+            return str(combination)
+        # For per-feature rules, create a concise summary
+        non_none_rules = {f: r for f, r in dict_non_actionable.items() if r != "none"}
+        return f"per_feature_rules:{len(non_none_rules)}_constraints"
+    
     # Loop through combinations
     for combination_num, combination in enumerate(RULES_COMBINATIONS[:num_combinations_to_test]):
-        dict_non_actionable = dict(zip(FEATURES_NAMES, combination))
+        # Build dict_non_actionable based on config (per-feature rules or combination)
+        if use_feature_rules:
+            # Use per-feature rules from config
+            dict_non_actionable = build_dict_non_actionable(config, FEATURES_NAMES, VARIABLE_INDICES)
+        else:
+            # Legacy: build from rule combination
+            dict_non_actionable = dict(zip(FEATURES_NAMES, combination))
+            # Force non-actionable features (not in VARIABLE_INDICES) to "no_change"
+            for idx, feature_name in enumerate(FEATURES_NAMES):
+                if idx not in VARIABLE_INDICES:
+                    dict_non_actionable[feature_name] = "no_change"
         
-        # Force non-actionable features (not in VARIABLE_INDICES) to "no_change"
-        # This ensures they remain frozen during counterfactual generation
-        for idx, feature_name in enumerate(FEATURES_NAMES):
-            if idx not in VARIABLE_INDICES:
-                dict_non_actionable[feature_name] = "no_change"
-        
-        # Log non-actionable features on first iteration
+        # Log actionability rules on first iteration
         if combination_num == 0:
-            frozen_features = [f for idx, f in enumerate(FEATURES_NAMES) if idx not in VARIABLE_INDICES]
+            frozen_features = [f for f, rule in dict_non_actionable.items() if rule == "no_change"]
+            directional_features = {f: rule for f, rule in dict_non_actionable.items() 
+                                   if rule in ["non_increasing", "non_decreasing"]}
             if frozen_features:
                 print(f"INFO: Freezing {len(frozen_features)} non-actionable features: {frozen_features}")
+            if directional_features:
+                print(f"INFO: Directional constraints: {directional_features}")
         
         counterfactuals_df_replications = []
-        combination_viz = {'label': combination, 'pairwise': None, 'pca': None, 'replication': []}
+        # Store dict_non_actionable directly for visualization (works for both per-feature rules and legacy mode)
+        combination_viz = {'label': dict_non_actionable, 'pairwise': None, 'pca': None, 'replication': []}
         
         skip_combination = False
         
@@ -580,7 +651,7 @@ def run_single_sample(
                         if wandb_run:
                             wandb.log({
                                 "replication/sample_id": SAMPLE_ID,
-                                "replication/combination": str(combination),
+                                "replication/combination": get_combination_label(combination, dict_non_actionable),
                                 "replication/replication_num": replication_num,
                                 "replication/success": False,
                             })
@@ -595,7 +666,7 @@ def run_single_sample(
                 elif wandb_run:
                     wandb.log({
                         "replication/sample_id": SAMPLE_ID,
-                        "replication/combination": str(combination),
+                        "replication/combination": get_combination_label(combination, dict_non_actionable),
                         "replication/replication_num": replication_num,
                         "replication/success": False,
                     })
@@ -694,7 +765,7 @@ def run_single_sample(
                 
                 log_data = {
                     "replication/sample_id": SAMPLE_ID,
-                    "replication/combination": str(combination),
+                    "replication/combination": get_combination_label(combination, dict_non_actionable),
                     "replication/replication_num": replication_num,
                     "replication/success": True,
                     "replication/final_fitness": best_fitness,
@@ -726,7 +797,7 @@ def run_single_sample(
                         
                     # Also log metadata about this fitness series to summary
                     wandb.run.summary[f"fitness_metadata/{replication_key}/sample_id"] = SAMPLE_ID
-                    wandb.run.summary[f"fitness_metadata/{replication_key}/combination"] = str(combination)
+                    wandb.run.summary[f"fitness_metadata/{replication_key}/combination"] = get_combination_label(combination, dict_non_actionable)
                     wandb.run.summary[f"fitness_metadata/{replication_key}/replication"] = replication_num
                     wandb.run.summary[f"fitness_metadata/{replication_key}/final_fitness"] = best_fitness
                     wandb.run.summary[f"fitness_metadata/{replication_key}/generations"] = len(cf_model.best_fitness_list)
@@ -782,7 +853,7 @@ def run_single_sample(
                 if wandb_run:
                     combo_log = {
                         "combo/sample_id": SAMPLE_ID,
-                        "combo/combination": str(combination),
+                        "combo/combination": get_combination_label(combination, dict_non_actionable),
                     }
                     for key, value in combination_comprehensive_metrics.items():
                         if isinstance(value, (int, float, bool)) and not (isinstance(value, float) and (np.isnan(value) or np.isinf(value))):
@@ -810,7 +881,7 @@ def run_single_sample(
                 
                 wandb.log({
                     "combination/sample_id": SAMPLE_ID,
-                    "combination/combination": str(combination),
+                    "combination/combination": get_combination_label(combination, dict_non_actionable),
                     "combination/num_cfs": len(cf_list),
                     "combination/valid_cfs": num_valid,
                     "combination/validity_pct": pct_valid * 100,
@@ -906,7 +977,8 @@ def run_single_sample(
     # Generate visualizations if enabled
     if config.output.save_visualizations:
         for combination_idx, combination_viz in enumerate(visualizations):
-            dict_non_actionable = dict(zip(FEATURES_NAMES, combination_viz['label']))
+            # dict_non_actionable is now stored directly in combination_viz['label']
+            dict_non_actionable = combination_viz['label']
             
             # Per-replication visualizations
             for replication_idx, replication_viz in enumerate(combination_viz['replication']):

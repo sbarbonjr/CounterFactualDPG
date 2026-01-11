@@ -645,12 +645,13 @@ class CounterFactualModel:
                 
         return individual,
 
-    def _crossover_dict(self, ind1, ind2, indpb):
+    def _crossover_dict(self, ind1, ind2, indpb, sample=None):
         """Custom crossover operator for dict-based individuals.
         
         Args:
             ind1, ind2: Parent individuals (dicts)
             indpb: Probability of swapping each feature
+            sample: Original sample dict for actionability enforcement (optional)
             
         Returns:
             Tuple of two offspring individuals
@@ -658,6 +659,20 @@ class CounterFactualModel:
         for key in ind1.keys():
             if np.random.rand() < indpb:
                 ind1[key], ind2[key] = ind2[key], ind1[key]
+        
+        # Enforce actionability constraints after crossover
+        if sample is not None and self.dict_non_actionable:
+            for ind in [ind1, ind2]:
+                for feature, constraint in self.dict_non_actionable.items():
+                    if feature in ind and feature in sample:
+                        original_value = sample[feature]
+                        if constraint == "non_decreasing":
+                            ind[feature] = max(ind[feature], original_value)
+                        elif constraint == "non_increasing":
+                            ind[feature] = min(ind[feature], original_value)
+                        elif constraint == "no_change":
+                            ind[feature] = original_value
+        
         return ind1, ind2
 
     def genetic_algorithm(self, sample, target_class, population_size=100, generations=100, mutation_rate=0.8, metric="euclidean", delta_threshold=0.01, patience=10, n_jobs=-1):
@@ -700,8 +715,8 @@ class CounterFactualModel:
         # Register population creation
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
         
-        # Register mating with custom dict crossover
-        toolbox.register("mate", self._crossover_dict, indpb=0.6)
+        # Register mating with custom dict crossover (pass original sample for constraint enforcement)
+        toolbox.register("mate", self._crossover_dict, indpb=0.6, sample=sample)
 
         # Define diversity-aware selection function
         def select_diverse(individuals, k):

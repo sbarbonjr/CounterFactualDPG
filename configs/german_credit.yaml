@@ -58,9 +58,15 @@ counterfactual:
   delta_threshold: 0.01
   patience: 15  # More patience for convergence
   
-  # Actionability rules to test
-  # For credit data, certain features like age, credit_history may be non-actionable
-  rules: ["none"]  # "non_increasing", "non_decreasing"
+  # Per-feature actionability rules (preferred over legacy "rules" combinations)
+  # Available rules: "none", "non_increasing", "non_decreasing", "no_change"
+  # Features not listed default to "none" (no restriction)
+  # Non-variable features (not in data.variable_features) are automatically "no_change"
+  feature_rules:
+    age: non_decreasing  # Age can only increase (cannot get younger)
+  
+  # Legacy: Actionability rules to test (only used if feature_rules is not set)
+  # rules: ["none"]  # "non_increasing", "non_decreasing"
 
 experiment_params:
   seed: 42
