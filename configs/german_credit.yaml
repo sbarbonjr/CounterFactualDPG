@@ -20,7 +20,7 @@ data:
   # categorical_features: ["status", "credit_history", "purpose", "savings", "employment_duration", "sex", "other_debtors", "property", "other_installment_plans", "housing", "job", "telephone", "foreign_worker"]
   
   # Variable features: only these features can change during counterfactual generation
-  # Non-actionable (frozen): age, people_under_maintenance, credit_history, purpose, personal_status_sex, housing, foreign_worker
+  # Non-actionable (frozen): people_under_maintenance, credit_history, purpose, personal_status_sex, housing, foreign_worker
   variable_features:
     - account_check_status
     - duration_in_month
@@ -35,6 +35,7 @@ data:
     - credits_this_bank
     - job
     - telephone
+    - age  # Added to variable_features so it can be constrained with non_decreasing rule
 
 model:
   type: "RandomForestClassifier"
