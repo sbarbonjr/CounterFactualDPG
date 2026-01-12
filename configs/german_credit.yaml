@@ -38,6 +38,7 @@ counterfactual:
   original_escape_weight: 2.0  # Weight for penalizing staying within original class bounds
   escape_pressure: 0.5  # Balance between escaping original (1.0) vs approaching target (0.0)
   prioritize_non_overlapping: true  # Prioritize mutating features with non-overlapping boundaries
+  max_bonus_cap: 50.0  # Cap for diversity/repulsion bonuses (critical for high-dimensional datasets)
   
   # Runtime parameters
   population_size: 40  # Larger population for more features
