@@ -1521,6 +1521,116 @@ Final Results
                                     feature_df = pd.DataFrame(feature_rows)
                                     feature_df.to_csv(os.path.join(sample_dir, f'feature_values_generations_combo_{combination_idx}.csv'), index=False)
 
+                                    # Create seaborn pairplot for feature evolution visualization
+                                    try:
+                                        import seaborn as sns
+                                        
+                                        # Determine which features to include in pairplot
+                                        # Use top features by variance or change, limit to 4-6 for readability
+                                        numeric_features = [f for f in FEATURE_NAMES_LOCAL if f in feature_df.columns]
+                                        
+                                        # Calculate variance for each feature across generations
+                                        feature_variance = {}
+                                        for feat in numeric_features:
+                                            if feat in feature_df.columns:
+                                                feature_variance[feat] = feature_df[feat].var()
+                                        
+                                        # Sort by variance and select top features
+                                        sorted_by_variance = sorted(feature_variance.items(), key=lambda x: x[1] if x[1] is not None else 0, reverse=True)
+                                        max_pairplot_features = 5  # Limit for readability
+                                        pairplot_features = [feat for feat, _ in sorted_by_variance[:max_pairplot_features]]
+                                        
+                                        if len(pairplot_features) >= 2:
+                                            print(f"INFO: Creating seaborn pairplot for top {len(pairplot_features)} features by variance...")
+                                            
+                                            # Build combined dataframe with dataset samples + evolution points
+                                            # 1. Dataset samples (background)
+                                            dataset_df = pd.DataFrame(FEATURES, columns=FEATURE_NAMES_LOCAL)
+                                            dataset_df['point_type'] = 'Dataset'
+                                            dataset_df['predicted_class'] = LABELS.tolist() if hasattr(LABELS, 'tolist') else list(LABELS)
+                                            
+                                            # 2. Evolution data from feature_df
+                                            pairplot_df = feature_df.copy()
+                                            
+                                            # Create type labels for evolution data
+                                            max_gen = feature_df[feature_df['replication'] != 'original']['generation'].max() if len(feature_df[feature_df['replication'] != 'original']) > 0 else 0
+                                            
+                                            def get_point_type(row):
+                                                if row['replication'] == 'original':
+                                                    return 'Original'
+                                                elif row['generation'] == max_gen:
+                                                    return 'Counterfactual'
+                                                else:
+                                                    return 'Evolution'
+                                            
+                                            pairplot_df['point_type'] = pairplot_df.apply(get_point_type, axis=1)
+                                            
+                                            # Combine dataset + evolution data
+                                            combined_df = pd.concat([
+                                                dataset_df[pairplot_features + ['point_type']],
+                                                pairplot_df[pairplot_features + ['point_type']]
+                                            ], ignore_index=True)
+                                            
+                                            # Define color palette matching class colors
+                                            orig_class_color = class_colors_list[ORIGINAL_SAMPLE_PREDICTED_CLASS % len(class_colors_list)]
+                                            target_class_color = class_colors_list[TARGET_CLASS % len(class_colors_list)]
+                                            
+                                            palette = {
+                                                'Dataset': 'lightgray',
+                                                'Original': orig_class_color,
+                                                'Evolution': 'gray',
+                                                'Counterfactual': target_class_color
+                                            }
+                                            
+                                            # Set style
+                                            sns.set_style("whitegrid")
+                                            
+                                            # Create pairplot with hue_order to control layering
+                                            pairplot_data = combined_df.dropna()
+                                            
+                                            g = sns.pairplot(
+                                                pairplot_data,
+                                                hue='point_type',
+                                                hue_order=['Dataset', 'Evolution', 'Original', 'Counterfactual'],
+                                                palette=palette,
+                                                markers=['o', '.', 'o', 's'],
+                                                diag_kind='kde',
+                                                plot_kws={'alpha': 0.6},
+                                                diag_kws={'alpha': 0.5, 'linewidth': 2},
+                                                corner=False,
+                                                height=2.5,
+                                                aspect=1
+                                            )
+                                            
+                                            # Customize marker sizes - make Original and Counterfactual larger
+                                            for ax in g.axes.flatten():
+                                                if ax is not None:
+                                                    for collection in ax.collections:
+                                                        # Adjust sizes based on label
+                                                        pass  # seaborn handles this internally
+                                            
+                                            # Customize the plot
+                                            g.fig.suptitle(
+                                                f'Feature Evolution Pairplot - Sample {SAMPLE_ID}\n'
+                                                f'Original (Class {ORIGINAL_SAMPLE_PREDICTED_CLASS}) → Counterfactual (Class {TARGET_CLASS})',
+                                                y=1.02, fontsize=12, weight='bold'
+                                            )
+                                            
+                                            # Adjust legend
+                                            if g._legend:
+                                                g._legend.set_title('Point Type')
+                                            
+                                            # Save the pairplot
+                                            pairplot_path = os.path.join(sample_dir, f'pairplot_combo_{combination_idx}.png')
+                                            g.savefig(pairplot_path, bbox_inches='tight', dpi=150)
+                                            plt.close(g.fig)
+                                            print(f"INFO: Successfully saved seaborn pairplot to {pairplot_path}")
+                                        else:
+                                            print(f"INFO: Skipping pairplot - not enough features (need at least 2)")
+                                    except Exception as exc:
+                                        print(f"ERROR: Failed to create seaborn pairplot: {exc}")
+                                        traceback.print_exc()
+
                                     # Calculate feature changes and filter for visualization
                                     # 1. Get final counterfactual from last generation of first replication
                                     final_cf = None
@@ -2025,6 +2135,11 @@ Final Results
                         radar_path = os.path.join(sample_dir, f'feature_changes_radar_combo_{combination_idx}.png')
                         if os.path.exists(radar_path):
                             log_dict["visualizations/feature_changes_radar"] = wandb.Image(radar_path)
+                        
+                        # Log seaborn pairplot
+                        pairplot_path = os.path.join(sample_dir, f'pairplot_combo_{combination_idx}.png')
+                        if os.path.exists(pairplot_path):
+                            log_dict["visualizations/pairplot"] = wandb.Image(pairplot_path)
                         
                         # Log CSV files as wandb Tables
                         pca_coords_path = os.path.join(sample_dir, f'pca_coords_combo_{combination_idx}.csv')
