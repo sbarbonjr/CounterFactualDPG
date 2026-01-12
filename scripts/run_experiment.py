@@ -1464,20 +1464,94 @@ Final Results
                                         if final_cf and len(actionable_features) > 0:
                                             print(f"INFO: Creating radar chart for {len(actionable_features)} actionable features...")
                                             
+                                            # Extract DPG constraints for radar chart
+                                            orig_class_key = f"Class {ORIGINAL_SAMPLE_PREDICTED_CLASS}"
+                                            target_class_key = f"Class {TARGET_CLASS}"
+                                            
+                                            orig_constraints = {}
+                                            target_constraints = {}
+                                            
+                                            if orig_class_key in constraints:
+                                                for constraint in constraints[orig_class_key]:
+                                                    feat = constraint.get('feature')
+                                                    if feat:
+                                                        orig_constraints[feat] = {
+                                                            'min': constraint.get('min'),
+                                                            'max': constraint.get('max')
+                                                        }
+                                            
+                                            if target_class_key in constraints:
+                                                for constraint in constraints[target_class_key]:
+                                                    feat = constraint.get('feature')
+                                                    if feat:
+                                                        target_constraints[feat] = {
+                                                            'min': constraint.get('min'),
+                                                            'max': constraint.get('max')
+                                                        }
+                                            
                                             # Prepare data for radar chart
                                             categories = actionable_features
                                             original_values = [ORIGINAL_SAMPLE.get(f, 0) for f in categories]
                                             cf_values = [final_cf.get(f, 0) for f in categories]
                                             
+                                            # Collect constraint bounds for normalization
+                                            constraint_values = []
+                                            for f in categories:
+                                                if f in orig_constraints:
+                                                    if orig_constraints[f]['min'] is not None:
+                                                        constraint_values.append(orig_constraints[f]['min'])
+                                                    if orig_constraints[f]['max'] is not None:
+                                                        constraint_values.append(orig_constraints[f]['max'])
+                                                if f in target_constraints:
+                                                    if target_constraints[f]['min'] is not None:
+                                                        constraint_values.append(target_constraints[f]['min'])
+                                                    if target_constraints[f]['max'] is not None:
+                                                        constraint_values.append(target_constraints[f]['max'])
+                                            
                                             # Normalize values to 0-1 range for better visualization
-                                            all_values = original_values + cf_values
-                                            min_val = min(all_values)
-                                            max_val = max(all_values)
+                                            all_values = original_values + cf_values + constraint_values
+                                            min_val = min(all_values) if all_values else 0
+                                            max_val = max(all_values) if all_values else 1
                                             value_range = max_val - min_val if max_val > min_val else 1.0
                                             
                                             # Normalize and clip to [0, 1] to avoid floating-point precision errors
                                             original_norm = [np.clip((v - min_val) / value_range, 0.0, 1.0) for v in original_values]
                                             cf_norm = [np.clip((v - min_val) / value_range, 0.0, 1.0) for v in cf_values]
+                                            
+                                            # Normalize constraint bounds
+                                            orig_constraint_min = []
+                                            orig_constraint_max = []
+                                            target_constraint_min = []
+                                            target_constraint_max = []
+                                            
+                                            for f in categories:
+                                                # Original class constraints
+                                                if f in orig_constraints:
+                                                    if orig_constraints[f]['min'] is not None:
+                                                        orig_constraint_min.append(np.clip((orig_constraints[f]['min'] - min_val) / value_range, 0.0, 1.0))
+                                                    else:
+                                                        orig_constraint_min.append(None)
+                                                    if orig_constraints[f]['max'] is not None:
+                                                        orig_constraint_max.append(np.clip((orig_constraints[f]['max'] - min_val) / value_range, 0.0, 1.0))
+                                                    else:
+                                                        orig_constraint_max.append(None)
+                                                else:
+                                                    orig_constraint_min.append(None)
+                                                    orig_constraint_max.append(None)
+                                                
+                                                # Target class constraints
+                                                if f in target_constraints:
+                                                    if target_constraints[f]['min'] is not None:
+                                                        target_constraint_min.append(np.clip((target_constraints[f]['min'] - min_val) / value_range, 0.0, 1.0))
+                                                    else:
+                                                        target_constraint_min.append(None)
+                                                    if target_constraints[f]['max'] is not None:
+                                                        target_constraint_max.append(np.clip((target_constraints[f]['max'] - min_val) / value_range, 0.0, 1.0))
+                                                    else:
+                                                        target_constraint_max.append(None)
+                                                else:
+                                                    target_constraint_min.append(None)
+                                                    target_constraint_max.append(None)
                                             
                                             # Create radar chart
                                             num_vars = len(categories)
@@ -1488,21 +1562,61 @@ Final Results
                                             cf_norm += cf_norm[:1]
                                             angles += angles[:1]
                                             
-                                            fig_radar, ax_radar = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
+                                            fig_radar, ax_radar = plt.subplots(figsize=(12, 12), subplot_kw=dict(projection='polar'))
                                             
                                             # Plot original and counterfactual
                                             orig_class_color = class_colors_list[ORIGINAL_SAMPLE_PREDICTED_CLASS % len(class_colors_list)]
                                             target_class_color = class_colors_list[TARGET_CLASS % len(class_colors_list)]
                                             
+                                            # Plot constraint bounds as shaded regions
+                                            for idx, (angle, orig_min, orig_max, target_min, target_max) in enumerate(zip(
+                                                angles[:-1], orig_constraint_min, orig_constraint_max, 
+                                                target_constraint_min, target_constraint_max)):
+                                                
+                                                # Original class constraint region
+                                                if orig_min is not None and orig_max is not None:
+                                                    ax_radar.plot([angle, angle], [orig_min, orig_max], 
+                                                                color=orig_class_color, linewidth=4, alpha=0.4, 
+                                                                linestyle='-', zorder=1)
+                                                elif orig_min is not None:
+                                                    ax_radar.plot([angle, angle], [orig_min, 1.0], 
+                                                                color=orig_class_color, linewidth=4, alpha=0.3, 
+                                                                linestyle=':', zorder=1)
+                                                elif orig_max is not None:
+                                                    ax_radar.plot([angle, angle], [0.0, orig_max], 
+                                                                color=orig_class_color, linewidth=4, alpha=0.3, 
+                                                                linestyle=':', zorder=1)
+                                                
+                                                # Target class constraint region
+                                                if target_min is not None and target_max is not None:
+                                                    ax_radar.plot([angle, angle], [target_min, target_max], 
+                                                                color=target_class_color, linewidth=4, alpha=0.4, 
+                                                                linestyle='-', zorder=1)
+                                                elif target_min is not None:
+                                                    ax_radar.plot([angle, angle], [target_min, 1.0], 
+                                                                color=target_class_color, linewidth=4, alpha=0.3, 
+                                                                linestyle=':', zorder=1)
+                                                elif target_max is not None:
+                                                    ax_radar.plot([angle, angle], [0.0, target_max], 
+                                                                color=target_class_color, linewidth=4, alpha=0.3, 
+                                                                linestyle=':', zorder=1)
+                                            
                                             ax_radar.plot(angles, original_norm, 'o-', linewidth=2, 
                                                         label=f'Original (Class {ORIGINAL_SAMPLE_PREDICTED_CLASS})', 
-                                                        color=orig_class_color, markersize=8)
-                                            ax_radar.fill(angles, original_norm, alpha=0.15, color=orig_class_color)
+                                                        color=orig_class_color, markersize=8, zorder=3)
+                                            ax_radar.fill(angles, original_norm, alpha=0.15, color=orig_class_color, zorder=2)
                                             
                                             ax_radar.plot(angles, cf_norm, 's-', linewidth=2, 
                                                         label=f'Counterfactual (Class {TARGET_CLASS})', 
-                                                        color=target_class_color, markersize=8)
-                                            ax_radar.fill(angles, cf_norm, alpha=0.15, color=target_class_color)
+                                                        color=target_class_color, markersize=8, zorder=3)
+                                            ax_radar.fill(angles, cf_norm, alpha=0.15, color=target_class_color, zorder=2)
+                                            
+                                            # Add custom legend entries for constraints
+                                            from matplotlib.lines import Line2D
+                                            custom_lines = [
+                                                Line2D([0], [0], color=orig_class_color, linewidth=4, alpha=0.4, label=f'Class {ORIGINAL_SAMPLE_PREDICTED_CLASS} Constraints'),
+                                                Line2D([0], [0], color=target_class_color, linewidth=4, alpha=0.4, label=f'Class {TARGET_CLASS} Constraints')
+                                            ]
                                             
                                             # Set category labels
                                             ax_radar.set_xticks(angles[:-1])
@@ -1515,8 +1629,10 @@ Final Results
                                             ax_radar.grid(True, linestyle='--', alpha=0.3)
                                             
                                             # Add legend and title
-                                            ax_radar.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=10)
-                                            ax_radar.set_title(f'Feature Changes: Original vs Counterfactual\n(Normalized values)', 
+                                            handles, labels = ax_radar.get_legend_handles_labels()
+                                            handles.extend(custom_lines)
+                                            ax_radar.legend(handles=handles, loc='upper right', bbox_to_anchor=(1.35, 1.1), fontsize=9)
+                                            ax_radar.set_title(f'Feature Changes: Original vs Counterfactual\\n(Normalized values with DPG Constraints)', 
                                                              size=14, weight='bold', pad=20)
                                             
                                             try:
