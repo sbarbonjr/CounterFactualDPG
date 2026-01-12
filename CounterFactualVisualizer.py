@@ -761,7 +761,10 @@ def plot_pairwise_with_counterfactual_df(model, dataset, target, sample, counter
     # Add legends and adjust layout
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, loc='upper right')
-    plt.tight_layout()
+    try:
+        plt.tight_layout()
+    except:
+        pass  # Ignore tight_layout warnings for complex plots
     plt.close(fig)
     return fig
 
@@ -855,6 +858,8 @@ def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactual
             for gen_idx, (coords, gen_class) in enumerate(zip(history_pca, history_classes)):
                 # Opacity increases from ~0.1 to 1.0
                 alpha = 0.1 + (0.9 * gen_idx / max(1, num_generations - 1))
+                # Clamp alpha to [0, 1] to avoid floating-point precision errors
+                alpha = np.clip(alpha, 0.0, 1.0)
                 # Size for circle outline
                 size = 60 if gen_idx < num_generations - 1 else 100
                 # Use class color
