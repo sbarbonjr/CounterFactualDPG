@@ -414,24 +414,31 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
     l2_distance = np.linalg.norm(changes)
     l1_distance = np.sum(np.abs(changes))
     
+    # Filter out features with zero change for charts 1 and 2
+    non_zero_mask = np.abs(changes) > 0.001
+    feature_list_filtered = [f for f, mask in zip(feature_list, non_zero_mask) if mask]
+    original_values_filtered = original_values[non_zero_mask]
+    counterfactual_values_filtered = counterfactual_values[non_zero_mask]
+    changes_filtered = changes[non_zero_mask]
+    
     # Create figure with custom layout
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
     
     # 1. Combined Feature Comparison with Arrows
     ax1 = axes[0]
-    x_pos = np.arange(len(feature_list))
+    x_pos = np.arange(len(feature_list_filtered))
     width = 0.35
     
     # Bars for original and counterfactual
-    bars1 = ax1.barh(x_pos - width/2, original_values, width, 
+    bars1 = ax1.barh(x_pos - width/2, original_values_filtered, width, 
                      label='Original', color=class_colors_list[predicted_class], 
                      alpha=0.7, edgecolor='black', linewidth=1.5)
-    bars2 = ax1.barh(x_pos + width/2, counterfactual_values, width, 
+    bars2 = ax1.barh(x_pos + width/2, counterfactual_values_filtered, width, 
                      label='Counterfactual', color=class_colors_list[counterfactual_class], 
                      alpha=0.7, edgecolor='black', linewidth=1.5)
     
     # Add arrows showing direction of change
-    for i, (orig, cf, change) in enumerate(zip(original_values, counterfactual_values, changes)):
+    for i, (orig, cf, change) in enumerate(zip(original_values_filtered, counterfactual_values_filtered, changes_filtered)):
         if abs(change) > 0.01:  # Only show arrow if change is significant
             arrow_color = 'darkgreen' if change < 0 else 'darkred'
             # Arrow always points from original to counterfactual
@@ -544,7 +551,7 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
                                    zorder=12)
     
     ax1.set_yticks(x_pos)
-    ax1.set_yticklabels([f.replace(' (cm)', '').replace('_', ' ') for f in feature_list])
+    ax1.set_yticklabels([f.replace(' (cm)', '').replace('_', ' ') for f in feature_list_filtered])
     ax1.set_xlabel('Feature Value', fontsize=12, fontweight='bold')
     ax1.set_title(f'Feature Comparison\nClass {predicted_class} → Class {counterfactual_class}', 
                  fontsize=13, fontweight='bold')
@@ -554,13 +561,13 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
     
     # 2. Feature Changes (Signed changes like original)
     ax2 = axes[1]
-    changes_values = changes  # Already calculated as counterfactual - original
+    changes_values = changes_filtered  # Already calculated as counterfactual - original
     change_colors = ['green' if c < 0 else 'red' if c > 0 else 'gray' for c in changes_values]
     
-    bars_change = ax2.barh(range(len(feature_list)), changes_values, 
+    bars_change = ax2.barh(range(len(feature_list_filtered)), changes_values, 
                            color=change_colors, alpha=0.7, edgecolor='black', linewidth=1.5)
-    ax2.set_yticks(range(len(feature_list)))
-    ax2.set_yticklabels([f.replace(' (cm)', '').replace('_', ' ') for f in feature_list])
+    ax2.set_yticks(range(len(feature_list_filtered)))
+    ax2.set_yticklabels([f.replace(' (cm)', '').replace('_', ' ') for f in feature_list_filtered])
     ax2.set_xlabel('Change Value', fontsize=11, fontweight='bold')
     ax2.set_title('Feature Changes', fontsize=12, fontweight='bold')
     ax2.axvline(x=0, color='black', linestyle='-', linewidth=1)
@@ -592,7 +599,7 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
                 # Determine vertical offset based on class
                 y_offset = -0.15 if class_idx == predicted_class else 0.15
                 
-                for i, feature in enumerate(feature_list):
+                for i, feature in enumerate(feature_list_filtered):
                     # Try to match feature name - be more flexible with matching
                     feature_key = None
                     feature_normalized = feature.replace(' (cm)', '').replace('_', ' ').strip().lower()
@@ -605,7 +612,7 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
                     
                     if feature_key and feature_key in constraint_dict:
                         c = constraint_dict[feature_key]
-                        orig_val = original_values[i]
+                        orig_val = original_values_filtered[i]
                         
                         # Calculate the maximum possible change based on constraints
                         constraint_color = class_colors_list[class_idx]
