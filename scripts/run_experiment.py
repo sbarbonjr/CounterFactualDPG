@@ -1623,6 +1623,71 @@ Final Results
                                                         color=target_class_color, markersize=8, zorder=3)
                                             ax_radar.fill(angles, cf_norm, alpha=0.15, color=target_class_color, zorder=2)
                                             
+                                            # Add numerical value annotations
+                                            for idx, (angle, orig_val, cf_val, orig_norm_val, cf_norm_val, 
+                                                     orig_min, orig_max, target_min, target_max) in enumerate(zip(
+                                                angles[:-1], original_values, cf_values, original_norm[:-1], cf_norm[:-1],
+                                                orig_constraint_min, orig_constraint_max, 
+                                                target_constraint_min, target_constraint_max)):
+                                                
+                                                # Annotate original value
+                                                ax_radar.text(angle, orig_norm_val + 0.05, f'{orig_val:.2f}', 
+                                                            ha='center', va='bottom', fontsize=6, 
+                                                            color=orig_class_color, weight='bold',
+                                                            bbox=dict(boxstyle='round,pad=0.2', facecolor='white', 
+                                                                     edgecolor=orig_class_color, alpha=0.7, linewidth=0.5),
+                                                            zorder=4)
+                                                
+                                                # Annotate counterfactual value
+                                                ax_radar.text(angle, cf_norm_val - 0.05, f'{cf_val:.2f}', 
+                                                            ha='center', va='top', fontsize=6, 
+                                                            color=target_class_color, weight='bold',
+                                                            bbox=dict(boxstyle='round,pad=0.2', facecolor='white', 
+                                                                     edgecolor=target_class_color, alpha=0.7, linewidth=0.5),
+                                                            zorder=4)
+                                                
+                                                # Annotate original class constraints
+                                                if orig_min is not None:
+                                                    orig_min_real = orig_constraints[categories[idx]]['min']
+                                                    ax_radar.text(angle, orig_min - 0.08, f'min:{orig_min_real:.2f}', 
+                                                                ha='center', va='top', fontsize=5, 
+                                                                color=orig_class_color, alpha=0.8, style='italic',
+                                                                bbox=dict(boxstyle='round,pad=0.15', facecolor='white', 
+                                                                         edgecolor=orig_class_color, alpha=0.5, linewidth=0.3),
+                                                                zorder=2)
+                                                
+                                                if orig_max is not None:
+                                                    orig_max_real = orig_constraints[categories[idx]]['max']
+                                                    ax_radar.text(angle, orig_max + 0.08, f'max:{orig_max_real:.2f}', 
+                                                                ha='center', va='bottom', fontsize=5, 
+                                                                color=orig_class_color, alpha=0.8, style='italic',
+                                                                bbox=dict(boxstyle='round,pad=0.15', facecolor='white', 
+                                                                         edgecolor=orig_class_color, alpha=0.5, linewidth=0.3),
+                                                                zorder=2)
+                                                
+                                                # Annotate target class constraints (offset slightly to avoid overlap)
+                                                if target_min is not None:
+                                                    target_min_real = target_constraints[categories[idx]]['min']
+                                                    # Offset angle slightly for readability
+                                                    offset_angle = angle + 0.05
+                                                    ax_radar.text(offset_angle, target_min - 0.08, f'min:{target_min_real:.2f}', 
+                                                                ha='left', va='top', fontsize=5, 
+                                                                color=target_class_color, alpha=0.8, style='italic',
+                                                                bbox=dict(boxstyle='round,pad=0.15', facecolor='white', 
+                                                                         edgecolor=target_class_color, alpha=0.5, linewidth=0.3),
+                                                                zorder=2)
+                                                
+                                                if target_max is not None:
+                                                    target_max_real = target_constraints[categories[idx]]['max']
+                                                    # Offset angle slightly for readability
+                                                    offset_angle = angle + 0.05
+                                                    ax_radar.text(offset_angle, target_max + 0.08, f'max:{target_max_real:.2f}', 
+                                                                ha='left', va='bottom', fontsize=5, 
+                                                                color=target_class_color, alpha=0.8, style='italic',
+                                                                bbox=dict(boxstyle='round,pad=0.15', facecolor='white', 
+                                                                         edgecolor=target_class_color, alpha=0.5, linewidth=0.3),
+                                                                zorder=2)
+                                            
                                             # Add custom legend entries for constraints
                                             from matplotlib.lines import Line2D
                                             custom_lines = [
