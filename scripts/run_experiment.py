@@ -440,6 +440,8 @@ def _run_single_replication(args):
             original_escape_weight=getattr(config.counterfactual, 'original_escape_weight', 2.0),
             escape_pressure=getattr(config.counterfactual, 'escape_pressure', 0.5),
             prioritize_non_overlapping=getattr(config.counterfactual, 'prioritize_non_overlapping', True),
+            # Fitness calculation parameters
+            max_bonus_cap=getattr(config.counterfactual, 'max_bonus_cap', 50.0),
         )
         
         counterfactual = cf_model.generate_counterfactual(
@@ -730,6 +732,8 @@ def run_single_sample(
                 original_escape_weight=result.get('original_escape_weight', 2.0),
                 escape_pressure=result.get('escape_pressure', 0.5),
                 prioritize_non_overlapping=result.get('prioritize_non_overlapping', True),
+                # Fitness calculation parameters
+                max_bonus_cap=result.get('max_bonus_cap', 50.0),
             )
             # Restore fitness history
             cf_model.best_fitness_list = best_fitness_list
