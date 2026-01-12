@@ -209,6 +209,8 @@ def plot_dpg_constraints_overview(
     n_features = len(features_with_constraints)
     
     # Identify non-overlapping features between classes
+    # Non-overlapping means the ranges are disjoint (no intersection)
+    # c1_max < c2_min means c1 range ends BEFORE c2 range starts (strictly less than)
     non_overlapping_features = set()
     for feat in features_with_constraints:
         for i, c1 in enumerate(class_names):
@@ -221,10 +223,11 @@ def plot_dpg_constraints_overview(
                 c2_min = c2_bounds.get('min')
                 c2_max = c2_bounds.get('max')
                 
-                # Check for non-overlap
-                if c1_max is not None and c2_min is not None and c1_max <= c2_min:
+                # Check for non-overlap (strictly less than, not equal)
+                # Equal bounds means they touch/overlap, not non-overlapping
+                if c1_max is not None and c2_min is not None and c1_max < c2_min:
                     non_overlapping_features.add(feat)
-                if c2_max is not None and c1_min is not None and c2_max <= c1_min:
+                if c2_max is not None and c1_min is not None and c2_max < c1_min:
                     non_overlapping_features.add(feat)
     
     # Create figure
