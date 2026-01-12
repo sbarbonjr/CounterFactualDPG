@@ -691,6 +691,155 @@ def delta_proba(x, cf_list, model, agg=None):
 
 
 # ============================================================================
+# Boundary Escape Metrics (Dual-Boundary)
+# ============================================================================
+
+def boundary_escape_score(x, cf_list, original_constraints, target_constraints, feature_names=None):
+    """
+    Calculate boundary escape score: measures how well counterfactuals escape 
+    original class bounds while entering target class bounds.
+    
+    Args:
+        x: Original sample (dict or 1D array)
+        cf_list: Array of counterfactual samples (n_samples, n_features)
+        original_constraints: List of constraint dicts for original class 
+                              [{"feature": "age", "min": 3.0, "max": 10.5}, ...]
+        target_constraints: List of constraint dicts for target class
+        feature_names: List of feature names (required if x is array)
+        
+    Returns:
+        dict: Dictionary with escape metrics:
+            - 'escape_rate': Fraction of constrained features that escaped original bounds
+            - 'target_satisfaction_rate': Fraction of features satisfying target bounds
+            - 'boundary_transition_score': Combined score (escaped AND in target) / total constrained
+            - 'features_escaped': List of feature names that escaped original bounds
+            - 'features_in_target': List of feature names satisfying target bounds
+    """
+    if len(cf_list) == 0:
+        return {
+            'escape_rate': 0.0,
+            'target_satisfaction_rate': 0.0,
+            'boundary_transition_score': 0.0,
+            'features_escaped': [],
+            'features_in_target': []
+        }
+    
+    # Convert to dict format if needed
+    if isinstance(x, np.ndarray):
+        if feature_names is None:
+            feature_names = [f"feature_{i}" for i in range(len(x))]
+        x_dict = {feature_names[i]: x[i] for i in range(len(x))}
+    else:
+        x_dict = x
+        if feature_names is None:
+            feature_names = list(x.keys())
+    
+    # Build constraint lookup
+    def _normalize_feature(f):
+        import re
+        f = re.sub(r'\s*\([^)]*\)', '', f)
+        f = f.replace('_', ' ')
+        f = re.sub(r'\s+', ' ', f)
+        return f.strip().lower()
+    
+    orig_bounds = {}
+    for c in original_constraints:
+        norm_f = _normalize_feature(c.get("feature", ""))
+        orig_bounds[norm_f] = {'min': c.get('min'), 'max': c.get('max')}
+    
+    target_bounds = {}
+    for c in target_constraints:
+        norm_f = _normalize_feature(c.get("feature", ""))
+        target_bounds[norm_f] = {'min': c.get('min'), 'max': c.get('max')}
+    
+    # Analyze each counterfactual
+    total_escape_count = 0
+    total_target_count = 0
+    total_both_count = 0
+    total_constrained = 0
+    
+    features_escaped_all = set()
+    features_in_target_all = set()
+    
+    for cf in cf_list:
+        if isinstance(cf, np.ndarray):
+            cf_dict = {feature_names[i]: cf[i] for i in range(len(cf))}
+        else:
+            cf_dict = cf
+        
+        for feature, cf_value in cf_dict.items():
+            norm_f = _normalize_feature(feature)
+            orig_value = x_dict.get(feature, cf_value)
+            
+            # Check original bounds
+            has_orig_constraint = norm_f in orig_bounds
+            escaped_original = True
+            
+            if has_orig_constraint:
+                total_constrained += 1
+                orig_min = orig_bounds[norm_f].get('min')
+                orig_max = orig_bounds[norm_f].get('max')
+                
+                # Check if original value was in bounds
+                orig_in_bounds = True
+                if orig_min is not None and orig_value < orig_min:
+                    orig_in_bounds = False
+                if orig_max is not None and orig_value > orig_max:
+                    orig_in_bounds = False
+                
+                # Check if cf escaped (if original was in bounds)
+                if orig_in_bounds:
+                    cf_in_orig_bounds = True
+                    if orig_min is not None and cf_value < orig_min:
+                        cf_in_orig_bounds = False
+                    if orig_max is not None and cf_value > orig_max:
+                        cf_in_orig_bounds = False
+                    
+                    if not cf_in_orig_bounds:
+                        escaped_original = True
+                        total_escape_count += 1
+                        features_escaped_all.add(feature)
+                    else:
+                        escaped_original = False
+                else:
+                    # Original wasn't in bounds, so "escaped" by default
+                    total_escape_count += 1
+                    features_escaped_all.add(feature)
+            
+            # Check target bounds
+            in_target = True
+            if norm_f in target_bounds:
+                target_min = target_bounds[norm_f].get('min')
+                target_max = target_bounds[norm_f].get('max')
+                
+                if target_min is not None and cf_value < target_min:
+                    in_target = False
+                if target_max is not None and cf_value > target_max:
+                    in_target = False
+                
+                if in_target:
+                    total_target_count += 1
+                    features_in_target_all.add(feature)
+                    
+                    if escaped_original and has_orig_constraint:
+                        total_both_count += 1
+    
+    # Calculate rates
+    n_cfs = len(cf_list)
+    escape_rate = total_escape_count / total_constrained if total_constrained > 0 else 1.0
+    target_rate = total_target_count / (n_cfs * len(target_bounds)) if len(target_bounds) > 0 else 1.0
+    transition_score = total_both_count / total_constrained if total_constrained > 0 else 1.0
+    
+    return {
+        'escape_rate': float(escape_rate),
+        'target_satisfaction_rate': float(target_rate),
+        'boundary_transition_score': float(transition_score),
+        'features_escaped': list(features_escaped_all),
+        'features_in_target': list(features_in_target_all)
+    }
+
+
+# ============================================================================
 # Comprehensive Evaluation Function
 # ============================================================================
 
