@@ -1280,16 +1280,21 @@ Final Results
                                             # Calculate absolute change
                                             feature_changes[feat] = abs(cf_val - orig_val)
                                     
-                                    # 3. Sort features by change magnitude and select top 6
+                                    # 3. Sort features by change magnitude and filter non-zero changes
                                     sorted_features = sorted(feature_changes.items(), key=lambda x: x[1], reverse=True)
+                                    # Filter out features with zero or negligible change (< 0.001)
+                                    sorted_features_nonzero = [(feat, change) for feat, change in sorted_features if change > 0.001]
                                     
                                     print(f"\nINFO: Feature changes ranked (most to least):")
-                                    for feat, change in sorted_features:
+                                    for feat, change in sorted_features_nonzero:
                                         print(f"  {feat}: {change:.4f}")
                                     
                                     # Select top 6 most changed features for pairwise matrix
                                     max_features_for_pairwise = 6
-                                    features_to_plot = [feat for feat, _ in sorted_features[:max_features_for_pairwise]]
+                                    features_to_plot = [feat for feat, _ in sorted_features_nonzero[:max_features_for_pairwise]]
+                                    
+                                    # For radar chart, use all features with non-zero changes
+                                    features_for_radar = [feat for feat, _ in sorted_features_nonzero]
                                     
                                     # Create 4D visualization (pairwise scatter matrix) of feature evolution
                                     try:
@@ -1471,10 +1476,10 @@ Final Results
                                         print(f"ERROR: Failed to save pairwise feature evolution plot: {exc}")
                                         traceback.print_exc()
 
-                                    # Create radar chart for all actionable feature changes
+                                    # Create radar chart for features with non-zero changes
                                     try:
-                                        if final_cf and len(actionable_features) > 0:
-                                            print(f"INFO: Creating radar chart for {len(actionable_features)} actionable features...")
+                                        if final_cf and len(features_for_radar) > 0:
+                                            print(f"INFO: Creating radar chart for {len(features_for_radar)} features with changes...")
                                             
                                             # Extract DPG constraints for radar chart
                                             orig_class_key = f"Class {ORIGINAL_SAMPLE_PREDICTED_CLASS}"
@@ -1501,8 +1506,8 @@ Final Results
                                                             'max': constraint.get('max')
                                                         }
                                             
-                                            # Prepare data for radar chart
-                                            categories = actionable_features
+                                            # Prepare data for radar chart using filtered features
+                                            categories = features_for_radar
                                             original_values = [ORIGINAL_SAMPLE.get(f, 0) for f in categories]
                                             cf_values = [final_cf.get(f, 0) for f in categories]
                                             
