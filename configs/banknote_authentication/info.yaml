@@ -1,0 +1,27 @@
+name: Banknote Authentication
+source:
+  - "https://www.kaggle.com/datasets/ritesaluja/bank-note-authentication-uci-data"
+  - "https://archive.ics.uci.edu/dataset/267/banknote+authentication"
+description: |
+  Banknote authentication dataset from UCI ML Repository. Contains features extracted
+  from images of genuine and forged banknote specimens using wavelet transform.
+size: 1372
+features:
+  count: 4
+  names:
+    - variance
+    - skewness
+    - curtosis
+    - entropy
+  types: all_numerical
+  notes: Features derived from wavelet transformed banknote images
+target:
+  name: class
+  classes: [0, 1]
+  type: binary
+  notes: "0 = genuine, 1 = forged"
+actionability_examples:
+  all_features: no_change  # image-derived features; not directly modifiable
+notes: |
+  Small dataset with only 4 features, ideal for quick experiments and testing.
+  All features are extracted from image processing and represent physical characteristics.

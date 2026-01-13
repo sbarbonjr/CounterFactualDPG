@@ -1,0 +1,53 @@
+name: Heart Disease UCI (Cleveland)
+source:
+  - "https://www.kaggle.com/datasets/redwankarimsony/heart-disease-data"
+  - "https://archive.ics.uci.edu/dataset/45/heart+disease"
+description: |
+  Heart Disease dataset from UCI ML Repository (Cleveland subset). Contains various
+  medical attributes to predict presence of heart disease.
+size: ~920
+features:
+  count: 13
+  names:
+    - age
+    - sex
+    - cp  # chest pain type
+    - trestbps  # resting blood pressure
+    - chol  # serum cholesterol
+    - fbs  # fasting blood sugar > 120 mg/dl
+    - restecg  # resting ECG results
+    - thalch  # maximum heart rate achieved
+    - exang  # exercise induced angina
+    - oldpeak  # ST depression induced by exercise
+    - slope  # slope of peak exercise ST segment
+    - ca  # number of major vessels colored by fluoroscopy
+    - thal  # thalassemia type
+  types: mixed (numerical + categorical)
+  categorical_features:
+    - sex
+    - cp
+    - fbs
+    - restecg
+    - exang
+    - slope
+    - thal
+    - dataset  # to be dropped
+target:
+  name: num
+  classes: [0, 1, 2, 3, 4]
+  type: multiclass (often binarized to 0 vs >0)
+  notes: "0 = no disease, 1-4 = presence of disease (severity)"
+actionability_examples:
+  age: non_decreasing  # cannot get younger
+  sex: no_change  # immutable
+  chol: non_increasing  # can lower with treatment
+  thalch: non_increasing  # max heart rate tends to decrease with age
+  trestbps: none  # blood pressure can be modified
+  fbs: none  # can be modified with diet
+  ca: no_change  # medical measurement
+  thal: no_change  # thalassemia is genetic
+notes: |
+  Classic medical dataset with excellent actionability constraint examples.
+  Contains both numerical and categorical features. Target is often binarized
+  (0 = healthy, >0 = disease present). Some columns like 'id' and 'dataset'
+  should be dropped before use.

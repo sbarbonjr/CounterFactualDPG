@@ -1,0 +1,100 @@
+# Experiment Configuration for CounterFactual DPG - Heart Disease UCI Dataset
+# Heart Disease: ~920 samples, 13 features (mixed), multiclass (often binarized)
+
+experiment:
+  name: "counterfactual_dpg_heart_disease"
+  project: "counterfactual-dpg"
+  entity: "mllab-ts-universit-di-trieste"
+  tags: ["baseline", "heart-disease", "dpg", "binary", "medical"]
+  notes: "DPG counterfactual generation on Heart Disease UCI dataset - classic medical dataset"
+
+data:
+  dataset: "heart_disease_uci"
+  dataset_path: "configs/heart_disease_uci/dataset.csv"
+  target_column: "num"
+  test_size: 0.3
+  random_state: 42
+  # Drop non-feature columns
+  drop_columns: ["id", "dataset"]
+  # Binarize target: 0 = no disease, >0 = disease present
+  binarize_target: true
+  binarize_threshold: 1  # >= 1 becomes 1 (disease), 0 stays 0 (healthy)
+  # Feature specifications
+  continuous_features:
+    - "age"
+    - "trestbps"
+    - "chol"
+    - "thalch"
+    - "oldpeak"
+    - "ca"
+  categorical_features:
+    - "sex"
+    - "cp"
+    - "fbs"
+    - "restecg"
+    - "exang"
+    - "slope"
+    - "thal"
+
+model:
+  type: "RandomForestClassifier"
+  n_estimators: 50
+  random_state: 42
+
+counterfactual:
+  method: "dpg"
+  
+  # GA hyperparameters
+  diversity_weight: 1.5
+  repulsion_weight: 2.0
+  boundary_weight: 12.0
+  distance_factor: 1.5
+  sparsity_factor: 1.0
+  constraints_factor: 3.0
+  
+  # Dual-boundary parameters
+  original_escape_weight: 2.0
+  escape_pressure: 0.5
+  prioritize_non_overlapping: true
+  max_bonus_cap: 50.0
+  
+  # Runtime parameters
+  population_size: 50
+  max_generations: 60
+  mutation_rate: 0.3
+  delta_threshold: 0.01
+  patience: 20
+  
+  # Actionability rules - excellent for testing realistic constraints
+  # Set to "none" for baseline; uncomment actionability block for constrained experiments
+  rules: ["none"]
+  # actionability:
+  #   age: "non_decreasing"  # cannot get younger
+  #   sex: "no_change"  # immutable
+  #   chol: "non_increasing"  # can lower with treatment
+  #   thalch: "non_increasing"  # max heart rate tends to decrease with age
+  #   ca: "no_change"  # medical measurement (number of vessels)
+  #   thal: "no_change"  # thalassemia is genetic
+  #   trestbps: "none"  # blood pressure can be modified
+  #   fbs: "none"  # can be modified with diet
+  #   cp: "none"  # chest pain type
+  #   restecg: "none"  # can change
+  #   exang: "none"  # exercise angina
+  #   oldpeak: "none"  # ST depression
+  #   slope: "none"  # slope of ST segment
+
+experiment_params:
+  seed: 42
+  sample_indices: null
+  num_samples: 10
+  num_combinations_to_test: 1
+  num_replications: 3
+  compute_comprehensive_metrics: true
+  parallel_replications: true
+  max_workers: null
+
+output:
+  local_dir: "experiment_results"
+  save_visualizations: true
+  save_raw_data: true
+  save_visualization_images: true

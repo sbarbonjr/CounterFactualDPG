@@ -1,0 +1,37 @@
+name: Pima Indians Diabetes
+source:
+  - "https://www.kaggle.com/datasets/uciml/pima-indians-diabetes-database"
+description: |
+  Pima Indians Diabetes dataset from the National Institute of Diabetes and Digestive
+  and Kidney Diseases. Contains diagnostic measurements to predict diabetes onset.
+size: 768
+features:
+  count: 8
+  names:
+    - Pregnancies
+    - Glucose
+    - BloodPressure
+    - SkinThickness
+    - Insulin
+    - BMI
+    - DiabetesPedigreeFunction
+    - Age
+  types: all_numerical
+target:
+  name: Outcome
+  classes: [0, 1]
+  type: binary
+  notes: "0 = no diabetes, 1 = diabetes"
+actionability_examples:
+  Age: non_decreasing  # cannot get younger
+  Pregnancies: non_decreasing  # cannot un-have pregnancies
+  DiabetesPedigreeFunction: no_change  # genetic/hereditary factor
+  Glucose: none  # can be modified with diet/medication
+  BloodPressure: none  # can be modified with lifestyle/medication
+  BMI: none  # can be modified with diet/exercise
+  SkinThickness: none  # can change with weight
+  Insulin: none  # can be modified with medication
+notes: |
+  Excellent dataset for testing actionability constraints. Age and Pregnancies are
+  naturally non-decreasing, DiabetesPedigreeFunction is genetic (immutable), while
+  Glucose, BloodPressure, BMI are modifiable through lifestyle changes.
