@@ -5,13 +5,13 @@ with automatic logging to Weights & Biases for experiment tracking and compariso
 
 Usage:
   # Run with config file path
-  python scripts/run_experiment.py --config configs/dpg/iris/config.yaml
+  python scripts/run_experiment.py --config configs/iris/dpg/config.yaml
   
-  # Run with method and dataset (auto-constructs path)
-  python scripts/run_experiment.py --method dpg --dataset german_credit
+  # Run with dataset and method (auto-constructs path)
+  python scripts/run_experiment.py --dataset german_credit --method dpg
   
   # Override specific params
-  python scripts/run_experiment.py --config configs/dpg/iris/config.yaml \
+  python scripts/run_experiment.py --config configs/iris/dpg/config.yaml \
     --set counterfactual.population_size=50 \
     --set experiment_params.seed=123
     
@@ -19,7 +19,7 @@ Usage:
   python scripts/run_experiment.py --resume <wandb_run_id>
   
   # Offline mode (no wandb sync)
-  python scripts/run_experiment.py --config configs/dpg/iris/config.yaml --offline
+  python scripts/run_experiment.py --config configs/iris/dpg/config.yaml --offline
 """
 
 from __future__ import annotations
@@ -2965,19 +2965,19 @@ def main():
         '--config',
         type=str,
         default=None,
-        help='Path to config YAML file (e.g., configs/dpg/iris/config.yaml)'
-    )
-    parser.add_argument(
-        '--method',
-        type=str,
-        default=None,
-        help='Method name (e.g., dpg, dice) - used with --dataset to auto-construct config path'
+        help='Path to config YAML file (e.g., configs/iris/dpg/config.yaml)'
     )
     parser.add_argument(
         '--dataset',
         type=str,
         default=None,
         help='Dataset name (e.g., iris, german_credit) - used with --method to auto-construct config path'
+    )
+    parser.add_argument(
+        '--method',
+        type=str,
+        default=None,
+        help='Method name (e.g., dpg, dice) - used with --dataset to auto-construct config path'
     )
     parser.add_argument(
         '--set',
@@ -3011,18 +3011,18 @@ def main():
     
     args = parser.parse_args()
     
-    # Construct config path from method and dataset if provided
-    if args.method and args.dataset:
+    # Construct config path from dataset and method if provided
+    if args.dataset and args.method:
         if args.config:
-            print("WARNING: --config specified along with --method and --dataset. Using --config value.")
+            print("WARNING: --config specified along with --dataset and --method. Using --config value.")
         else:
-            args.config = f"configs/{args.method}/{args.dataset}/config.yaml"
+            args.config = f"configs/{args.dataset}/{args.method}/config.yaml"
             print(f"INFO: Auto-constructed config path: {args.config}")
-    elif args.method or args.dataset:
-        print("ERROR: Both --method and --dataset must be specified together, or use --config")
+    elif args.dataset or args.method:
+        print("ERROR: Both --dataset and --method must be specified together, or use --config")
         return None
     elif not args.config:
-        print("ERROR: Either --config or both --method and --dataset must be specified")
+        print("ERROR: Either --config or both --dataset and --method must be specified")
         return None
     
     # Load config
