@@ -3,6 +3,9 @@
 # This configuration enables automated hyperparameter tuning for the
 # counterfactual generation algorithm.
 #
+# Note: Update the --config path in the command section below to specify
+# which base configuration to use for the sweep (e.g., configs/dpg/iris/config.yaml)
+#
 # Usage:
 #   wandb sweep configs/sweep_config.yaml
 #   wandb agent <sweep_id>
@@ -49,5 +52,5 @@ command:
   - python
   - ${program}
   - "--config"
-  - "configs/experiment_config.yaml"
+  - "configs/dpg/iris/config.yaml"  # Update this to your desired base config
   - ${args_no_hyphens}
