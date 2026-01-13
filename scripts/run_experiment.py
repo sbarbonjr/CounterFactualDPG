@@ -268,8 +268,19 @@ def plot_dpg_constraints_overview(
         print("WARNING: No constraint values found")
         return None
     
-    x_min = min(all_values) - 0.1 * (max(all_values) - min(all_values))
-    x_max = max(all_values) + 0.1 * (max(all_values) - min(all_values))
+    # Filter out NaN and Inf values
+    all_values = [v for v in all_values if v is not None and np.isfinite(v)]
+    if not all_values:
+        print("WARNING: No valid (finite) constraint values found")
+        return None
+    
+    value_range = max(all_values) - min(all_values)
+    # Handle case where all values are the same (range = 0)
+    if value_range == 0 or not np.isfinite(value_range):
+        value_range = abs(max(all_values)) * 0.2 if max(all_values) != 0 else 1.0
+    
+    x_min = min(all_values) - 0.1 * value_range
+    x_max = max(all_values) + 0.1 * value_range
     
     # For each feature, draw constraint regions for each class
     for feat_idx, feat in enumerate(features_with_constraints):
@@ -3098,7 +3109,8 @@ def run_experiment(config: DictConfig, wandb_run=None):
                 
         except Exception as exc:
             print(f"WARNING: Failed to generate DPG constraints overview: {exc}")
-            traceback.print_exc()
+            import traceback as tb
+            tb.print_exc()
     # -----------------------------------------------------------------------
     
     # Determine sample indices to process (always from training split)
