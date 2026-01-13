@@ -352,8 +352,14 @@ class CounterFactualModel:
         - Distance between the original sample and the counterfactual sample.
         """
         # Ensure inputs are numpy arrays
-        original_sample = np.array(original_sample)
-        counterfactual_sample = np.array(counterfactual_sample)
+        original_sample = np.array(original_sample, dtype=float)
+        counterfactual_sample = np.array(counterfactual_sample, dtype=float)
+        
+        # Check for NaN/Inf values and replace with 0 to avoid errors
+        if not np.all(np.isfinite(original_sample)):
+            original_sample = np.nan_to_num(original_sample, nan=0.0, posinf=0.0, neginf=0.0)
+        if not np.all(np.isfinite(counterfactual_sample)):
+            counterfactual_sample = np.nan_to_num(counterfactual_sample, nan=0.0, posinf=0.0, neginf=0.0)
 
         # Validate metric and compute distance
         if metric == "euclidean":
