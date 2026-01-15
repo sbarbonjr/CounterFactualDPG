@@ -65,3 +65,4 @@ experiment_results/
 temp/
 
 wandb/
+outputs/
