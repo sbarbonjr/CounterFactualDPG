@@ -26,7 +26,9 @@ experiment_params:
   seed: 42
 methods:
   _default:
-    actionability: {}
+    actionability:
+      alcohol: non_decreasing
+      fixed_acidity: non_increasing
     boundary_weight: 15.0
     constraints_factor: 3.0
     delta_threshold: 0.01
