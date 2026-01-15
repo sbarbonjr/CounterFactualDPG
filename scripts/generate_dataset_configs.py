@@ -57,16 +57,16 @@ CONFIG_TEMPLATE = {
         'save_visualizations': True,
         'save_visualization_images': True,
     },
-    'counterfactual_defaults': {
-        'actionability': {},
-    },
     'methods': {
-        'dpg': {
-            'method': 'dpg',
+        '_default': {
+            'actionability': {},
+            # Shared optimization parameters
             'population_size': 50,
             'max_generations': 100,
             'mutation_rate': 0.1,
-            'diversity_weight': 0.5,
+            'delta_threshold': 0.01,
+            'patience': 20,
+            # Shared fitness weights
             'repulsion_weight': 4.0,
             'boundary_weight': 15.0,
             'distance_factor': 2.0,
@@ -76,8 +76,14 @@ CONFIG_TEMPLATE = {
             'escape_pressure': 0.5,
             'prioritize_non_overlapping': True,
         },
+        'dpg': {
+            'method': 'dpg',
+            # DPG-specific
+            'diversity_weight': 0.5,
+        },
         'dice': {
             'method': 'dice',
+            # DICE-specific
             'total_CFs': 4,
             'proximity_weight': 0.5,
             'diversity_weight': 1.0,
@@ -137,7 +143,12 @@ def merge_existing_method_config(base_config: dict, method_name: str, method_con
     # Extract counterfactual-specific settings
     if 'counterfactual' in method_config:
         cf_config = method_config['counterfactual']
-        # Merge with defaults
+        # Separate actionability (goes to _default) from method-specific settings
+        actionability = cf_config.pop('actionability', None)
+        if actionability:
+            base_config['methods']['_default']['actionability'] = actionability
+        
+        # Merge method-specific settings
         if method_name in base_config['methods']:
             base_config['methods'][method_name].update(cf_config)
         else:
