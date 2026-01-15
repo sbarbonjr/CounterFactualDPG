@@ -910,9 +910,9 @@ def load_config(config_path: str, method: str = None) -> DictConfig:
         # Get method-specific config
         method_config = config_dict['methods'][method]
         
-        # Merge counterfactual_defaults if present
-        cf_defaults = config_dict.get('counterfactual_defaults', {})
-        merged_cf = {**cf_defaults, **method_config}
+        # Merge _default if present (inside methods)
+        defaults = config_dict['methods'].get('_default', {})
+        merged_cf = {**defaults, **method_config}
         
         # Set as counterfactual section
         config_dict['counterfactual'] = merged_cf
@@ -932,9 +932,8 @@ def load_config(config_path: str, method: str = None) -> DictConfig:
         if method not in config_dict['experiment']['tags']:
             config_dict['experiment']['tags'].append(method)
         
-        # Remove 'methods' and 'counterfactual_defaults' from final config
+        # Remove 'methods' from final config (including _default)
         config_dict.pop('methods', None)
-        config_dict.pop('counterfactual_defaults', None)
         
         print(f"INFO: Using unified config with method '{method}'")
     elif method:
