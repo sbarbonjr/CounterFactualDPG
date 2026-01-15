@@ -11,7 +11,7 @@
 #   wandb agent <sweep_id>
 
 program: scripts/run_experiment.py
-method: grid  # Options: grid, random, bayes
+method: random  # Options: grid, random, bayes
 metric:
   name: experiment/overall_success_rate
   goal: maximize
