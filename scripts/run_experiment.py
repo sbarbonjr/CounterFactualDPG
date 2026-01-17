@@ -3199,8 +3199,10 @@ def run_experiment(config: DictConfig, wandb_run=None):
     # -----------------------------------------------------------------------
     
     # Determine sample indices to process (always from training split)
-    if config.experiment_params.sample_indices is not None:
-        sample_indices = config.experiment_params.sample_indices
+    # sample_indices is optional - if not specified, randomly select samples
+    sample_indices_config = getattr(config.experiment_params, 'sample_indices', None)
+    if sample_indices_config is not None:
+        sample_indices = sample_indices_config
     else:
         # Select random samples from training split
         sample_indices = np.random.choice(
