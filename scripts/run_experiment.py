@@ -981,12 +981,20 @@ Final Results
                                             orig_class_color = class_colors_list[ORIGINAL_SAMPLE_PREDICTED_CLASS % len(class_colors_list)]
                                             target_class_color = class_colors_list[TARGET_CLASS % len(class_colors_list)]
                                             
-                                            palette = {
+                                            # Define full palette and markers mapping
+                                            full_palette = {
                                                 'Dataset': 'lightgray',
                                                 'Original': orig_class_color,
                                                 'Evolution': 'gray',
                                                 'Counterfactual': target_class_color
                                             }
+                                            full_markers = {
+                                                'Dataset': 'o',
+                                                'Original': 'o',
+                                                'Evolution': '.',
+                                                'Counterfactual': 's'
+                                            }
+                                            full_hue_order = ['Dataset', 'Evolution', 'Original', 'Counterfactual']
                                             
                                             # Set style
                                             sns.set_style("whitegrid")
@@ -994,12 +1002,20 @@ Final Results
                                             # Create pairplot with hue_order to control layering
                                             pairplot_data = combined_df.dropna()
                                             
+                                            # Determine actual unique point types present in data
+                                            actual_point_types = pairplot_data['point_type'].unique().tolist()
+                                            
+                                            # Filter hue_order, palette, and markers to only include actual values
+                                            hue_order = [h for h in full_hue_order if h in actual_point_types]
+                                            palette = {k: full_palette[k] for k in hue_order}
+                                            markers = [full_markers[k] for k in hue_order]
+                                            
                                             g = sns.pairplot(
                                                 pairplot_data,
                                                 hue='point_type',
-                                                hue_order=['Dataset', 'Evolution', 'Original', 'Counterfactual'],
+                                                hue_order=hue_order,
                                                 palette=palette,
-                                                markers=['o', '.', 'o', 's'],
+                                                markers=markers,
                                                 diag_kind='kde',
                                                 plot_kws={'alpha': 0.6},
                                                 diag_kws={'alpha': 0.5, 'linewidth': 2},
@@ -1102,21 +1118,37 @@ Final Results
                                             orig_class_color = class_colors_list[ORIGINAL_SAMPLE_PREDICTED_CLASS % len(class_colors_list)]
                                             target_class_color = class_colors_list[TARGET_CLASS % len(class_colors_list)]
                                             
-                                            palette_pc = {
+                                            # Define full palette and markers mapping
+                                            full_palette_pc = {
                                                 'Dataset': 'lightgray',
                                                 'Evolution': 'gray',
                                                 'Original': orig_class_color,
                                                 'Counterfactual': target_class_color
                                             }
+                                            full_markers_pc = {
+                                                'Dataset': 'o',
+                                                'Evolution': '.',
+                                                'Original': 'o',
+                                                'Counterfactual': 's'
+                                            }
+                                            full_hue_order_pc = ['Dataset', 'Evolution', 'Original', 'Counterfactual']
                                             
                                             sns.set_style("whitegrid")
+                                            
+                                            # Determine actual unique point types present in data
+                                            actual_point_types_pc = combined_pc_df['point_type'].unique().tolist()
+                                            
+                                            # Filter hue_order, palette, and markers to only include actual values
+                                            hue_order_pc = [h for h in full_hue_order_pc if h in actual_point_types_pc]
+                                            palette_pc = {k: full_palette_pc[k] for k in hue_order_pc}
+                                            markers_pc = [full_markers_pc[k] for k in hue_order_pc]
                                             
                                             g_pc = sns.pairplot(
                                                 combined_pc_df,
                                                 hue='point_type',
-                                                hue_order=['Dataset', 'Evolution', 'Original', 'Counterfactual'],
+                                                hue_order=hue_order_pc,
                                                 palette=palette_pc,
-                                                markers=['o', '.', 'o', 's'],
+                                                markers=markers_pc,
                                                 diag_kind='kde',
                                                 plot_kws={'alpha': 0.6},
                                                 diag_kws={'alpha': 0.5, 'linewidth': 2},
