@@ -3199,13 +3199,14 @@ def run_experiment(config: DictConfig, wandb_run=None):
     # -----------------------------------------------------------------------
     
     # Determine sample indices to process (always from training split)
-    # sample_indices is optional - if not specified, randomly select samples
+    # sample_indices is optional - if not specified, randomly select samples using seed
     sample_indices_config = getattr(config.experiment_params, 'sample_indices', None)
     if sample_indices_config is not None:
         sample_indices = sample_indices_config
     else:
-        # Select random samples from training split
-        sample_indices = np.random.choice(
+        # Select random samples from training split using seeded RNG for reproducibility
+        rng = np.random.default_rng(config.experiment_params.seed)
+        sample_indices = rng.choice(
             len(TRAIN_FEATURES),
             size=min(config.experiment_params.num_samples, len(TRAIN_FEATURES)),
             replace=False
