@@ -22,7 +22,7 @@ experiment:
 experiment_params:
   compute_comprehensive_metrics: true
   num_combinations_to_test: 1
-  num_replications: 3
+  num_replications: 1
   num_samples: 1
   parallel_replications: true
   seed: 42
@@ -67,6 +67,5 @@ model:
   random_state: 42
   type: RandomForestClassifier
 output:
-  local_dir: outputs
   save_visualization_images: true
   save_visualizations: true

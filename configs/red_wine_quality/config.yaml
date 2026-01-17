@@ -23,6 +23,7 @@ experiment_params:
   num_replications: 3
   num_samples: 5
   parallel_replications: true
+  sample_indices: null
   seed: 42
 methods:
   _default:
