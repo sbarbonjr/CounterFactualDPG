@@ -1387,7 +1387,7 @@ def run_single_sample(
     nbr_features = len(FEATURE_NAMES)
     ratio_cont = len(CONTINUOUS_INDICES) / nbr_features if nbr_features > 0 else 1.0
     
-    output_dir = config.output.local_dir
+    output_dir = getattr(config.output, 'local_dir', 'outputs') if hasattr(config, 'output') else 'outputs'
     
     # Get original sample from training split
     original_sample_values = TRAIN_FEATURES.iloc[sample_index].values if hasattr(TRAIN_FEATURES, 'iloc') else TRAIN_FEATURES[sample_index]
@@ -1887,7 +1887,7 @@ def run_single_sample(
             print(f"WARNING: Failed to save DPG constraints to sample folder: {exc}")
     
     # Generate visualizations if enabled
-    if config.output.save_visualizations:
+    if getattr(config.output, 'save_visualizations', True) if hasattr(config, 'output') else True:
         for combination_idx, combination_viz in enumerate(visualizations):
             # dict_non_actionable is now stored directly in combination_viz['label']
             dict_non_actionable = combination_viz['label']
@@ -3171,7 +3171,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
     if normalized_constraints and getattr(config.output, 'save_visualizations', True):
         try:
             # Create output directory for experiment-level visualizations
-            output_dir = config.output.local_dir
+            output_dir = getattr(config.output, 'local_dir', 'outputs')
             experiment_name = getattr(config.experiment, 'name', 'experiment')
             experiment_dir = os.path.join(output_dir, experiment_name)
             os.makedirs(experiment_dir, exist_ok=True)
@@ -3267,7 +3267,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
     
     # Save experiment-level summary metrics to CSV
     try:
-        output_dir = config.output.local_dir
+        output_dir = getattr(config.output, 'local_dir', 'outputs')
         experiment_name = getattr(config.experiment, 'name', 'experiment')
         experiment_dir = os.path.join(output_dir, experiment_name)
         os.makedirs(experiment_dir, exist_ok=True)
