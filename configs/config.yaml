@@ -1,0 +1,66 @@
+# Default configuration for all datasets
+# These values are used as defaults and can be overridden in dataset-specific configs
+#
+# Priority (lowest to highest):
+#   1. This file (configs/config.yaml) - base defaults
+#   2. Dataset config (configs/<dataset>/config.yaml) - dataset-specific overrides
+#   3. CLI --set overrides
+
+# Data defaults
+data:
+  test_size: 0.2
+  random_state: 42
+
+# Model defaults
+model:
+  type: RandomForestClassifier
+  n_estimators: 100
+  max_depth: null
+  random_state: 42
+
+# Experiment defaults
+experiment:
+  project: CounterFactualDPG
+
+experiment_params:
+  seed: 42
+  num_samples: 5
+  num_replications: 3
+  num_combinations_to_test: 1
+  parallel_replications: true
+  compute_comprehensive_metrics: true
+
+# Output defaults
+output:
+  local_dir: outputs
+  save_visualizations: true
+  save_visualization_images: true
+
+# Counterfactual method defaults
+methods:
+  _default:
+    actionability: {}
+    # Shared optimization parameters
+    population_size: 50
+    max_generations: 100
+    mutation_rate: 0.1
+    delta_threshold: 0.01
+    patience: 20
+    # Shared fitness weights
+    repulsion_weight: 4.0
+    boundary_weight: 15.0
+    distance_factor: 2.0
+    sparsity_factor: 1.0
+    constraints_factor: 3.0
+    original_escape_weight: 2.0
+    escape_pressure: 0.5
+    prioritize_non_overlapping: true
+  dpg:
+    method: dpg
+    diversity_weight: 0.5
+  dice:
+    method: dice
+    total_CFs: 4
+    proximity_weight: 0.5
+    diversity_weight: 1.0
+    generation_method: genetic
