@@ -2,10 +2,21 @@
 
 This module provides a unified interface for loading and preprocessing various datasets
 used in counterfactual generation experiments. It handles:
-- Dataset-specific loading and preprocessing
+- Generic CSV loading with config-driven preprocessing
 - Feature type detection (continuous/categorical)
 - Label encoding for categorical features
 - Feature actionability configuration
+
+All dataset-specific behavior is controlled via YAML config options:
+- data.dataset_path: Path to CSV file
+- data.target_column: Name of target column
+- data.drop_columns: List of columns to drop (e.g., id columns)
+- data.binarize_target: Whether to binarize target
+- data.binarize_threshold: Threshold for binarization (>= threshold = 1)
+- data.missing_values: Strategy for handling missing values ('fill' or 'drop')
+- data.categorical_features: Explicit list of categorical feature names (auto-detected if not specified)
+- data.continuous_features: Explicit list of continuous feature names (auto-detected if not specified)
+- data.variable_features: List of actionable features (all features if not specified)
 """
 
 import os
@@ -26,13 +37,13 @@ def determine_feature_types(features_df, config=None):
         tuple: (continuous_indices, categorical_indices, variable_indices)
     """
     # Check if config explicitly specifies feature types
-    if config and hasattr(config.data, 'continuous_features'):
+    if config and hasattr(config.data, 'continuous_features') and config.data.continuous_features:
         continuous_features = config.data.continuous_features
     else:
         # Auto-detect: numeric columns are continuous
         continuous_features = features_df.select_dtypes(include=[np.number]).columns.tolist()
     
-    if config and hasattr(config.data, 'categorical_features'):
+    if config and hasattr(config.data, 'categorical_features') and config.data.categorical_features:
         categorical_features = config.data.categorical_features
     else:
         # Auto-detect: non-numeric columns are categorical
@@ -44,7 +55,7 @@ def determine_feature_types(features_df, config=None):
     categorical_indices = [all_cols.index(f) for f in categorical_features if f in all_cols]
     
     # Variable features (actionable) - default to all features
-    if config and hasattr(config.data, 'variable_features'):
+    if config and hasattr(config.data, 'variable_features') and config.data.variable_features:
         variable_features = config.data.variable_features
         variable_indices = [all_cols.index(f) for f in variable_features if f in all_cols]
     else:
@@ -52,6 +63,140 @@ def determine_feature_types(features_df, config=None):
         variable_indices = list(range(len(all_cols)))
     
     return continuous_indices, categorical_indices, variable_indices
+
+
+def _load_csv_dataset(config, repo_root=None):
+    """Generic CSV dataset loader driven by config options.
+    
+    Config options used:
+        data.dataset_path: Path to CSV file (required)
+        data.target_column: Name of target column (required)
+        data.drop_columns: List of columns to drop (optional)
+        data.binarize_target: Whether to binarize target (optional, default False)
+        data.binarize_threshold: Threshold for binarization (optional, default 1)
+        data.missing_values: Strategy for missing values - 'fill' or 'drop' (optional, default 'fill')
+        
+    Returns:
+        dict with features, labels, feature_names, features_df, label_encoders, and feature indices
+    """
+    dataset_name = config.data.dataset
+    print(f"INFO: Loading {dataset_name} dataset...")
+    
+    # Load CSV
+    dataset_path = config.data.dataset_path
+    if not os.path.isabs(dataset_path) and repo_root:
+        dataset_path = os.path.join(repo_root, dataset_path)
+    
+    df = pd.read_csv(dataset_path)
+    
+    # Drop columns if specified (e.g., id columns)
+    drop_columns = getattr(config.data, 'drop_columns', None) or []
+    if drop_columns:
+        existing_drop_cols = [c for c in drop_columns if c in df.columns]
+        if existing_drop_cols:
+            print(f"INFO: Dropping columns: {existing_drop_cols}")
+            df = df.drop(columns=existing_drop_cols)
+    
+    # Handle missing values
+    missing_before = df.isnull().sum().sum()
+    if missing_before > 0:
+        missing_strategy = getattr(config.data, 'missing_values', 'fill')
+        print(f"INFO: Dataset has {missing_before} missing values, strategy: {missing_strategy}")
+        
+        if missing_strategy == 'drop':
+            df = df.dropna()
+            print(f"INFO: Dropped rows with missing values, {len(df)} rows remaining")
+        else:  # 'fill' (default)
+            for col in df.columns:
+                if df[col].dtype in ['float64', 'int64', 'float32', 'int32']:
+                    # Fill numerical columns with median
+                    df[col] = df[col].fillna(df[col].median())
+                else:
+                    # Fill categorical columns with mode
+                    mode_val = df[col].mode().iloc[0] if not df[col].mode().empty else 'unknown'
+                    df[col] = df[col].fillna(mode_val)
+            print(f"INFO: Filled missing values (numerical: median, categorical: mode)")
+    
+    # Extract target
+    target_column = config.data.target_column
+    labels = df[target_column].values
+    features_df = df.drop(columns=[target_column])
+    
+    label_encoders = {}
+    
+    # Handle target encoding
+    # 1. Binarize target if configured
+    binarize_target = getattr(config.data, 'binarize_target', False)
+    if binarize_target:
+        threshold = getattr(config.data, 'binarize_threshold', 1)
+        print(f"INFO: Binarizing target with threshold {threshold} (>= {threshold} = 1, < {threshold} = 0)")
+        labels = (labels >= threshold).astype(int)
+    
+    # 2. Encode target if it's string/object type
+    elif labels.dtype == 'object' or str(labels.dtype) == 'object':
+        print("INFO: Encoding string target labels")
+        le = LabelEncoder()
+        labels = le.fit_transform(labels)
+        label_encoders['target'] = le
+        print(f"INFO: Target label mapping: {dict(zip(le.classes_, le.transform(le.classes_)))}")
+    
+    # 3. Encode target if it contains negative values (e.g., -1, 1)
+    elif np.issubdtype(labels.dtype, np.number):
+        unique_labels = np.unique(labels)
+        if np.any(unique_labels < 0):
+            print(f"INFO: Encoding target labels from {unique_labels} to non-negative integers")
+            le = LabelEncoder()
+            labels = le.fit_transform(labels)
+            label_encoders['target'] = le
+            print(f"INFO: Target label mapping: {dict(zip(le.classes_, le.transform(le.classes_)))}")
+    
+    # Encode categorical feature variables
+    features_df_encoded = features_df.copy()
+    
+    for col in features_df.columns:
+        col_dtype = features_df[col].dtype
+        if col_dtype == 'object' or col_dtype.name == 'category':
+            print(f"INFO: Encoding categorical feature: {col}")
+            le = LabelEncoder()
+            features_df_encoded[col] = le.fit_transform(features_df[col].astype(str))
+            label_encoders[col] = le
+        elif col_dtype == 'bool':
+            features_df_encoded[col] = features_df[col].astype(int)
+    
+    features = features_df_encoded.values.astype(float)
+    feature_names = list(features_df_encoded.columns)
+    
+    # Final check for NaN/Inf values
+    if np.any(~np.isfinite(features)):
+        nan_count = np.sum(~np.isfinite(features))
+        print(f"WARNING: Found {nan_count} non-finite values in features, replacing with 0")
+        features = np.nan_to_num(features, nan=0.0, posinf=0.0, neginf=0.0)
+    
+    # Report stats
+    print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
+    if label_encoders:
+        feature_encoders = {k: v for k, v in label_encoders.items() if k != 'target'}
+        if feature_encoders:
+            print(f"INFO: Encoded {len(feature_encoders)} categorical features")
+    unique_labels = np.unique(labels)
+    if len(unique_labels) <= 10:  # Only show distribution for reasonable number of classes
+        print(f"INFO: Classes: {unique_labels}, distribution: {np.bincount(labels)}")
+    else:
+        print(f"INFO: Classes: {len(unique_labels)} unique values")
+    
+    # Determine feature types
+    continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df_encoded, config)
+    
+    return {
+        'features': features,
+        'labels': labels,
+        'feature_names': feature_names,
+        'features_df': features_df_encoded,
+        'label_encoders': label_encoders,
+        'continuous_indices': continuous_indices,
+        'categorical_indices': categorical_indices,
+        'variable_indices': variable_indices,
+    }
 
 
 def load_dataset(config, repo_root=None):
@@ -74,16 +219,16 @@ def load_dataset(config, repo_root=None):
     """
     dataset_name = config.data.dataset.lower()
     
+    # Special case: iris (sklearn built-in, no CSV needed)
     if dataset_name == "iris":
-        print("INFO: Loading Iris dataset...")
+        print("INFO: Loading Iris dataset (sklearn built-in)...")
         iris = load_iris()
         features = iris.data
         labels = iris.target
         feature_names = list(iris.feature_names)
         features_df = pd.DataFrame(features, columns=feature_names)
-        label_encoders = {}  # No categorical features in iris
+        label_encoders = {}
         
-        # Determine feature types (Iris: all continuous)
         continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df, config)
         
         return {
@@ -97,442 +242,11 @@ def load_dataset(config, repo_root=None):
             'variable_indices': variable_indices,
         }
     
-    elif dataset_name == "german_credit":
-        print("INFO: Loading German Credit dataset...")
-        
-        # Load CSV
-        dataset_path = config.data.dataset_path
-        if not os.path.isabs(dataset_path) and repo_root:
-            dataset_path = os.path.join(repo_root, dataset_path)
-        
-        df = pd.read_csv(dataset_path)
-        
-        # Extract target
-        target_column = config.data.target_column
-        labels = df[target_column].values
-        features_df = df.drop(columns=[target_column])
-        
-        # Encode categorical variables
-        label_encoders = {}
-        features_df_encoded = features_df.copy()
-        
-        for col in features_df.columns:
-            if features_df[col].dtype == 'object' or features_df[col].dtype.name == 'category':
-                print(f"INFO: Encoding categorical feature: {col}")
-                le = LabelEncoder()
-                features_df_encoded[col] = le.fit_transform(features_df[col])
-                label_encoders[col] = le
-        
-        features = features_df_encoded.values
-        feature_names = list(features_df_encoded.columns)
-        
-        print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
-        print(f"INFO: Encoded {len(label_encoders)} categorical features")
-        
-        # Determine feature types
-        continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df_encoded, config)
-        
-        return {
-            'features': features,
-            'labels': labels,
-            'feature_names': feature_names,
-            'features_df': features_df_encoded,
-            'label_encoders': label_encoders,
-            'continuous_indices': continuous_indices,
-            'categorical_indices': categorical_indices,
-            'variable_indices': variable_indices,
-        }
+    # Generic CSV loader - works for any dataset with proper config
+    if hasattr(config.data, 'dataset_path') and config.data.dataset_path:
+        return _load_csv_dataset(config, repo_root)
     
-    elif dataset_name == "wheat_seeds":
-        print("INFO: Loading Wheat Seeds dataset...")
-        
-        # Load CSV
-        dataset_path = config.data.dataset_path
-        if not os.path.isabs(dataset_path) and repo_root:
-            dataset_path = os.path.join(repo_root, dataset_path)
-        
-        df = pd.read_csv(dataset_path)
-        
-        # Extract target
-        target_column = config.data.target_column
-        labels = df[target_column].values
-        features_df = df.drop(columns=[target_column])
-        
-        # All features are numerical - no encoding needed
-        features = features_df.values
-        feature_names = list(features_df.columns)
-        label_encoders = {}
-        
-        print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
-        print(f"INFO: Classes: {np.unique(labels)}")
-        
-        # Determine feature types
-        continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df, config)
-        
-        return {
-            'features': features,
-            'labels': labels,
-            'feature_names': feature_names,
-            'features_df': features_df,
-            'label_encoders': label_encoders,
-            'continuous_indices': continuous_indices,
-            'categorical_indices': categorical_indices,
-            'variable_indices': variable_indices,
-        }
-    
-    elif dataset_name == "red_wine_quality":
-        print("INFO: Loading Red Wine Quality dataset...")
-        
-        # Load CSV
-        dataset_path = config.data.dataset_path
-        if not os.path.isabs(dataset_path) and repo_root:
-            dataset_path = os.path.join(repo_root, dataset_path)
-        
-        df = pd.read_csv(dataset_path)
-        
-        # Extract target
-        target_column = config.data.target_column
-        labels = df[target_column].values
-        features_df = df.drop(columns=[target_column])
-        
-        # Binarize target if configured (quality >= threshold = good, else bad)
-        binarize_target = getattr(config.data, 'binarize_target', False)
-        if binarize_target:
-            threshold = getattr(config.data, 'binarize_threshold', 6)
-            print(f"INFO: Binarizing target with threshold {threshold} (>= {threshold} = 1, < {threshold} = 0)")
-            labels = (labels >= threshold).astype(int)
-        
-        # All features are numerical - no encoding needed
-        features = features_df.values
-        feature_names = list(features_df.columns)
-        label_encoders = {}
-        
-        print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
-        print(f"INFO: Classes: {np.unique(labels)}, distribution: {np.bincount(labels)}")
-        
-        # Determine feature types
-        continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df, config)
-        
-        return {
-            'features': features,
-            'labels': labels,
-            'feature_names': feature_names,
-            'features_df': features_df,
-            'label_encoders': label_encoders,
-            'continuous_indices': continuous_indices,
-            'categorical_indices': categorical_indices,
-            'variable_indices': variable_indices,
-        }
-    
-    elif dataset_name == "breast_cancer_wisconsin":
-        print("INFO: Loading Breast Cancer Wisconsin dataset...")
-        
-        # Load CSV
-        dataset_path = config.data.dataset_path
-        if not os.path.isabs(dataset_path) and repo_root:
-            dataset_path = os.path.join(repo_root, dataset_path)
-        
-        df = pd.read_csv(dataset_path)
-        
-        # Drop columns if specified (e.g., id column)
-        drop_columns = getattr(config.data, 'drop_columns', [])
-        if drop_columns:
-            print(f"INFO: Dropping columns: {drop_columns}")
-            df = df.drop(columns=[c for c in drop_columns if c in df.columns])
-        
-        # Extract target
-        target_column = config.data.target_column
-        labels = df[target_column].values
-        features_df = df.drop(columns=[target_column])
-        
-        # Encode target (M=1, B=0) if it's string
-        label_encoders = {}
-        if labels.dtype == 'object' or str(labels.dtype) == 'object':
-            print("INFO: Encoding target variable (M=Malignant, B=Benign)")
-            le = LabelEncoder()
-            labels = le.fit_transform(labels)
-            label_encoders['target'] = le
-            print(f"INFO: Label mapping: {dict(zip(le.classes_, le.transform(le.classes_)))}")
-        
-        # All features are numerical - no encoding needed
-        features = features_df.values.astype(float)
-        feature_names = list(features_df.columns)
-        
-        print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
-        print(f"INFO: Classes: {np.unique(labels)}, distribution: {np.bincount(labels)}")
-        
-        # Determine feature types
-        continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df, config)
-        
-        return {
-            'features': features,
-            'labels': labels,
-            'feature_names': feature_names,
-            'features_df': features_df,
-            'label_encoders': label_encoders,
-            'continuous_indices': continuous_indices,
-            'categorical_indices': categorical_indices,
-            'variable_indices': variable_indices,
-        }
-    
-    elif dataset_name == "banknote_authentication":
-        print("INFO: Loading Banknote Authentication dataset...")
-        
-        # Load CSV
-        dataset_path = config.data.dataset_path
-        if not os.path.isabs(dataset_path) and repo_root:
-            dataset_path = os.path.join(repo_root, dataset_path)
-        
-        df = pd.read_csv(dataset_path)
-        
-        # Extract target
-        target_column = config.data.target_column
-        labels = df[target_column].values
-        features_df = df.drop(columns=[target_column])
-        
-        # All features are numerical (wavelet-transformed image features)
-        features = features_df.values
-        feature_names = list(features_df.columns)
-        label_encoders = {}
-        
-        print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
-        print(f"INFO: Classes: {np.unique(labels)}, distribution: {np.bincount(labels)}")
-        
-        # Determine feature types
-        continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df, config)
-        
-        return {
-            'features': features,
-            'labels': labels,
-            'feature_names': feature_names,
-            'features_df': features_df,
-            'label_encoders': label_encoders,
-            'continuous_indices': continuous_indices,
-            'categorical_indices': categorical_indices,
-            'variable_indices': variable_indices,
-        }
-    
-    elif dataset_name == "diabetes":
-        print("INFO: Loading Pima Indians Diabetes dataset...")
-        
-        # Load CSV
-        dataset_path = config.data.dataset_path
-        if not os.path.isabs(dataset_path) and repo_root:
-            dataset_path = os.path.join(repo_root, dataset_path)
-        
-        df = pd.read_csv(dataset_path)
-        
-        # Extract target
-        target_column = config.data.target_column
-        labels = df[target_column].values
-        features_df = df.drop(columns=[target_column])
-        
-        # All features are numerical
-        features = features_df.values
-        feature_names = list(features_df.columns)
-        label_encoders = {}
-        
-        print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
-        print(f"INFO: Classes: {np.unique(labels)}, distribution: {np.bincount(labels)}")
-        
-        # Determine feature types
-        continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df, config)
-        
-        return {
-            'features': features,
-            'labels': labels,
-            'feature_names': feature_names,
-            'features_df': features_df,
-            'label_encoders': label_encoders,
-            'continuous_indices': continuous_indices,
-            'categorical_indices': categorical_indices,
-            'variable_indices': variable_indices,
-        }
-    
-    elif dataset_name == "heart_disease_uci":
-        print("INFO: Loading Heart Disease UCI dataset...")
-        
-        # Load CSV
-        dataset_path = config.data.dataset_path
-        if not os.path.isabs(dataset_path) and repo_root:
-            dataset_path = os.path.join(repo_root, dataset_path)
-        
-        df = pd.read_csv(dataset_path)
-        
-        # Drop columns if specified (e.g., id, dataset columns)
-        drop_columns = getattr(config.data, 'drop_columns', [])
-        if drop_columns:
-            print(f"INFO: Dropping columns: {drop_columns}")
-            df = df.drop(columns=[c for c in drop_columns if c in df.columns])
-        
-        # Handle missing values - this dataset has many NaN values
-        missing_before = df.isnull().sum().sum()
-        if missing_before > 0:
-            print(f"INFO: Dataset has {missing_before} missing values")
-            # Option 1: Drop rows with any missing values
-            # df = df.dropna()
-            # Option 2: Fill missing values (preferred to keep more data)
-            for col in df.columns:
-                if df[col].dtype in ['float64', 'int64']:
-                    # Fill numerical columns with median
-                    df[col] = df[col].fillna(df[col].median())
-                else:
-                    # Fill categorical columns with mode
-                    df[col] = df[col].fillna(df[col].mode().iloc[0] if not df[col].mode().empty else 'unknown')
-            print(f"INFO: Filled missing values (numerical: median, categorical: mode)")
-            print(f"INFO: Remaining missing values: {df.isnull().sum().sum()}")
-        
-        # Extract target
-        target_column = config.data.target_column
-        labels = df[target_column].values
-        features_df = df.drop(columns=[target_column])
-        
-        # Binarize target if configured (0 = no disease, >0 = disease)
-        binarize_target = getattr(config.data, 'binarize_target', False)
-        if binarize_target:
-            threshold = getattr(config.data, 'binarize_threshold', 1)
-            print(f"INFO: Binarizing target with threshold {threshold} (>= {threshold} = 1, < {threshold} = 0)")
-            labels = (labels >= threshold).astype(int)
-        
-        # Encode categorical variables
-        label_encoders = {}
-        features_df_encoded = features_df.copy()
-        
-        for col in features_df.columns:
-            if features_df[col].dtype == 'object' or features_df[col].dtype.name == 'category' or features_df[col].dtype == 'bool':
-                print(f"INFO: Encoding categorical feature: {col}")
-                le = LabelEncoder()
-                # Handle boolean columns
-                if features_df[col].dtype == 'bool':
-                    features_df_encoded[col] = features_df[col].astype(int)
-                else:
-                    features_df_encoded[col] = le.fit_transform(features_df[col].astype(str))
-                    label_encoders[col] = le
-        
-        features = features_df_encoded.values.astype(float)
-        feature_names = list(features_df_encoded.columns)
-        
-        # Final check for NaN/Inf values
-        if np.any(~np.isfinite(features)):
-            nan_count = np.sum(~np.isfinite(features))
-            print(f"WARNING: Found {nan_count} non-finite values in features, replacing with 0")
-            features = np.nan_to_num(features, nan=0.0, posinf=0.0, neginf=0.0)
-        
-        print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
-        print(f"INFO: Encoded {len(label_encoders)} categorical features")
-        print(f"INFO: Classes: {np.unique(labels)}, distribution: {np.bincount(labels)}")
-        
-        # Determine feature types
-        continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df_encoded, config)
-        
-        return {
-            'features': features,
-            'labels': labels,
-            'feature_names': feature_names,
-            'features_df': features_df_encoded,
-            'label_encoders': label_encoders,
-            'continuous_indices': continuous_indices,
-            'categorical_indices': categorical_indices,
-            'variable_indices': variable_indices,
-        }
-    
-    elif dataset_name == "abalone":
-        print("INFO: Loading Abalone dataset...")
-        
-        # Load CSV
-        dataset_path = config.data.dataset_path
-        if not os.path.isabs(dataset_path) and repo_root:
-            dataset_path = os.path.join(repo_root, dataset_path)
-        
-        df = pd.read_csv(dataset_path)
-        
-        # Extract target
-        target_column = config.data.target_column
-        labels = df[target_column].values
-        features_df = df.drop(columns=[target_column])
-        
-        # Encode target labels if needed (handle -1, 1 or other values)
-        label_encoders = {}
-        unique_labels = np.unique(labels)
-        if np.any(unique_labels < 0):
-            print(f"INFO: Encoding target labels from {unique_labels} to non-negative integers")
-            le = LabelEncoder()
-            labels = le.fit_transform(labels)
-            label_encoders['target'] = le
-            print(f"INFO: Label mapping: {dict(zip(le.classes_, le.transform(le.classes_)))}")
-        
-        # All features are numerical
-        features = features_df.values.astype(float)
-        feature_names = list(features_df.columns)
-        
-        print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
-        print(f"INFO: Classes: {np.unique(labels)}, distribution: {np.bincount(labels)}")
-        
-        # Determine feature types
-        continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df, config)
-        
-        return {
-            'features': features,
-            'labels': labels,
-            'feature_names': feature_names,
-            'features_df': features_df,
-            'label_encoders': label_encoders,
-            'continuous_indices': continuous_indices,
-            'categorical_indices': categorical_indices,
-            'variable_indices': variable_indices,
-        }
-    
-    elif dataset_name == "arrhythmia":
-        print("INFO: Loading Arrhythmia dataset...")
-        
-        # Load CSV
-        dataset_path = config.data.dataset_path
-        if not os.path.isabs(dataset_path) and repo_root:
-            dataset_path = os.path.join(repo_root, dataset_path)
-        
-        df = pd.read_csv(dataset_path)
-        
-        # Extract target
-        target_column = config.data.target_column
-        labels = df[target_column].values
-        features_df = df.drop(columns=[target_column])
-        
-        # Encode target labels if needed (handle -1, 1 or other values)
-        label_encoders = {}
-        unique_labels = np.unique(labels)
-        if np.any(unique_labels < 0):
-            print(f"INFO: Encoding target labels from {unique_labels} to non-negative integers")
-            le = LabelEncoder()
-            labels = le.fit_transform(labels)
-            label_encoders['target'] = le
-            print(f"INFO: Label mapping: {dict(zip(le.classes_, le.transform(le.classes_)))}")
-        
-        # All features are numerical
-        features = features_df.values.astype(float)
-        feature_names = list(features_df.columns)
-        
-        # Handle missing values if any
-        if np.any(~np.isfinite(features)):
-            nan_count = np.sum(~np.isfinite(features))
-            print(f"WARNING: Found {nan_count} non-finite values in features, replacing with 0")
-            features = np.nan_to_num(features, nan=0.0, posinf=0.0, neginf=0.0)
-        
-        print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
-        print(f"INFO: Classes: {np.unique(labels)}, distribution: {np.bincount(labels)}")
-        
-        # Determine feature types
-        continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df, config)
-        
-        return {
-            'features': features,
-            'labels': labels,
-            'feature_names': feature_names,
-            'features_df': pd.DataFrame(features, columns=feature_names),
-            'label_encoders': label_encoders,
-            'continuous_indices': continuous_indices,
-            'categorical_indices': categorical_indices,
-            'variable_indices': variable_indices,
-        }
-    
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}. Supported: iris, german_credit, wheat_seeds, red_wine_quality, breast_cancer_wisconsin, banknote_authentication, diabetes, heart_disease_uci, abalone, arrhythmia")
+    raise ValueError(
+        f"Cannot load dataset '{dataset_name}': no dataset_path specified in config. "
+        f"Add 'data.dataset_path' to your config YAML pointing to the CSV file."
+    )
