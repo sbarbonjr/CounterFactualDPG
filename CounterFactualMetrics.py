@@ -554,22 +554,23 @@ def plausibility(x, model, cf_list, X_test, y_pred, continuous_features_all,
             continue
         
         # Use agg='none' to get individual distances for nearest neighbor lookup
-        neigh_dist = distance_mh(x.reshape(1, -1), X_test_y, continuous_features_all,
+        # NOTE: We compute distance from CF to X_test_y (not from x), per the paper's definition:
+        # impl = (1/|C|) * sum_{c in C} min_{x' in X} d(c, x')
+        neigh_dist = distance_mh(cf.reshape(1, -1), X_test_y, continuous_features_all,
                                 categorical_features_all, X_train, ratio_cont, agg='none')
         
         if neigh_dist is None or len(neigh_dist) == 0:
             continue
         
-        # Filter out invalid distances and find the nearest neighbor
-        valid_mask = ~(np.isnan(neigh_dist) | np.isinf(neigh_dist))
+        # Flatten and filter out invalid distances
+        neigh_dist_flat = np.asarray(neigh_dist).flatten()
+        valid_mask = ~(np.isnan(neigh_dist_flat) | np.isinf(neigh_dist_flat))
         if not np.any(valid_mask):
             continue
         
-        idx_neigh = np.argsort(neigh_dist)[0]
-        closest = X_test_y[idx_neigh]
-        
-        d = distance_mh(cf, closest.reshape(1, -1), continuous_features_all,
-                       categorical_features_all, X_train, ratio_cont)
+        # Find the minimum distance (nearest neighbor to cf)
+        # The distance is already computed, so just take the minimum
+        d = np.min(neigh_dist_flat[valid_mask])
         
         if not np.isnan(d) and not np.isinf(d):
             sum_dist += d
