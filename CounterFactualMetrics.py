@@ -600,7 +600,24 @@ def euclidean_jaccard(x, A, continuous_features, categorical_features, ratio_con
 
 
 def select_test_knn(x, model, X_test, continuous_features, categorical_features, scaler, test_size=5, get_normalized=False):
-    """Select test samples for KNN evaluation."""
+    """Select test samples for KNN evaluation.
+    
+    Selects k samples from same class and k samples from different class,
+    based on distance to x.
+    
+    Args:
+        x: Original sample
+        model: Classifier model
+        X_test: Test dataset
+        continuous_features: Indices of continuous features
+        categorical_features: Indices of categorical features
+        scaler: Feature scaler
+        test_size: Number of samples per class (total returned = 2*test_size)
+        get_normalized: Whether to also return normalized samples
+        
+    Returns:
+        Selected test samples (and optionally normalized versions)
+    """
     y_val = _safe_predict(model, x.reshape(1, -1))[0]
     y_test = _safe_predict(model, X_test)
     
@@ -618,11 +635,21 @@ def select_test_knn(x, model, X_test, continuous_features, categorical_features,
             return X_test[idx], nX_test[idx]
         return X_test[idx]
     
+    # Get original indices for each class
+    same_class_indices = np.where(same_class)[0]
+    diff_class_indices = np.where(diff_class)[0]
+    
+    # Compute distances to filtered samples
     dist_f = euclidean_jaccard(nx, nX_test[same_class], continuous_features, categorical_features)
     dist_cf = euclidean_jaccard(nx, nX_test[diff_class], continuous_features, categorical_features)
     
-    index_f = np.argsort(dist_f[0])[:test_size].tolist()
-    index_cf = np.argsort(dist_cf[0])[:test_size].tolist()
+    # Get indices within filtered arrays, then map back to original indices
+    sorted_f = np.argsort(dist_f[0])[:test_size]
+    sorted_cf = np.argsort(dist_cf[0])[:test_size]
+    
+    # Map back to original X_test indices
+    index_f = same_class_indices[sorted_f].tolist()
+    index_cf = diff_class_indices[sorted_cf].tolist()
     
     index = np.array(index_f + index_cf)
     
