@@ -482,5 +482,57 @@ def load_dataset(config, repo_root=None):
             'variable_indices': variable_indices,
         }
     
+    elif dataset_name == "arrhythmia":
+        print("INFO: Loading Arrhythmia dataset...")
+        
+        # Load CSV
+        dataset_path = config.data.dataset_path
+        if not os.path.isabs(dataset_path) and repo_root:
+            dataset_path = os.path.join(repo_root, dataset_path)
+        
+        df = pd.read_csv(dataset_path)
+        
+        # Extract target
+        target_column = config.data.target_column
+        labels = df[target_column].values
+        features_df = df.drop(columns=[target_column])
+        
+        # Encode target labels if needed (handle -1, 1 or other values)
+        label_encoders = {}
+        unique_labels = np.unique(labels)
+        if np.any(unique_labels < 0):
+            print(f"INFO: Encoding target labels from {unique_labels} to non-negative integers")
+            le = LabelEncoder()
+            labels = le.fit_transform(labels)
+            label_encoders['target'] = le
+            print(f"INFO: Label mapping: {dict(zip(le.classes_, le.transform(le.classes_)))}")
+        
+        # All features are numerical
+        features = features_df.values.astype(float)
+        feature_names = list(features_df.columns)
+        
+        # Handle missing values if any
+        if np.any(~np.isfinite(features)):
+            nan_count = np.sum(~np.isfinite(features))
+            print(f"WARNING: Found {nan_count} non-finite values in features, replacing with 0")
+            features = np.nan_to_num(features, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        print(f"INFO: Loaded {len(df)} samples with {len(feature_names)} features")
+        print(f"INFO: Classes: {np.unique(labels)}, distribution: {np.bincount(labels)}")
+        
+        # Determine feature types
+        continuous_indices, categorical_indices, variable_indices = determine_feature_types(features_df, config)
+        
+        return {
+            'features': features,
+            'labels': labels,
+            'feature_names': feature_names,
+            'features_df': pd.DataFrame(features, columns=feature_names),
+            'label_encoders': label_encoders,
+            'continuous_indices': continuous_indices,
+            'categorical_indices': categorical_indices,
+            'variable_indices': variable_indices,
+        }
+    
     else:
-        raise ValueError(f"Unknown dataset: {dataset_name}. Supported: iris, german_credit, wheat_seeds, red_wine_quality, breast_cancer_wisconsin, banknote_authentication, diabetes, heart_disease_uci, abalone")
+        raise ValueError(f"Unknown dataset: {dataset_name}. Supported: iris, german_credit, wheat_seeds, red_wine_quality, breast_cancer_wisconsin, banknote_authentication, diabetes, heart_disease_uci, abalone, arrhythmia")
