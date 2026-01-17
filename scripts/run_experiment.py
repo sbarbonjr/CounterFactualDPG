@@ -878,12 +878,32 @@ class DictConfig:
         setattr(self, key, value)
 
 
+def deep_merge_dicts(base: dict, override: dict) -> dict:
+    """Deep merge two dictionaries, with override taking precedence.
+    
+    Args:
+        base: Base dictionary with default values
+        override: Dictionary with values to override
+        
+    Returns:
+        Merged dictionary
+    """
+    result = base.copy()
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = deep_merge_dicts(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
 def load_config(config_path: str, method: str = None) -> DictConfig:
     """Load YAML config file with optional method selection for unified configs.
     
-    Supports two config formats:
-    1. Legacy: configs/dataset/method/config.yaml (method-specific config)
-    2. Unified: configs/dataset/config.yaml (single config with 'methods' section)
+    Supports config inheritance:
+    1. Base defaults from configs/config.yaml (if exists)
+    2. Dataset-specific config from config_path
+    3. Method selection from 'methods' section
     
     Args:
         config_path: Path to config YAML file
@@ -892,12 +912,28 @@ def load_config(config_path: str, method: str = None) -> DictConfig:
     Returns:
         DictConfig with merged configuration
     """
+    # Load base defaults from configs/config.yaml if it exists
+    base_config_path = os.path.join(REPO_ROOT, 'configs', 'config.yaml')
+    base_config = {}
+    if os.path.exists(base_config_path) and os.path.abspath(config_path) != os.path.abspath(base_config_path):
+        try:
+            with open(base_config_path, 'r') as f:
+                base_config = yaml.safe_load(f) or {}
+            print(f"INFO: Loaded base defaults from configs/config.yaml")
+        except Exception as e:
+            print(f"WARNING: Failed to load base config: {e}")
+    
+    # Load dataset-specific config
     with open(config_path, 'r') as f:
-        config_dict = yaml.safe_load(f)
+        config_dict = yaml.safe_load(f) or {}
+    
+    # Deep merge: base defaults + dataset config
+    if base_config:
+        config_dict = deep_merge_dicts(base_config, config_dict)
     
     # Check if this is a unified config (has 'methods' section)
     if 'methods' in config_dict:
-        available_methods = list(config_dict['methods'].keys())
+        available_methods = [k for k in config_dict['methods'].keys() if k != '_default']
         
         if not method:
             # No method specified - use 'dpg' as default if available, else first method
