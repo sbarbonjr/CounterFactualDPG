@@ -1,16 +1,14 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
+import ast
 from scipy.spatial.distance import euclidean, cityblock, cosine
 from scipy.spatial.distance import cdist
 
 class CounterFactualModel:
-    def __init__(self, model, constraints, dict_non_actionable=None, verbose=False, 
-                 diversity_weight=0.5, repulsion_weight=4.0, boundary_weight=15.0, 
-                 distance_factor=2.0, sparsity_factor=1.0, constraints_factor=3.0,
-                 original_escape_weight=2.0, escape_pressure=0.5, prioritize_non_overlapping=True,
-                 max_bonus_cap=50.0):
+    def __init__(self, model, constraints, dict_non_actionable=None, verbose=False):
         """
         Initialize the CounterFactualDPG object.
 
@@ -28,19 +26,6 @@ class CounterFactualModel:
         self.average_fitness_list = []
         self.best_fitness_list = []
         self.verbose = verbose
-        
-        # Store all parameters for compatibility with the experiment framework
-        # (even though they're not used in the old implementation)
-        self.diversity_weight = diversity_weight
-        self.repulsion_weight = repulsion_weight
-        self.boundary_weight = boundary_weight
-        self.distance_factor = distance_factor
-        self.sparsity_factor = sparsity_factor
-        self.constraints_factor = constraints_factor
-        self.original_escape_weight = original_escape_weight
-        self.escape_pressure = escape_pressure
-        self.prioritize_non_overlapping = prioritize_non_overlapping
-        self.max_bonus_cap = max_bonus_cap
 
     def is_actionable_change(self, counterfactual_sample, original_sample):
       """
@@ -185,39 +170,27 @@ class CounterFactualModel:
                 # Validate numerical constraints specific to the target class
                 for condition in class_constraints:
                     if condition["feature"] == feature:
-                        # Support both old (operator/value) and new (min/max) constraint formats
-                        if "operator" in condition:
-                            # Old format
-                            operator = condition["operator"]
-                            constraint_value = condition["value"]
+                        operator = condition["operator"]
+                        constraint_value = condition["value"]
 
-                            # Check if the new value violates any constraints
-                            if operator == "<" and not (new_value < constraint_value):
-                                valid_change = False
-                                penalty += constraint_value
-                            elif operator == "<=" and not (new_value <= constraint_value):
-                                valid_change = False
-                                penalty += constraint_value
-                            elif operator == ">" and not (new_value > constraint_value):
-                                valid_change = False
-                                penalty += constraint_value
-                            elif operator == ">=" and not (new_value >= constraint_value):
-                                valid_change = False
-                                penalty += constraint_value
-                        else:
-                            # New format with min/max
-                            min_val = condition.get("min")
-                            max_val = condition.get("max")
-                            
-                            # Check if violates minimum constraint
-                            if min_val is not None and new_value < min_val:
-                                valid_change = False
-                                penalty += abs(new_value - min_val)
-                            
-                            # Check if violates maximum constraint
-                            if max_val is not None and new_value > max_val:
-                                valid_change = False
-                                penalty += abs(new_value - max_val)
+                        #print("Feature:", feature)
+                        #print("Operator:", operator)
+                        #print("Constraint Value:", constraint_value)
+                        #print("New Value:", new_value)
+
+                        # Check if the new value violates any constraints
+                        if operator == "<" and not (new_value < constraint_value):
+                            valid_change = False
+                            penalty += constraint_value
+                        elif operator == "<=" and not (new_value <= constraint_value):
+                            valid_change = False
+                            penalty += constraint_value
+                        elif operator == ">" and not (new_value > constraint_value):
+                            valid_change = False
+                            penalty += constraint_value
+                        elif operator == ">=" and not (new_value >= constraint_value):
+                            valid_change = False
+                            penalty += constraint_value
 
         # Collect all constraints that are NOT related to the target class
         non_target_class_constraints = [
@@ -235,46 +208,23 @@ class CounterFactualModel:
                 # Validate numerical constraints NOT related to the target class
                 for condition in non_target_class_constraints:
                     if condition["feature"] == feature:
-                        # Support both old (operator/value) and new (min/max) constraint formats
-                        if "operator" in condition:
-                            # Old format
-                            operator = condition["operator"]
-                            constraint_value = condition["value"]
+                        operator = condition["operator"]
+                        constraint_value = condition["value"]
 
-                            # Check if the new value violates any constraints
-                            if operator == "<" and (new_value < constraint_value):
-                                valid_change = False
-                                penalty += constraint_value
-                            elif operator == "<=" and (new_value <= constraint_value):
-                                valid_change = False
-                                penalty += constraint_value
-                            elif operator == ">" and (new_value > constraint_value):
-                                valid_change = False
-                                penalty += constraint_value
-                            elif operator == ">=" and (new_value >= constraint_value):
-                                valid_change = False
-                                penalty += constraint_value
-                        else:
-                            # New format with min/max - penalize if inside non-target class bounds
-                            min_val = condition.get("min")
-                            max_val = condition.get("max")
-                            
-                            # If value is within non-target class bounds, it's bad
-                            in_bounds = True
-                            if min_val is not None and new_value < min_val:
-                                in_bounds = False
-                            if max_val is not None and new_value > max_val:
-                                in_bounds = False
-                            
-                            if in_bounds:
-                                valid_change = False
-                                # Penalty based on how far we need to escape
-                                if min_val is not None and max_val is not None:
-                                    penalty += min(abs(new_value - min_val), abs(new_value - max_val))
-                                elif min_val is not None:
-                                    penalty += abs(new_value - min_val)
-                                elif max_val is not None:
-                                    penalty += abs(new_value - max_val)
+                        # Check if the new value violates any constraints
+                        if operator == "<" and (new_value < constraint_value):
+                            valid_change = False
+                            penalty += constraint_value
+                        elif operator == "<=" and (new_value <= constraint_value):
+                            valid_change = False
+                            penalty += constraint_value
+                        elif operator == ">" and (new_value > constraint_value):
+                            valid_change = False
+                            penalty += constraint_value
+                        elif operator == ">=" and (new_value >= constraint_value):
+                            valid_change = False
+                            penalty += constraint_value
+
 
         #print('Total Penalty:', penalty)
         return valid_change, penalty
@@ -305,30 +255,18 @@ class CounterFactualModel:
             # Find the constraints for this feature
             for condition in class_constraints:
                 if condition["feature"] == feature:
-                    # Support both old (operator/value) and new (min/max) constraint formats
-                    if "operator" in condition:
-                        # Old format
-                        operator = condition["operator"]
-                        constraint_value = condition["value"]
+                    operator = condition["operator"]
+                    constraint_value = condition["value"]
 
-                        # Update the min and max values based on the constraints
-                        if operator == "<":
-                            max_value = min(max_value, constraint_value - 1e-5)
-                        elif operator == "<=":
-                            max_value = min(max_value, constraint_value)
-                        elif operator == ">":
-                            min_value = max(min_value, constraint_value + 1e-5)
-                        elif operator == ">=":
-                            min_value = max(min_value, constraint_value)
-                    else:
-                        # New format with min/max
-                        cond_min = condition.get("min")
-                        cond_max = condition.get("max")
-                        
-                        if cond_min is not None:
-                            min_value = max(min_value, cond_min)
-                        if cond_max is not None:
-                            max_value = min(max_value, cond_max)
+                    # Update the min and max values based on the constraints
+                    if operator == "<":
+                        max_value = min(max_value, constraint_value - 1e-5)
+                    elif operator == "<=":
+                        max_value = min(max_value, constraint_value)
+                    elif operator == ">":
+                        min_value = max(min_value, constraint_value + 1e-5)
+                    elif operator == ">=":
+                        min_value = max(min_value, constraint_value)
 
             # Incorporate non-actionable constraints
             if self.dict_non_actionable and feature in self.dict_non_actionable:
@@ -410,25 +348,7 @@ class CounterFactualModel:
             return fitness
 
 
-    def genetic_algorithm(self, sample, target_class, population_size=100, generations=100, mutation_rate=0.8, metric="euclidean", delta_threshold=0.01, patience=10, n_jobs=-1, original_class=None):
-      """
-      Genetic algorithm to find counterfactual samples.
-      
-      Args:
-          sample (dict): The original sample with feature values.
-          target_class (int): The desired class for the counterfactual.
-          population_size (int): Size of the population.
-          generations (int): Number of generations to run.
-          mutation_rate (float): Mutation rate for the genetic algorithm.
-          metric (str): Distance metric to use.
-          delta_threshold (float): Threshold for convergence.
-          patience (int): Number of generations to wait for improvement.
-          n_jobs (int): Number of parallel jobs (ignored in old implementation).
-          original_class (int): Original class (ignored in old implementation).
-      
-      Returns:
-          dict: The best counterfactual found or None.
-      """
+    def genetic_algorithm(self, sample, target_class, population_size=100, generations=100, mutation_rate=0.8, metric="euclidean", delta_threshold=0.01, patience=10):
       # Initialize population with random values within a reasonable range
       population = []
       feature_names = list(sample.keys())
@@ -532,32 +452,22 @@ class CounterFactualModel:
       best_index = np.argmin(fitness_scores)
       return population[best_index]
 
-    def generate_counterfactual(self, sample, target_class, population_size=100, generations=100, mutation_rate=0.8, n_jobs=-1):
+    def generate_counterfactual(self, sample, target_class, population_size=100, generations=100 ):
         """
         Generate a counterfactual for the given sample and target class using a genetic algorithm.
-        
-        Enhanced with dual-boundary support: the GA uses both original and target class
-        constraints to guide evolution, escaping original bounds while approaching target bounds.
 
         Args:
             sample (dict): The original sample with feature values.
             target_class (int): The desired class for the counterfactual.
-            population_size (int): Size of the population for the genetic algorithm.
-            generations (int): Number of generations to run.
-            mutation_rate (float): Per-feature mutation probability.
-            n_jobs (int): Number of parallel jobs. -1=all CPUs (default), 1=sequential (ignored in old implementation).
 
         Returns:
             dict: A modified sample representing the counterfactual or None if not found.
         """
         sample_class = self.model.predict(pd.DataFrame([sample]))[0]
-
+        # Check if the predicted class matches the desired class
         if sample_class == target_class:
             raise ValueError("Target class need to be different from the predicted class label.")
-
-        # Pass original_class to enable dual-boundary GA
-        counterfactual = self.genetic_algorithm(
-            sample, target_class, population_size, generations, 
-            mutation_rate=mutation_rate, n_jobs=n_jobs, original_class=sample_class
-        )
+        #counterfactual = None
+        #while counterfactual is None:
+        counterfactual = self.genetic_algorithm(sample, target_class, population_size, generations)
         return counterfactual
