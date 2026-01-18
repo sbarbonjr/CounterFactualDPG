@@ -167,23 +167,23 @@ def fetch_all_runs(
     techniques = techniques or ['dpg', 'dice']
     api = wandb.Api()
     
-    print(f"Fetching up to {limit} most recent runs from {entity}/{project}...")
+    print(f"Fetching up to {limit} runs from {entity}/{project}...")
     
-    # Filter at API level for finished runs only, order by created_at descending
-    # Also limit the number of runs fetched from the API
-    filters = {"state": "finished"}
-    runs = api.runs(f"{entity}/{project}", filters=filters, order="-created_at", per_page=limit)
+    # Simple query - get runs and limit iteration
+    runs = api.runs(f"{entity}/{project}", per_page=limit)
     
     data = []
-    count = 0
-    for run in runs:
-        if count >= limit:
+    for i, run in enumerate(runs):
+        if i >= limit:
             break
+        
+        if run.state != 'finished':
+            continue
         
         config = run.config
         summary = run.summary._json_dict
         
-        # Require data.dataset and data.method to be set - no fallback logic
+        # Require data.dataset and data.method to be set
         if 'data' not in config:
             continue
         
@@ -191,10 +191,7 @@ def fetch_all_runs(
         dataset_name = data_config.get('dataset_name') or data_config.get('dataset')
         technique = data_config.get('method')
         
-        if not dataset_name:
-            continue
-        
-        if not technique:
+        if not dataset_name or not technique:
             continue
         
         technique = technique.lower()
