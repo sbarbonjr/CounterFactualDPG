@@ -166,7 +166,7 @@ def get_sweep_config(dataset: str, target_metric: str, entity: Optional[str] = N
         },
         'command': [
             '${env}',
-            'python',
+            '.venv/bin/python',
             '${program}',
             '--dataset', dataset,
             '--method', 'dpg',
@@ -215,8 +215,12 @@ def run_single_sweep_experiment(
     print(f"{'='*60}\n")
     
     # Load base configuration
-    configs_dir = REPO_ROOT / 'configs'
-    config = load_config(configs_dir, dataset, method)
+    config_path = REPO_ROOT / 'configs' / dataset / 'config.yaml'
+    if not config_path.exists():
+        print(f"ERROR: Config file not found: {config_path}")
+        return {'error': 'config_not_found'}
+    
+    config = load_config(str(config_path), method=method, repo_root=str(REPO_ROOT))
     
     # Apply sweep hyperparameters to config
     # These go under methods._default or methods.dpg
