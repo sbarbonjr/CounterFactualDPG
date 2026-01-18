@@ -95,8 +95,12 @@ class CounterFactualModel:
             return False  # Return np.inf if the samples are identical
 
         # Predict the class for the counterfactual sample
-        #print('self.model.predict(counterfactual_sample)[0]', self.model.predict(counterfactual_sample)[0])
-        predicted_class = self.model.predict(counterfactual_sample)[0]
+        # Use DataFrame with feature names if model has feature_names_in_ attribute to avoid warnings
+        if hasattr(self.model, 'feature_names_in_'):
+            counterfactual_df = pd.DataFrame(counterfactual_sample, columns=self.model.feature_names_in_)
+            predicted_class = self.model.predict(counterfactual_df)[0]
+        else:
+            predicted_class = self.model.predict(counterfactual_sample)[0]
 
         # Check if the predicted class matches the desired class
         if predicted_class == desired_class:
