@@ -605,13 +605,13 @@ class ExperimentRunner:
         global_stats = get_global_stats(self.output_dir)
         
         # Session stats bar (this orchestrator's view)
-        stats_line = (f"{Colors.GREEN}✓ {stats['completed']}{Colors.RESET} | "
-                     f"{Colors.RED}✗ {stats['failed']}{Colors.RESET} | "
-                     f"{Colors.CYAN}⟳ {stats['running']}{Colors.RESET} | "
-                     f"{Colors.BLUE}⟐ {stats.get('external_running', 0)}{Colors.RESET} | "
-                     f"{Colors.DIM}○ {stats['pending']}{Colors.RESET} | "
-                     f"{Colors.YELLOW}⊘ {stats['skipped']}{Colors.RESET} | "
-                     f"{Colors.MAGENTA}⊗ {stats['cancelled']}{Colors.RESET}")
+        stats_line = (f"{Colors.GREEN}Done: {stats['completed']}{Colors.RESET} | "
+                     f"{Colors.RED}Failed: {stats['failed']}{Colors.RESET} | "
+                     f"{Colors.CYAN}Running: {stats['running']}{Colors.RESET} | "
+                     f"{Colors.BLUE}External: {stats.get('external_running', 0)}{Colors.RESET} | "
+                     f"{Colors.DIM}Pending: {stats['pending']}{Colors.RESET} | "
+                     f"{Colors.YELLOW}Skipped: {stats['skipped']}{Colors.RESET} | "
+                     f"{Colors.MAGENTA}Cancelled: {stats['cancelled']}{Colors.RESET}")
         lines.append(stats_line)
         
         # Global stats line (all experiments ever)
