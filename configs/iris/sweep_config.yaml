@@ -1,0 +1,82 @@
+# WandB Sweep Configuration for DPG Hyperparameter Optimization
+# Dataset: iris (baseline dataset for hyperparameter search)
+#
+# Usage:
+#   # Create sweep and get sweep ID
+#   wandb sweep configs/iris/sweep_config.yaml
+#   
+#   # Run agent(s) to execute experiments
+#   wandb agent <entity>/<project>/<sweep_id>
+#   
+#   # Or use the run_sweep.py script:
+#   python scripts/run_sweep.py --dataset iris --target-metric plausibility_sum
+#   python scripts/run_sweep.py --dataset iris --target-metric perc_valid_cf
+#
+# Available target metrics (9 recommended):
+#   Validity:     perc_valid_cf (maximize)
+#   Distance:     distance_l2 (minimize), distance_mad (minimize)
+#   Sparsity:     avg_nbr_changes_per_cf (minimize)
+#   Diversity:    diversity_l2 (maximize)
+#   Plausibility: plausibility_sum (minimize) - DEFAULT
+#   Actionability: perc_valid_actionable_cf (maximize)
+#   Fidelity:     accuracy_knn_sklearn (maximize)
+#   Delta:        delta (maximize)
+
+program: scripts/run_sweep.py
+method: random
+name: dpg_hyperparameter_sweep
+
+# Metric to optimize (overridden by --target-metric in run_sweep.py)
+metric:
+  name: plausibility_sum
+  goal: minimize
+
+# Sweep parameters - 5 most impactful GA hyperparameters
+parameters:
+  # Population size: affects exploration vs. computation cost
+  population_size:
+    distribution: int_uniform
+    min: 20
+    max: 100
+
+  # Max generations: affects convergence depth
+  max_generations:
+    distribution: int_uniform
+    min: 30
+    max: 200
+
+  # Mutation rate: controls exploration/exploitation balance
+  mutation_rate:
+    distribution: uniform
+    min: 0.05
+    max: 0.5
+
+  # Diversity weight: encourages spread in solution space
+  diversity_weight:
+    distribution: uniform
+    min: 0.1
+    max: 3.0
+
+  # Repulsion weight: distance to nearest neighbor in population
+  repulsion_weight:
+    distribution: uniform
+    min: 1.0
+    max: 10.0
+
+# Early termination for poorly performing runs
+early_terminate:
+  type: hyperband
+  min_iter: 3
+  eta: 3
+  s: 2
+
+# Run settings
+command:
+  - ${env}
+  - python
+  - ${program}
+  - --dataset
+  - iris
+  - --method
+  - dpg
+  - ${args}
