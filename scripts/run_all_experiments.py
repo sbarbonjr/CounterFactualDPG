@@ -491,10 +491,10 @@ class ExperimentRunner:
             ExperimentStatus.CANCELLED: Colors.MAGENTA,
         }
         
-        status_symbols = {
+        status_labels = {
             ExperimentStatus.PENDING: '○',
             ExperimentStatus.RUNNING: self.spinner_chars[self.spinner_idx],
-            ExperimentStatus.EXTERNAL_RUNNING: '⟐',  # Different symbol for external
+            ExperimentStatus.EXTERNAL_RUNNING: '⟐',
             ExperimentStatus.COMPLETED: '✓',
             ExperimentStatus.FAILED: '✗',
             ExperimentStatus.SKIPPED: '⊘',
@@ -502,10 +502,10 @@ class ExperimentRunner:
         }
         
         color = status_colors.get(exp.status, Colors.WHITE)
-        symbol = status_symbols.get(exp.status, '?')
+        label = status_labels.get(exp.status, '?')
         
         # Format: [symbol] dataset/method (elapsed) - last_log
-        key_part = f"{symbol} {exp.key}"
+        key_part = f"{label} {exp.key}"
         time_part = f"({exp.elapsed_str})" if exp.status in (ExperimentStatus.RUNNING, ExperimentStatus.EXTERNAL_RUNNING) or exp.end_time else ""
         
         # Add PID for external processes
@@ -582,20 +582,20 @@ class ExperimentRunner:
         global_stats = get_global_stats(self.output_dir)
         
         # Session stats bar (this orchestrator's view)
-        stats_line = (f"{Colors.GREEN}✓ {stats['completed']}{Colors.RESET} | "
-                     f"{Colors.RED}✗ {stats['failed']}{Colors.RESET} | "
-                     f"{Colors.CYAN}⟳ {stats['running']}{Colors.RESET} | "
-                     f"{Colors.BLUE}⟐ {stats.get('external_running', 0)}{Colors.RESET} | "
-                     f"{Colors.DIM}○ {stats['pending']}{Colors.RESET} | "
-                     f"{Colors.YELLOW}⊘ {stats['skipped']}{Colors.RESET} | "
-                     f"{Colors.MAGENTA}⊗ {stats['cancelled']}{Colors.RESET}")
+        stats_line = (f"{Colors.GREEN}Done: {stats['completed']}{Colors.RESET} | "
+                     f"{Colors.RED}Failed: {stats['failed']}{Colors.RESET} | "
+                     f"{Colors.CYAN}Running: {stats['running']}{Colors.RESET} | "
+                     f"{Colors.BLUE}External: {stats.get('external_running', 0)}{Colors.RESET} | "
+                     f"{Colors.DIM}Pending: {stats['pending']}{Colors.RESET} | "
+                     f"{Colors.YELLOW}Skipped: {stats['skipped']}{Colors.RESET} | "
+                     f"{Colors.MAGENTA}Cancelled: {stats['cancelled']}{Colors.RESET}")
         lines.append(stats_line)
         
         # Global stats line (all experiments ever)
         global_line = (f"{Colors.DIM}Global: "
-                      f"✓ {global_stats['finished']} | "
-                      f"⟳ {global_stats['running']} | "
-                      f"✗ {global_stats['error']} | "
+                      f"Finished: {global_stats['finished']} | "
+                      f"Running: {global_stats['running']} | "
+                      f"Error: {global_stats['error']} | "
                       f"Total tracked: {global_stats['total']}{Colors.RESET}")
         lines.append(global_line)
         lines.append(f"{Colors.DIM}{'─' * width}{Colors.RESET}")
