@@ -333,15 +333,17 @@ def create_comparison_table(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(comparison_data)
 
 
-def create_method_metrics_table(df: pd.DataFrame, dataset: Optional[str] = None) -> pd.DataFrame:
+def create_method_metrics_table(df: pd.DataFrame, dataset: Optional[str] = None, styled: bool = True) -> pd.DataFrame:
     """Create a table with methods as rows and metrics as columns.
     
     Args:
         df: DataFrame from fetch_all_runs()
         dataset: Optional dataset name to filter. If None, aggregates across all datasets.
+        styled: If True, returns a styled DataFrame with color highlighting for best values.
         
     Returns:
-        DataFrame with methods as rows (dpg, dice) and metrics as columns
+        DataFrame (or Styler) with methods as rows (dpg, dice) and metrics as columns.
+        Best values are highlighted in green when styled=True.
         
     Example output:
         |          | perc_valid_cf | plausibility_sum | distance_l2 | ...
@@ -369,16 +371,36 @@ def create_method_metrics_table(df: pd.DataFrame, dataset: Optional[str] = None)
     result = agg_data.reset_index()
     result = result.set_index('technique')
     
-    # Rename columns to use friendly names with arrows indicating goal
+    # Build rename map and track goals for styling
     rename_map = {}
+    col_goals = {}  # Map renamed column -> goal
     for col in metric_cols:
         if col in COMPARISON_METRICS:
             info = COMPARISON_METRICS[col]
             arrow = '↑' if info['goal'] == 'maximize' else '↓'
-            rename_map[col] = f"{info['name']} {arrow}"
+            new_name = f"{info['name']} {arrow}"
+            rename_map[col] = new_name
+            col_goals[new_name] = info['goal']
+    
     result = result.rename(columns=rename_map)
     
-    return result
+    if not styled:
+        return result
+    
+    # Apply styling: highlight best value per column based on goal
+    def highlight_best(s):
+        """Highlight the best value in a column based on its optimization goal."""
+        col_name = s.name
+        goal = col_goals.get(col_name, 'maximize')
+        
+        if goal == 'maximize':
+            is_best = s == s.max()
+        else:  # minimize
+            is_best = s == s.min()
+        
+        return ['background-color: #90EE90; font-weight: bold' if v else '' for v in is_best]
+    
+    return result.style.apply(highlight_best, axis=0).format('{:.4f}')
 
 
 def determine_winner(dpg_val: float, dice_val: float, goal: str) -> str:
