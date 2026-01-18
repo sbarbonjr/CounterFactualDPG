@@ -338,11 +338,16 @@ def run_agent(
     """
     def sweep_train():
         """Wrapper function for sweep agent."""
-        run_single_sweep_experiment(
-            dataset=dataset,
-            method='dpg',
-            target_metric=target_metric,
-        )
+        # Initialize the wandb run - agent provides the config
+        run = wandb.init()
+        try:
+            run_single_sweep_experiment(
+                dataset=dataset,
+                method='dpg',
+                target_metric=target_metric,
+            )
+        finally:
+            wandb.finish()
     
     sweep_path = f"{entity}/{project}/{sweep_id}" if entity else f"{project}/{sweep_id}"
     
