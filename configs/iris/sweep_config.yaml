@@ -73,7 +73,7 @@ early_terminate:
 # Run settings
 command:
   - ${env}
-  - python
+  - .venv/bin/python
   - ${program}
   - --dataset
   - iris
