@@ -373,8 +373,13 @@ def create_method_metrics_table(df: pd.DataFrame, dataset: Optional[str] = None)
     result = agg_data.reset_index()
     result = result.set_index('technique')
     
-    # Rename columns to use friendly names
-    rename_map = {col: COMPARISON_METRICS[col]['name'] for col in metric_cols if col in COMPARISON_METRICS}
+    # Rename columns to use friendly names with arrows indicating goal
+    rename_map = {}
+    for col in metric_cols:
+        if col in COMPARISON_METRICS:
+            info = COMPARISON_METRICS[col]
+            arrow = '↑' if info['goal'] == 'maximize' else '↓'
+            rename_map[col] = f"{info['name']} {arrow}"
     result = result.rename(columns=rename_map)
     
     return result
