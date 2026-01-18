@@ -52,13 +52,32 @@ import termios
 import tty
 import fcntl
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+
+# Try to import psutil for system monitoring
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
 
 # Ensure repo root is on sys.path
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
+
+# Import experiment status utilities
+from utils.experiment_status import (
+    PersistentStatus,
+    ExperimentStatusInfo,
+    get_experiment_status,
+    get_all_experiment_statuses,
+    get_global_stats,
+    read_log_tail,
+    get_log_file_path,
+    is_process_running,
+)
 
 # Default methods to run
 DEFAULT_METHODS = ['dpg', 'dice']
@@ -84,6 +103,52 @@ class Colors:
     BG_BLUE = '\033[44m'
 
 
+def get_system_stats() -> Tuple[float, float, float, float]:
+    """Get CPU and memory usage stats.
+    
+    Returns:
+        Tuple of (cpu_percent, mem_used_gb, mem_total_gb, mem_percent)
+    """
+    if PSUTIL_AVAILABLE:
+        cpu_percent = psutil.cpu_percent(interval=None)
+        mem = psutil.virtual_memory()
+        mem_used_gb = mem.used / (1024 ** 3)
+        mem_total_gb = mem.total / (1024 ** 3)
+        mem_percent = mem.percent
+        return cpu_percent, mem_used_gb, mem_total_gb, mem_percent
+    else:
+        # Fallback: read from /proc on Linux
+        try:
+            # CPU usage (rough estimate from /proc/stat)
+            with open('/proc/stat', 'r') as f:
+                line = f.readline()
+                fields = line.split()[1:]
+                idle = int(fields[3])
+                total = sum(int(x) for x in fields[:7])
+                # This is a rough estimate, not as accurate as psutil
+                cpu_percent = 100.0 * (1 - idle / total) if total > 0 else 0.0
+            
+            # Memory from /proc/meminfo
+            with open('/proc/meminfo', 'r') as f:
+                meminfo = {}
+                for line in f:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        meminfo[parts[0].rstrip(':')] = int(parts[1])
+                
+                mem_total_kb = meminfo.get('MemTotal', 0)
+                mem_available_kb = meminfo.get('MemAvailable', meminfo.get('MemFree', 0))
+                mem_used_kb = mem_total_kb - mem_available_kb
+                
+                mem_total_gb = mem_total_kb / (1024 ** 2)
+                mem_used_gb = mem_used_kb / (1024 ** 2)
+                mem_percent = 100.0 * mem_used_kb / mem_total_kb if mem_total_kb > 0 else 0.0
+            
+            return cpu_percent, mem_used_gb, mem_total_gb, mem_percent
+        except Exception:
+            return 0.0, 0.0, 0.0, 0.0
+
+
 class ExperimentStatus(Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -91,6 +156,7 @@ class ExperimentStatus(Enum):
     FAILED = "failed"
     SKIPPED = "skipped"
     CANCELLED = "cancelled"
+    EXTERNAL_RUNNING = "external_running"  # Running from another orchestrator
 
 
 @dataclass
@@ -104,6 +170,7 @@ class Experiment:
     return_code: Optional[int] = None
     last_log_line: str = ""
     log_lines: List[str] = field(default_factory=list)
+    external_pid: Optional[int] = None  # PID of external process (from another orchestrator)
     
     @property
     def key(self) -> str:
@@ -138,7 +205,8 @@ class ExperimentRunner:
         offline: bool = False,
         overrides: Optional[List[str]] = None,
         output_dir: Optional[pathlib.Path] = None,
-        skip_existing: bool = False
+        skip_existing: bool = False,
+        monitor_only: bool = False,  # New: just monitor, don't start new experiments
     ):
         self.max_workers = max_workers
         self.verbose = verbose
@@ -146,6 +214,7 @@ class ExperimentRunner:
         self.overrides = overrides or []
         self.output_dir = output_dir or REPO_ROOT / 'outputs'
         self.skip_existing = skip_existing
+        self.monitor_only = monitor_only
         
         # Initialize experiments
         self.experiments: Dict[str, Experiment] = {}
@@ -155,15 +224,47 @@ class ExperimentRunner:
             exp = Experiment(dataset=exp_dict['dataset'], method=exp_dict['method'])
             self.experiments[exp.key] = exp
             
-            # Check if should skip
-            if skip_existing and self._check_existing_output(exp.dataset, exp.method):
+            # Check status from persistent status file
+            persistent_status, status_info = get_experiment_status(
+                exp.dataset, exp.method, self.output_dir
+            )
+            
+            if persistent_status == PersistentStatus.FINISHED:
+                # Already completed successfully
                 exp.status = ExperimentStatus.SKIPPED
+                if status_info and status_info.start_time:
+                    exp.start_time = status_info.start_time
+                    exp.end_time = status_info.end_time
+            elif persistent_status == PersistentStatus.RUNNING:
+                # Another process is running this experiment - track it
+                if status_info and status_info.pid and is_process_running(status_info.pid):
+                    exp.status = ExperimentStatus.EXTERNAL_RUNNING
+                    exp.external_pid = status_info.pid
+                    exp.start_time = status_info.start_time
+                    # Start a thread to read its logs
+                    self._start_external_log_reader(exp)
+                else:
+                    # Process died - it's actually an error, add to queue
+                    if not monitor_only:
+                        self.pending_queue.append(exp.key)
+            elif persistent_status == PersistentStatus.ERROR:
+                # Previous run errored - we should retry unless monitor_only
+                if monitor_only:
+                    exp.status = ExperimentStatus.FAILED
+                    if status_info:
+                        exp.start_time = status_info.start_time
+                        exp.end_time = status_info.end_time
+                        exp.last_log_line = status_info.error_message or "Error"
+                else:
+                    self.pending_queue.append(exp.key)
             else:
-                self.pending_queue.append(exp.key)
+                # No status or unknown - add to queue unless monitor_only
+                if not monitor_only:
+                    self.pending_queue.append(exp.key)
         
         # Control flags
         self.stop_requested = False
-        self.soft_stop_requested = False
+        self.soft_stop_requested = False or monitor_only  # Don't start new if monitor_only
         self.paused = False
         
         # Thread management
@@ -181,10 +282,54 @@ class ExperimentRunner:
         # Display state
         self.last_display_lines = 0
     
+    def _start_external_log_reader(self, exp: Experiment):
+        """Start a thread to read logs from an external experiment's log file."""
+        def read_external_logs():
+            log_file = get_log_file_path(exp.dataset, exp.method, self.output_dir)
+            last_position = 0
+            
+            while exp.status == ExperimentStatus.EXTERNAL_RUNNING:
+                try:
+                    if log_file.exists():
+                        with open(log_file, 'r') as f:
+                            f.seek(last_position)
+                            new_lines = f.readlines()
+                            last_position = f.tell()
+                            
+                            for line in new_lines:
+                                line = line.rstrip()
+                                if line:
+                                    with self.lock:
+                                        exp.last_log_line = line
+                                        exp.log_lines.append(line)
+                                        if len(exp.log_lines) > 100:
+                                            exp.log_lines = exp.log_lines[-100:]
+                    
+                    # Check if the external process is still running
+                    if exp.external_pid and not is_process_running(exp.external_pid):
+                        # Process finished - check final status
+                        final_status, _ = get_experiment_status(
+                            exp.dataset, exp.method, self.output_dir
+                        )
+                        if final_status == PersistentStatus.FINISHED:
+                            exp.status = ExperimentStatus.COMPLETED
+                        else:
+                            exp.status = ExperimentStatus.FAILED
+                        exp.end_time = time.time()
+                        break
+                    
+                    time.sleep(0.5)
+                except Exception:
+                    time.sleep(1)
+        
+        thread = threading.Thread(target=read_external_logs, daemon=True)
+        thread.start()
+        self.reader_threads.append(thread)
+    
     def _check_existing_output(self, dataset: str, method: str) -> bool:
-        """Check if output already exists for a dataset/method combination."""
-        expected_output = self.output_dir / f"{dataset}_{method}"
-        return expected_output.exists() and any(expected_output.iterdir())
+        """Check if experiment completed successfully (based on status file)."""
+        status, info = get_experiment_status(dataset, method, self.output_dir)
+        return status == PersistentStatus.FINISHED
     
     def _build_command(self, exp: Experiment) -> List[str]:
         """Build command for running an experiment."""
@@ -273,6 +418,34 @@ class ExperimentRunner:
                     else:
                         exp.status = ExperimentStatus.FAILED
     
+    def _check_external_completed(self):
+        """Check if externally running experiments have completed."""
+        for key, exp in self.experiments.items():
+            if exp.status == ExperimentStatus.EXTERNAL_RUNNING:
+                # Check if the process is still running
+                status_info = get_experiment_status(exp.dataset, exp.method)
+                if status_info:
+                    if not status_info.pid or not is_process_running(status_info.pid):
+                        # Process no longer running, check final status
+                        if status_info.status == PersistentStatus.FINISHED:
+                            exp.status = ExperimentStatus.COMPLETED
+                            exp.end_time = status_info.end_time or time.time()
+                        elif status_info.status == PersistentStatus.ERROR:
+                            exp.status = ExperimentStatus.FAILED
+                            exp.end_time = status_info.end_time or time.time()
+                        else:
+                            # Status file says running but process is dead
+                            exp.status = ExperimentStatus.FAILED
+                            exp.end_time = time.time()
+                else:
+                    # No status file found, mark as failed
+                    exp.status = ExperimentStatus.FAILED
+                    exp.end_time = time.time()
+    
+    def _get_external_running_count(self) -> int:
+        """Get number of externally running experiments."""
+        return sum(1 for exp in self.experiments.values() if exp.status == ExperimentStatus.EXTERNAL_RUNNING)
+    
     def _get_running_count(self) -> int:
         """Get number of currently running experiments."""
         return sum(1 for exp in self.experiments.values() if exp.status == ExperimentStatus.RUNNING)
@@ -311,6 +484,7 @@ class ExperimentRunner:
         status_colors = {
             ExperimentStatus.PENDING: Colors.DIM,
             ExperimentStatus.RUNNING: Colors.CYAN,
+            ExperimentStatus.EXTERNAL_RUNNING: Colors.BLUE,
             ExperimentStatus.COMPLETED: Colors.GREEN,
             ExperimentStatus.FAILED: Colors.RED,
             ExperimentStatus.SKIPPED: Colors.YELLOW,
@@ -320,6 +494,7 @@ class ExperimentRunner:
         status_symbols = {
             ExperimentStatus.PENDING: '○',
             ExperimentStatus.RUNNING: self.spinner_chars[self.spinner_idx],
+            ExperimentStatus.EXTERNAL_RUNNING: '⟐',  # Different symbol for external
             ExperimentStatus.COMPLETED: '✓',
             ExperimentStatus.FAILED: '✗',
             ExperimentStatus.SKIPPED: '⊘',
@@ -331,13 +506,17 @@ class ExperimentRunner:
         
         # Format: [symbol] dataset/method (elapsed) - last_log
         key_part = f"{symbol} {exp.key}"
-        time_part = f"({exp.elapsed_str})" if exp.status == ExperimentStatus.RUNNING or exp.end_time else ""
+        time_part = f"({exp.elapsed_str})" if exp.status in (ExperimentStatus.RUNNING, ExperimentStatus.EXTERNAL_RUNNING) or exp.end_time else ""
+        
+        # Add PID for external processes
+        if exp.status == ExperimentStatus.EXTERNAL_RUNNING and exp.external_pid:
+            time_part += f" [PID:{exp.external_pid}]"
         
         base = f"{color}{key_part}{Colors.RESET} {time_part}"
         
-        if exp.status == ExperimentStatus.RUNNING and exp.last_log_line:
+        if exp.status in (ExperimentStatus.RUNNING, ExperimentStatus.EXTERNAL_RUNNING) and exp.last_log_line:
             # Truncate log line to fit
-            max_log_len = width - len(exp.key) - 25
+            max_log_len = width - len(exp.key) - 35
             log_line = exp.last_log_line[:max_log_len] if len(exp.last_log_line) > max_log_len else exp.last_log_line
             base += f" {Colors.DIM}- {log_line}{Colors.RESET}"
         
@@ -388,18 +567,42 @@ class ExperimentRunner:
             header += " | " + " ".join(status_flags)
         lines.append(header)
         
-        # Stats bar
+        # System resources line
+        cpu_pct, mem_used, mem_total, mem_pct = get_system_stats()
+        
+        # Color code based on usage levels
+        cpu_color = Colors.GREEN if cpu_pct < 70 else (Colors.YELLOW if cpu_pct < 90 else Colors.RED)
+        mem_color = Colors.GREEN if mem_pct < 70 else (Colors.YELLOW if mem_pct < 90 else Colors.RED)
+        
+        resource_line = (f"CPU: {cpu_color}{cpu_pct:5.1f}%{Colors.RESET} | "
+                        f"RAM: {mem_color}{mem_used:.1f}/{mem_total:.1f}GB ({mem_pct:.1f}%){Colors.RESET}")
+        lines.append(resource_line)
+        
+        # Get global stats from status files
+        global_stats = get_global_stats(self.output_dir)
+        
+        # Session stats bar (this orchestrator's view)
         stats_line = (f"{Colors.GREEN}✓ {stats['completed']}{Colors.RESET} | "
                      f"{Colors.RED}✗ {stats['failed']}{Colors.RESET} | "
                      f"{Colors.CYAN}⟳ {stats['running']}{Colors.RESET} | "
+                     f"{Colors.BLUE}⟐ {stats.get('external_running', 0)}{Colors.RESET} | "
                      f"{Colors.DIM}○ {stats['pending']}{Colors.RESET} | "
                      f"{Colors.YELLOW}⊘ {stats['skipped']}{Colors.RESET} | "
                      f"{Colors.MAGENTA}⊗ {stats['cancelled']}{Colors.RESET}")
         lines.append(stats_line)
+        
+        # Global stats line (all experiments ever)
+        global_line = (f"{Colors.DIM}Global: "
+                      f"✓ {global_stats['finished']} | "
+                      f"⟳ {global_stats['running']} | "
+                      f"✗ {global_stats['error']} | "
+                      f"Total tracked: {global_stats['total']}{Colors.RESET}")
+        lines.append(global_line)
         lines.append(f"{Colors.DIM}{'─' * width}{Colors.RESET}")
         
-        # Running experiments (always show)
-        running_exps = [exp for exp in self.experiments.values() if exp.status == ExperimentStatus.RUNNING]
+        # Running experiments (include both local and external)
+        running_exps = [exp for exp in self.experiments.values() 
+                       if exp.status in (ExperimentStatus.RUNNING, ExperimentStatus.EXTERNAL_RUNNING)]
         if running_exps:
             lines.append(f"{Colors.BOLD}Running:{Colors.RESET}")
             for exp in running_exps:
@@ -498,25 +701,32 @@ class ExperimentRunner:
                     self._cancel_pending()
                     break
                 
-                # Check for completed experiments
+                # Check for completed experiments (local processes)
                 self._check_completed()
                 
-                # Start new experiments if we have capacity
+                # Check for completed external experiments
+                self._check_external_completed()
+                
+                # Start new experiments if we have capacity (and not in monitor mode)
                 running_count = self._get_running_count()
                 while (running_count < self.max_workers 
                        and self.pending_queue 
                        and not self.stop_requested 
                        and not self.soft_stop_requested
-                       and not self.paused):
+                       and not self.paused
+                       and not self.monitor_only):
                     
                     key = self.pending_queue.pop(0)
                     self._start_experiment(key)
                     running_count += 1
                 
-                # Check if all done
+                # Check if all done (both local and external)
                 stats = self._get_stats()
-                if stats['running'] == 0 and stats['pending'] == 0:
-                    break
+                external_running = stats.get('external_running', 0)
+                if stats['running'] == 0 and stats['pending'] == 0 and external_running == 0:
+                    # In monitor mode, keep running to watch for new experiments
+                    if not self.monitor_only:
+                        break
                 
                 # Update spinner
                 self.spinner_idx = (self.spinner_idx + 1) % len(self.spinner_chars)
@@ -646,7 +856,7 @@ def main():
     parser.add_argument('--methods', nargs='+', default=DEFAULT_METHODS,
                        help=f'Methods to run (default: {DEFAULT_METHODS})')
     parser.add_argument('--skip-existing', action='store_true',
-                       help='Skip dataset/method combinations that already have output')
+                       help='Skip experiments that completed successfully (based on status files)')
     parser.add_argument('--dry-run', action='store_true',
                        help='Print commands without executing them')
     parser.add_argument('--verbose', action='store_true',
@@ -661,6 +871,8 @@ def main():
                        help='Continue running other experiments even if one fails')
     parser.add_argument('--parallel', type=int, default=None, metavar='N',
                        help='Run N experiments in parallel with interactive CLI')
+    parser.add_argument('--monitor', action='store_true',
+                       help='Monitor mode: only show running experiments, do not start new ones')
     
     args = parser.parse_args()
     
@@ -707,6 +919,7 @@ def main():
     print(f"Methods: {methods}")
     print(f"Total experiments: {len(experiments)}")
     print(f"Parallel workers: {args.parallel if args.parallel else 'sequential'}")
+    print(f"Monitor only: {args.monitor}")
     if args.overrides:
         print(f"Config overrides: {args.overrides}")
     print("=" * 60)
@@ -714,16 +927,17 @@ def main():
     total_start_time = time.time()
     
     # Run experiments
-    if args.parallel and args.parallel > 0:
-        # Interactive parallel mode
+    if args.parallel and args.parallel > 0 or args.monitor:
+        # Interactive parallel mode (or monitor mode)
         runner = ExperimentRunner(
             experiments=experiments,
-            max_workers=args.parallel,
+            max_workers=args.parallel or 0,
             verbose=args.verbose,
             offline=args.offline,
             overrides=args.overrides,
             output_dir=output_dir,
-            skip_existing=args.skip_existing
+            skip_existing=args.skip_existing,
+            monitor_only=args.monitor,
         )
         
         if args.dry_run:
@@ -746,8 +960,10 @@ def main():
             print(f"\n[{i}/{len(experiments)}] {experiment_key}")
             print("-" * 40)
             
-            if args.skip_existing and check_existing_output(dataset, method, output_dir):
-                print(f"  Skipping (output exists)")
+            # Use status-based check
+            status, _ = get_experiment_status(dataset, method, output_dir)
+            if args.skip_existing and status == PersistentStatus.FINISHED:
+                print(f"  Skipping (completed successfully)")
                 results['skipped'].append(experiment_key)
                 continue
             

@@ -36,6 +36,7 @@ import os
 import pickle
 import argparse
 import traceback
+import time
 from typing import Any, Dict, List, Optional
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing
@@ -118,6 +119,14 @@ from utils.replication_runner import (
 from utils.wandb_helper import (
     init_wandb,
     configure_wandb_metrics,
+)
+from utils.experiment_status import (
+    PersistentStatus,
+    write_status,
+    read_status,
+    get_log_file_path,
+    append_log,
+    clear_log,
 )
 
 # Config utilities moved to utils/config_manager.py
@@ -2206,6 +2215,28 @@ def main():
         if args.verbose:
             print(f"INFO: Logging comment: {args.comment}")
     
+    # Get output directory for status tracking
+    output_dir = pathlib.Path(getattr(config.output, 'local_dir', 'outputs') if hasattr(config, 'output') else 'outputs')
+    if not output_dir.is_absolute():
+        output_dir = REPO_ROOT / output_dir
+    
+    # Determine dataset and method for status tracking
+    dataset_name = args.dataset or getattr(config.data, 'dataset', 'unknown')
+    method_name = args.method or getattr(config.counterfactual, 'method', 'unknown')
+    
+    # Write initial "running" status
+    start_time = time.time()
+    write_status(
+        dataset=dataset_name,
+        method=method_name,
+        status=PersistentStatus.RUNNING,
+        output_dir=output_dir,
+        pid=os.getpid(),
+        start_time=start_time,
+    )
+    clear_log(dataset_name, method_name, output_dir)
+    print(f"INFO: Status tracking enabled for {dataset_name}/{method_name}")
+    
     # Initialize WandB
     wandb_run = None
     if WANDB_AVAILABLE:
@@ -2227,11 +2258,36 @@ def main():
         if wandb_run:
             wandb.finish()
         
+        # Write "finished" status
+        write_status(
+            dataset=dataset_name,
+            method=method_name,
+            status=PersistentStatus.FINISHED,
+            output_dir=output_dir,
+            pid=os.getpid(),
+            start_time=start_time,
+            end_time=time.time(),
+        )
+        print(f"INFO: Experiment {dataset_name}/{method_name} completed successfully")
+        
         return results
     
     except Exception as e:
         print(f"ERROR: Experiment failed: {e}")
         traceback.print_exc()
+        
+        # Write "error" status
+        write_status(
+            dataset=dataset_name,
+            method=method_name,
+            status=PersistentStatus.ERROR,
+            output_dir=output_dir,
+            pid=os.getpid(),
+            start_time=start_time,
+            end_time=time.time(),
+            error_message=str(e),
+        )
+        
         if wandb_run:
             wandb.finish(exit_code=1)
         raise
