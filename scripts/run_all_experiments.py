@@ -927,6 +927,9 @@ def main():
     methods = args.methods
     
     # Build experiments list with iris first (baseline/smallest dataset)
+    # Then randomize remaining datasets, keeping all methods together per dataset
+    import random
+    
     experiments = []
     
     # Add iris experiments first if iris is in the datasets list
@@ -934,11 +937,14 @@ def main():
         for method in methods:
             experiments.append({'dataset': 'iris', 'method': method})
     
-    # Add remaining experiments (excluding iris which was already added)
-    for dataset in datasets:
-        if dataset != 'iris':
-            for method in methods:
-                experiments.append({'dataset': dataset, 'method': method})
+    # Get remaining datasets (excluding iris) and shuffle them randomly
+    remaining_datasets = [d for d in datasets if d != 'iris']
+    random.shuffle(remaining_datasets)
+    
+    # Add experiments for each shuffled dataset with all methods together
+    for dataset in remaining_datasets:
+        for method in methods:
+            experiments.append({'dataset': dataset, 'method': method})
     
     # Print header
     print("=" * 60)
