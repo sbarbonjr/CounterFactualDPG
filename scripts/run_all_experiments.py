@@ -616,9 +616,9 @@ class ExperimentRunner:
         
         # Global stats line (all experiments ever)
         global_line = (f"{Colors.DIM}Global: "
-                      f"✓ {global_stats['finished']} | "
-                      f"⟳ {global_stats['running']} | "
-                      f"✗ {global_stats['error']} | "
+                      f"Finished: {global_stats['finished']} | "
+                      f"Running: {global_stats['running']} | "
+                      f"Error: {global_stats['error']} | "
                       f"Total tracked: {global_stats['total']}{Colors.RESET}")
         lines.append(global_line)
         lines.append(f"{Colors.DIM}{'─' * width}{Colors.RESET}")
