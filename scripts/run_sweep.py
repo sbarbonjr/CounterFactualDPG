@@ -21,9 +21,9 @@ Usage:
 Available Target Metrics (9 from Guidotti's paper):
   Metric Name               | Goal     | Description
   --------------------------|----------|---------------------------------------------
-  perc_actionable_cf_all    | maximize | Actionability - respects constraints (DEFAULT)
+  plausibility_nbr_cf       | minimize | Implausibility - distance to nearest real sample (DEFAULT)
+  perc_actionable_cf_all    | maximize | Actionability - respects constraints
   perc_valid_cf_all         | maximize | Size - percentage of valid CFs
-  plausibility_nbr_cf       | minimize | Implausibility - distance to nearest real sample
   distance_mh               | minimize | Dissimilarity_dist - MAD+Hamming distance
   avg_nbr_changes           | minimize | Dissimilarity_count - proportion of features changed
   diversity_mh              | maximize | Diversity_dist - pairwise CF diversity
@@ -66,10 +66,10 @@ TARGET_METRICS = {
     # Size (Validity) - perc_valid_cf_all = |C|/k
     'perc_valid_cf_all': {'goal': 'maximize', 'description': 'Size - percentage of valid CFs', 'wandb_key': 'metrics/combination/perc_valid_cf_all'},
     
-    # Actionability - perc_actionable_cf_all = |{c ∈ C | aA(c,x)}|/k (DEFAULT)
+    # Actionability - perc_actionable_cf_all = |{c ∈ C | aA(c,x)}|/k
     'perc_actionable_cf_all': {'goal': 'maximize', 'description': 'Actionability - respects constraints', 'wandb_key': 'metrics/combination/perc_actionable_cf_all'},
     
-    # Implausibility - plausibility_nbr_cf = (1/|C|)Σ min d(c, x)
+    # Implausibility - plausibility_nbr_cf = (1/|C|)Σ min d(c, x) (DEFAULT)
     'plausibility_nbr_cf': {'goal': 'minimize', 'description': 'Implausibility - distance to nearest real sample', 'wandb_key': 'metrics/combination/plausibility_nbr_cf'},
     
     # Dissimilarity_dist - distance_mh = (1/|C|)Σ d(x, c) using MAD+Hamming
@@ -93,9 +93,9 @@ TARGET_METRICS = {
 
 # 9 metrics for sweep optimization (from Guidotti's paper summary table)
 RECOMMENDED_METRICS = [
-    'perc_actionable_cf_all',  # Actionability (DEFAULT)
+    'plausibility_nbr_cf',     # Implausibility (DEFAULT)
+    'perc_actionable_cf_all',  # Actionability
     'perc_valid_cf_all',       # Size
-    'plausibility_nbr_cf',     # Implausibility
     'distance_mh',             # Dissimilarity_dist
     'avg_nbr_changes',         # Dissimilarity_count
     'diversity_mh',            # Diversity_dist
@@ -179,7 +179,7 @@ def get_sweep_config(dataset: str, target_metric: str, entity: Optional[str] = N
 def run_single_sweep_experiment(
     dataset: str,
     method: str = 'dpg',
-    target_metric: str = 'perc_actionable_cf_all',
+    target_metric: str = 'plausibility_nbr_cf',
     offline: bool = False,
 ) -> Dict[str, Any]:
     """Run a single experiment as part of a sweep.
@@ -277,7 +277,7 @@ def run_single_sweep_experiment(
 
 def init_sweep(
     dataset: str,
-    target_metric: str = 'perc_actionable_cf_all',
+    target_metric: str = 'plausibility_nbr_cf',
     project: str = 'CounterFactualDPG',
     entity: Optional[str] = None,
 ) -> str:
@@ -324,7 +324,7 @@ def run_agent(
     entity: Optional[str] = None,
     count: Optional[int] = None,
     dataset: str = 'iris',
-    target_metric: str = 'perc_actionable_cf_all',
+    target_metric: str = 'plausibility_nbr_cf',
 ) -> None:
     """Run a WandB sweep agent.
     
@@ -391,8 +391,8 @@ def main():
                        help='Dataset to use (default: iris)')
     parser.add_argument('--method', type=str, default='dpg',
                        help='Method to use (default: dpg)')
-    parser.add_argument('--target-metric', type=str, default='perc_actionable_cf_all',
-                       help='Metric to optimize (default: perc_actionable_cf_all)')
+    parser.add_argument('--target-metric', type=str, default='plausibility_nbr_cf',
+                       help='Metric to optimize (default: plausibility_nbr_cf)')
     
     # WandB configuration
     parser.add_argument('--project', type=str, default='CounterFactualDPG',
@@ -419,7 +419,7 @@ def main():
         print("-" * 70)
         for metric in RECOMMENDED_METRICS:
             info = TARGET_METRICS[metric]
-            marker = "★" if metric == 'perc_actionable_cf_all' else " "
+            marker = "★" if metric == 'plausibility_nbr_cf' else " "
             print(f"{marker} {metric:<26} {info['goal']:<10} {info['description']}")
         print("-" * 70)
         print("★ = Default metric")

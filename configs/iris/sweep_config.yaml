@@ -13,9 +13,9 @@
 #   python scripts/run_sweep.py --dataset iris --target-metric perc_valid_cf_all
 #
 # Available target metrics (9 from Guidotti's paper):
+#   Implausibility:    plausibility_nbr_cf (minimize) - DEFAULT
 #   Size:              perc_valid_cf_all (maximize)
-#   Actionability:     perc_actionable_cf_all (maximize) - DEFAULT
-#   Implausibility:    plausibility_nbr_cf (minimize)
+#   Actionability:     perc_actionable_cf_all (maximize)
 #   Dissimilarity_dist: distance_mh (minimize)
 #   Dissimilarity_count: avg_nbr_changes (minimize)
 #   Diversity_dist:    diversity_mh (maximize)
@@ -32,8 +32,8 @@ name: dpg_hyperparameter_sweep
 # Metric to optimize (overridden by --target-metric in run_sweep.py)
 # Use the full WandB path: metrics/combination/<metric_name>
 metric:
-  name: metrics/combination/perc_actionable_cf_all
-  goal: maximize
+  name: metrics/combination/plausibility_nbr_cf
+  goal: minimize
 
 # Sweep parameters - 5 most impactful GA hyperparameters
 parameters:
