@@ -170,8 +170,9 @@ def fetch_all_runs(
     print(f"Fetching up to {limit} most recent runs from {entity}/{project}...")
     
     # Filter at API level for finished runs only, order by created_at descending
+    # Also limit the number of runs fetched from the API
     filters = {"state": "finished"}
-    runs = api.runs(f"{entity}/{project}", filters=filters, order="-created_at")
+    runs = api.runs(f"{entity}/{project}", filters=filters, order="-created_at", per_page=limit)
     
     data = []
     count = 0
@@ -184,7 +185,6 @@ def fetch_all_runs(
         
         # Require data.dataset and data.method to be set - no fallback logic
         if 'data' not in config:
-            logger.warning(f"Skipping run {run.name}: missing 'data' config section")
             continue
         
         data_config = config['data']
@@ -192,11 +192,9 @@ def fetch_all_runs(
         technique = data_config.get('method')
         
         if not dataset_name:
-            logger.warning(f"Skipping run {run.name}: missing 'data.dataset' or 'data.dataset_name'")
             continue
         
         if not technique:
-            logger.warning(f"Skipping run {run.name}: missing 'data.method'")
             continue
         
         technique = technique.lower()
