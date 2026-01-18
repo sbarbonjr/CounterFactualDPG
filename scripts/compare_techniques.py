@@ -164,8 +164,8 @@ def fetch_all_runs(
     
     data = []
     for run in runs:
-        # Skip failed or running experiments
-        if run.state not in ['finished', 'crashed']:
+        # Only include finished experiments
+        if run.state != 'finished':
             continue
         
         config = run.config
