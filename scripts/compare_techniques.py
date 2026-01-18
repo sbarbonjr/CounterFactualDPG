@@ -155,60 +155,43 @@ def fetch_all_runs(
         
     Returns:
         DataFrame with columns: dataset, technique, replication, and all metrics
+        
+    Note:
+        Only runs with state='finished' and properly configured data.dataset and data.method
+        will be included. Runs missing these fields are skipped.
     """
     techniques = techniques or ['dpg', 'dice']
     api = wandb.Api()
     
     print(f"Fetching runs from {entity}/{project}...")
-    runs = api.runs(f"{entity}/{project}")
+    
+    # Filter at API level for finished runs only (saves transfer time)
+    filters = {"state": "finished"}
+    runs = api.runs(f"{entity}/{project}", filters=filters)
     
     data = []
     for run in runs:
-        # Only include finished experiments
-        if run.state != 'finished':
-            continue
-        
         config = run.config
         summary = run.summary._json_dict
         
-        # Extract dataset and technique from run name or config
-        run_name = run.name
-        
-        # Try to extract from config first
-        dataset_name = None
-        technique = None
-        
-        # Check for dataset in config (multiple possible keys)
-        if 'data' in config:
-            data_config = config['data']
-            dataset_name = data_config.get('dataset_name') or data_config.get('dataset')
-        
-        # Check for technique in config
-        if 'counterfactual' in config and 'method' in config['counterfactual']:
-            technique = config['counterfactual']['method'].lower()
-        
-        # Fallback: parse technique from run name (e.g., counterfactual_dpg_v1, iris_dice)
-        if not technique:
-            run_name_lower = run_name.lower()
-            if '_dpg' in run_name_lower or run_name_lower.startswith('dpg'):
-                technique = 'dpg'
-            elif '_dice' in run_name_lower or run_name_lower.startswith('dice'):
-                technique = 'dice'
-        
-        # Fallback: parse dataset from run name (format: dataset_technique or counterfactual_technique_v1)
-        if not dataset_name:
-            # Try format: dataset_technique (e.g., iris_dpg, german_credit_dice)
-            for tech in techniques:
-                if f'_{tech}' in run_name.lower():
-                    parts = run_name.lower().split(f'_{tech}')
-                    if parts[0] and parts[0] != 'counterfactual':
-                        dataset_name = parts[0]
-                        break
-        
-        # Skip if we couldn't determine dataset/technique
-        if not dataset_name or not technique:
-            logger.warning(f"Skipping run {run_name}: couldn't determine dataset/technique")
+        # Require data.dataset and data.method to be set - no fallback logic
+        if 'data' not in config:
+            logger.warning(f"Skipping run {run.name}: missing 'data' config section")
             continue
+        
+        data_config = config['data']
+        dataset_name = data_config.get('dataset_name') or data_config.get('dataset')
+        technique = data_config.get('method')
+        
+        if not dataset_name:
+            logger.warning(f"Skipping run {run.name}: missing 'data.dataset' or 'data.dataset_name'")
+            continue
+        
+        if not technique:
+            logger.warning(f"Skipping run {run.name}: missing 'data.method'")
+            continue
+        
+        technique = technique.lower()
         
         # Filter by requested techniques and datasets
         if technique not in techniques:
@@ -219,7 +202,7 @@ def fetch_all_runs(
         # Extract metrics
         row = {
             'run_id': run.id,
-            'run_name': run_name,
+            'run_name': run.name,
             'dataset': dataset_name,
             'technique': technique,
             'state': run.state,
