@@ -1872,9 +1872,14 @@ def run_experiment(config: DictConfig, wandb_run=None):
             "model/test_accuracy": test_score,
             "experiment/cf_method": cf_method,
         })
-        # Also add to config for easy filtering
+        # Add method to data config for easy filtering in compare_techniques.py
         try:
-            wandb_run.config.update({'counterfactual_method': cf_method})
+            wandb_run.config.update({
+                'data': {
+                    **wandb_run.config.get('data', {}),
+                    'method': cf_method,
+                }
+            })
         except Exception:
             pass
     
