@@ -51,6 +51,20 @@ parameters:
     min: 0.5
     max: 0.95
 
+  # =============================================================================
+  # EARLY STOPPING / CONVERGENCE PARAMETERS
+  # These control when the GA stops - critical for reaching cluster center
+  # =============================================================================
+  patience:
+    distribution: int_uniform
+    min: 20
+    max: 60
+  
+  delta_threshold:
+    distribution: log_uniform_values
+    min: 0.0001
+    max: 0.01
+
 # =============================================================================
 # SWEEP CONFIGURATION
 # =============================================================================
