@@ -6,19 +6,19 @@ and generates visualizations for easy comparison.
 
 Usage:
     # Generate comparison report (default: prints summary table)
-    python scripts/compare_techniques.py --project counterfactual-dpg
+    python scripts/compare_techniques.py --project CounterFactualDPG
     
     # Export aggregated results to CSV
-    python scripts/compare_techniques.py --project counterfactual-dpg --output comparison.csv
+    python scripts/compare_techniques.py --project CounterFactualDPG --output comparison.csv
     
     # Generate HTML visualization report
-    python scripts/compare_techniques.py --project counterfactual-dpg --html report.html
+    python scripts/compare_techniques.py --project CounterFactualDPG --html report.html
     
     # Generate all visualizations as images
-    python scripts/compare_techniques.py --project counterfactual-dpg --plots outputs/comparison_plots/
+    python scripts/compare_techniques.py --project CounterFactualDPG --plots outputs/comparison_plots/
     
     # Compare specific datasets only
-    python scripts/compare_techniques.py --project counterfactual-dpg --datasets iris german_credit heart_disease_uci
+    python scripts/compare_techniques.py --project CounterFactualDPG --datasets iris german_credit heart_disease_uci
 """
 
 import argparse
