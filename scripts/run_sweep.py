@@ -223,7 +223,7 @@ def run_single_sweep_experiment(
     config = load_config(str(config_path), method=method, repo_root=str(REPO_ROOT))
     
     # Apply sweep hyperparameters to config
-    # These go under methods._default or methods.dpg
+    # These go under counterfactual.* (the flattened config path after loading)
     overrides = []
     
     # All supported sweep parameters
@@ -254,7 +254,8 @@ def run_single_sweep_experiment(
     for param in sweep_params:
         if param in sweep_config:
             value = sweep_config[param]
-            overrides.append(f"methods._default.{param}={value}")
+            # Use counterfactual.* path (flattened config structure after loading)
+            overrides.append(f"counterfactual.{param}={value}")
     
     if overrides:
         config = apply_overrides(config, overrides)
