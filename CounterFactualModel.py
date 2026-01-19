@@ -14,7 +14,7 @@ class CounterFactualModel:
                  diversity_weight=0.5, repulsion_weight=4.0, boundary_weight=15.0, 
                  distance_factor=2.0, sparsity_factor=1.0, constraints_factor=3.0,
                  original_escape_weight=2.0, escape_pressure=0.5, prioritize_non_overlapping=True,
-                 max_bonus_cap=50.0):
+                 max_bonus_cap=50.0, fitness_mode='multi_objective', X_train=None, y_train=None):
         """
         Initialize the CounterFactualDPG object.
 
@@ -35,6 +35,11 @@ class CounterFactualModel:
             escape_pressure (float): Balance between escaping original (1.0) vs approaching target (0.0).
             prioritize_non_overlapping (bool): Prioritize mutating features with non-overlapping boundaries.
             max_bonus_cap (float): Maximum cap for diversity/repulsion bonuses to prevent unbounded negative fitness.
+            fitness_mode (str): Fitness calculation mode:
+                - 'multi_objective': Original multi-objective fitness (distance, sparsity, constraints, etc.)
+                - 'plausibility_only': Uses ONLY plausibility (distance to nearest real sample in target class)
+            X_train (np.ndarray): Training data for plausibility calculation (required if fitness_mode='plausibility_only')
+            y_train (np.ndarray): Training labels for plausibility calculation (required if fitness_mode='plausibility_only')
         """
         self.model = model
         self.constraints = constraints
@@ -59,6 +64,18 @@ class CounterFactualModel:
         self.feature_names = getattr(model, 'feature_names_in_', None)
         # Cache for boundary analysis results
         self._boundary_analysis_cache = {}
+        
+        # Plausibility-only fitness mode parameters
+        self.fitness_mode = fitness_mode
+        self.X_train = X_train
+        self.y_train = y_train
+        
+        # Precompute target class samples for plausibility calculation
+        self._target_class_samples_cache = {}
+        if X_train is not None and y_train is not None:
+            unique_classes = np.unique(y_train)
+            for cls in unique_classes:
+                self._target_class_samples_cache[cls] = X_train[y_train == cls]
 
     def _analyze_boundary_overlap(self, original_class, target_class):
         """
@@ -836,6 +853,98 @@ class CounterFactualModel:
 
             return fitness
 
+    def calculate_plausibility_fitness(self, individual, original_features, sample, target_class, original_class=None):
+        """
+        Calculate fitness based ONLY on plausibility (distance to nearest real sample in target class).
+        
+        This implements the implausibility metric from Guidotti's paper:
+        impl = (1/|C|) * sum_{c in C} min_{x' in X} d(c, x')
+        
+        For a single counterfactual during evolution, we compute:
+        - Distance to nearest sample in training data that belongs to target class
+        
+        Lower fitness = more plausible (closer to real data points).
+        
+        Args:
+            individual (dict): The individual sample with feature values.
+            original_features (np.array): The original feature values.
+            sample (dict): The original sample with feature values.
+            target_class (int): The desired class for the counterfactual.
+            original_class (int): The original class of the sample.
+
+        Returns:
+            float: The plausibility-based fitness score (lower is better).
+        """
+        INVALID_FITNESS = 1e6  # Large penalty for invalid samples
+        
+        # Convert individual feature values to a numpy array
+        features = np.array([individual[feature] for feature in sample.keys()]).reshape(1, -1)
+
+        # Check if the change is actionable
+        if not self.is_actionable_change(individual, sample):
+            return INVALID_FITNESS
+
+        # Check if sample is identical to original
+        if np.array_equal(features.flatten(), original_features.flatten()):
+            return INVALID_FITNESS
+
+        # CRITICAL: Check if the counterfactual actually predicts the target class
+        # This is a HARD constraint - plausibility only matters for valid counterfactuals
+        try:
+            if self.feature_names is not None:
+                features_df = pd.DataFrame(features, columns=self.feature_names)
+                probs = self.model.predict_proba(features_df)[0]
+            else:
+                probs = self.model.predict_proba(features)[0]
+            
+            target_prob = probs[target_class]
+            predicted_class = np.argmax(probs)
+            
+            # If not predicting target class, apply penalty proportional to distance from target
+            if predicted_class != target_class:
+                # Soft penalty: allow exploration but penalize heavily
+                validity_penalty = 500.0 * (1.0 - target_prob) ** 2
+            else:
+                validity_penalty = 0.0
+                
+        except Exception:
+            # Fallback: use hard prediction check
+            is_valid_class = self.check_validity(features.flatten(), original_features.flatten(), target_class)
+            if not is_valid_class:
+                return INVALID_FITNESS
+            validity_penalty = 0.0
+        
+        # Now calculate plausibility: distance to nearest sample in target class
+        if self.X_train is None or self.y_train is None:
+            raise ValueError("X_train and y_train must be provided for plausibility_only fitness mode")
+        
+        # Get samples from target class (use cache for efficiency)
+        if target_class in self._target_class_samples_cache:
+            target_samples = self._target_class_samples_cache[target_class]
+        else:
+            target_samples = self.X_train[self.y_train == target_class]
+            self._target_class_samples_cache[target_class] = target_samples
+        
+        if len(target_samples) == 0:
+            # No samples in target class - this shouldn't happen
+            return INVALID_FITNESS
+        
+        # Calculate distance to nearest neighbor in target class
+        # Using Euclidean distance on normalized features for simplicity
+        cf_features = features.flatten()
+        
+        # Compute distances to all target class samples
+        distances = cdist(cf_features.reshape(1, -1), target_samples, metric='euclidean').flatten()
+        
+        # Plausibility = minimum distance to any sample in target class
+        plausibility_distance = np.min(distances)
+        
+        # Total fitness = plausibility distance + validity penalty
+        # Lower is better (more plausible = closer to real data)
+        fitness = plausibility_distance + validity_penalty
+        
+        return fitness
+
 
     def _create_deap_individual(self, sample_dict, feature_names):
         """Create a DEAP individual from a dictionary."""
@@ -1244,8 +1353,19 @@ class CounterFactualModel:
         
         # Register evaluate operator after population creation so it can capture population in closure
         # Now includes original_class for escape penalty calculation
-        toolbox.register("evaluate", lambda ind: (self.calculate_fitness(
-            ind, original_features, sample, target_class, metric, population, original_class),))
+        # Choose fitness function based on fitness_mode
+        if self.fitness_mode == 'plausibility_only':
+            if self.X_train is None or self.y_train is None:
+                raise ValueError("X_train and y_train must be provided for plausibility_only fitness mode")
+            if self.verbose:
+                print(f"[Fitness Mode] Using PLAUSIBILITY-ONLY fitness (distance to nearest target class sample)")
+            toolbox.register("evaluate", lambda ind: (self.calculate_plausibility_fitness(
+                ind, original_features, sample, target_class, original_class),))
+        else:
+            if self.verbose:
+                print(f"[Fitness Mode] Using MULTI-OBJECTIVE fitness (distance, sparsity, constraints, etc.)")
+            toolbox.register("evaluate", lambda ind: (self.calculate_fitness(
+                ind, original_features, sample, target_class, metric, population, original_class),))
         
         # Setup statistics
         # Define INVALID_FITNESS threshold for filtering statistics
