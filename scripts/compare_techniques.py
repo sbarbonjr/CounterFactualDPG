@@ -64,65 +64,66 @@ DEFAULT_PROJECT = 'CounterFactualDPG'
 
 # Key metrics for comparison (from RECOMMENDED_METRICS)
 # Note: Only using 'metrics/combination/' prefix for aggregated metrics across all CFs
+# The 'name' field now uses the original wandb key names for consistency in tables and visualizations
 COMPARISON_METRICS = {
     'perc_valid_cf': {
-        'name': 'Validity (%)',
+        'name': 'perc_valid_cf',
         'goal': 'maximize',
         'description': 'Percentage of valid counterfactuals',
         'format': '.2%',
         'wandb_keys': ['metrics/combination/perc_valid_cf'],
     },
     'plausibility_sum': {
-        'name': 'Plausibility',
+        'name': 'plausibility_sum',
         'goal': 'minimize',
         'description': 'Sum of distances to nearest training samples',
         'format': '.3f',
         'wandb_keys': ['metrics/combination/plausibility_sum', 'metrics/combination/plausibility_nbr_cf'],
     },
     'distance_l2': {
-        'name': 'Distance (L2)',
+        'name': 'distance_l2',
         'goal': 'minimize',
         'description': 'Mean Euclidean distance from original',
         'format': '.3f',
         'wandb_keys': ['metrics/combination/distance_l2'],
     },
     'distance_mad': {
-        'name': 'Distance (MAD)',
+        'name': 'distance_mad',
         'goal': 'minimize',
         'description': 'Mean MAD-normalized distance',
         'format': '.3f',
         'wandb_keys': ['metrics/combination/distance_mad'],
     },
     'avg_nbr_changes_per_cf': {
-        'name': 'Sparsity',
+        'name': 'avg_nbr_changes_per_cf',
         'goal': 'minimize',
         'description': 'Average number of feature changes',
         'format': '.2f',
         'wandb_keys': ['metrics/combination/avg_nbr_changes_per_cf'],
     },
     'diversity_l2': {
-        'name': 'Diversity',
+        'name': 'diversity_l2',
         'goal': 'maximize',
         'description': 'Mean pairwise diversity (L2)',
         'format': '.3f',
         'wandb_keys': ['metrics/combination/diversity_l2'],
     },
     'perc_valid_actionable_cf': {
-        'name': 'Actionability (%)',
+        'name': 'perc_valid_actionable_cf',
         'goal': 'maximize',
         'description': 'Percentage of valid and actionable CFs',
         'format': '.2%',
         'wandb_keys': ['metrics/combination/perc_valid_actionable_cf'],
     },
     'accuracy_knn_sklearn': {
-        'name': 'Fidelity (KNN)',
+        'name': 'accuracy_knn_sklearn',
         'goal': 'maximize',
         'description': 'KNN classifier accuracy on CFs',
         'format': '.2%',
         'wandb_keys': ['metrics/combination/accuracy_knn_sklearn', 'metrics/combination/accuracy_knn_dist'],
     },
     'delta': {
-        'name': 'Δ Prediction',
+        'name': 'delta',
         'goal': 'maximize',
         'description': 'Mean prediction probability change',
         'format': '.3f',
