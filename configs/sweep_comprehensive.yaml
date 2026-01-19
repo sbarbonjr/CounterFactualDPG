@@ -5,8 +5,8 @@
 program: scripts/run_sweep.py
 method: bayes  # Bayesian optimization for efficient hyperparameter search
 metric:
-  name: avg_validity
-  goal: maximize
+  name: metrics/combination/plausibility_nbr_cf
+  goal: minimize
 
 parameters:
   # =============================================================================
