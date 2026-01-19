@@ -247,8 +247,8 @@ def run_single_sweep_experiment(
         'population_size', 'max_generations', 'boundary_weight',
         'distance_factor', 'sparsity_factor', 'constraints_factor',
         'original_escape_weight', 'escape_pressure',
-        # Fitness mode
-        'fitness_mode',
+        # Fitness mode and early stopping
+        'fitness_mode', 'patience', 'delta_threshold',
     ]
     
     for param in sweep_params:
@@ -484,8 +484,14 @@ def main():
     
     # Fitness mode
     parser.add_argument('--fitness_mode', type=str, default=None,
-                       choices=['multi_objective', 'plausibility_only'],
-                       help='Fitness calculation mode: multi_objective (default) or plausibility_only')
+                       choices=['multi_objective', 'plausibility_only', 'plausibility_density'],
+                       help='Fitness calculation mode: multi_objective (default), plausibility_only (nearest neighbor), or plausibility_density (k-NN center)')
+    
+    # Early stopping parameters (for plausibility fitness modes)
+    parser.add_argument('--patience', type=int, default=None,
+                       help='Number of generations without improvement before early stopping')
+    parser.add_argument('--delta_threshold', type=float, default=None,
+                       help='Minimum improvement threshold to reset patience counter')
     
     args = parser.parse_args()
     
@@ -561,7 +567,7 @@ def main():
             'sparsity_weight', 'diversity_weight', 'actionability_weight', 'plausibility_weight',
             'constraint_weight', 'repulsion_weight', 'constraint_handling_method',
             'use_niching', 'niche_radius', 'early_stopping_patience', 'convergence_threshold',
-            'fitness_mode',
+            'fitness_mode', 'patience', 'delta_threshold',
         ]
         
         for param in param_list:
