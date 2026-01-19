@@ -23,7 +23,8 @@ def _run_single_replication_dpg(args):
     
     Args:
         args: Tuple containing (replication_num, ORIGINAL_SAMPLE, TARGET_CLASS, 
-              FEATURES_NAMES, dict_non_actionable, config_dict, model, constraints)
+              FEATURES_NAMES, dict_non_actionable, config_dict, model, constraints,
+              train_df, continuous_features, categorical_features, X_train, y_train)
     
     Returns:
         Dict with replication results or None if failed
@@ -40,10 +41,15 @@ def _run_single_replication_dpg(args):
         _,  # train_df (not used for DPG)
         _,  # continuous_features (not used for DPG)
         _,  # categorical_features (not used for DPG)
+        X_train,  # Training features for plausibility
+        y_train,  # Training labels for plausibility
     ) = args
     
     # Reconstruct config from dict
     config = DictConfig(config_dict)
+    
+    # Get fitness mode from config (default to 'multi_objective' for backward compatibility)
+    fitness_mode = getattr(config.counterfactual, 'fitness_mode', 'multi_objective')
     
     try:
         # Create CF model with config parameters (including dual-boundary parameters)
@@ -64,6 +70,10 @@ def _run_single_replication_dpg(args):
             prioritize_non_overlapping=getattr(config.counterfactual, 'prioritize_non_overlapping', True),
             # Fitness calculation parameters
             max_bonus_cap=getattr(config.counterfactual, 'max_bonus_cap', 50.0),
+            # Plausibility-only fitness mode parameters
+            fitness_mode=fitness_mode,
+            X_train=X_train,
+            y_train=y_train,
         )
         
         counterfactual = cf_model.generate_counterfactual(
