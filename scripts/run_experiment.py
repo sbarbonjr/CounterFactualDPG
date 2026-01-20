@@ -1920,12 +1920,16 @@ def run_experiment(config: DictConfig, wandb_run=None):
                 # Store for saving in sample folders
                 normalized_constraints = normalized
 
-                # Put normalized constraints into config so they appear under the Config tab
+                # Put normalized constraints and dpg config into config so they appear under the Config tab
                 try:
+                    dpg_wandb_data = {
+                        'constraints': normalized,
+                        'config': dpg_config.get('dpg', {}) if dpg_config else {}
+                    }
                     try:
-                        wandb_run.config['dpg'] = normalized
+                        wandb_run.config['dpg'] = dpg_wandb_data
                     except Exception:
-                        wandb_run.config.update({'dpg': normalized})
+                        wandb_run.config.update({'dpg': dpg_wandb_data})
                 except Exception:
                     print("WARNING: Unable to add normalized DPG constraints to wandb config")
 
