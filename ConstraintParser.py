@@ -5,6 +5,13 @@ import os
 import sys
 import numpy as np
 
+# Handle OmegaConf DictConfig if available
+try:
+    from omegaconf import DictConfig, OmegaConf
+    HAS_OMEGACONF = True
+except ImportError:
+    HAS_OMEGACONF = False
+
 # Add DPG to path for imports
 _dpg_path = os.path.join(os.path.dirname(__file__), 'DPG')
 if _dpg_path not in sys.path:
@@ -229,6 +236,10 @@ class ConstraintParser:
         Returns:
             Dictionary mapping class labels to feature constraints (min/max format)
         """
+        # Convert OmegaConf DictConfig to regular dict if needed
+        if dpg_config is not None and HAS_OMEGACONF and isinstance(dpg_config, DictConfig):
+            dpg_config = OmegaConf.to_container(dpg_config, resolve=True)
+        
         # Build DPG from the trained model
         config_path = os.path.join(os.path.dirname(__file__), 'DPG', 'config.yaml')
         dpg = DecisionPredicateGraph(
