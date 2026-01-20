@@ -258,6 +258,32 @@ def fetch_all_runs(
     return df
 
 
+def filter_to_latest_run_per_combo(df: pd.DataFrame) -> pd.DataFrame:
+    """Filter to keep only the most recent run per dataset X technique combo.
+    
+    Args:
+        df: DataFrame from fetch_all_runs() (should be sorted by created_at descending)
+        
+    Returns:
+        DataFrame with only one run per dataset-technique combination (the most recent)
+    """
+    if len(df) == 0:
+        return df
+    
+    original_count = len(df)
+    
+    # Group by dataset and technique, keep first (most recent) row per group
+    # Since fetch_all_runs orders by created_at descending, first() gives most recent
+    filtered_df = df.groupby(['dataset', 'technique'], as_index=False).first()
+    
+    filtered_count = original_count - len(filtered_df)
+    
+    if filtered_count > 0:
+        print(f"Filtered out {filtered_count} older run(s) to keep only the most recent per dataset X technique combo")
+    
+    return filtered_df
+
+
 def aggregate_by_dataset_technique(df: pd.DataFrame) -> pd.DataFrame:
     """Aggregate metrics by dataset and technique.
     
