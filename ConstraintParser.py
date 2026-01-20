@@ -213,7 +213,7 @@ class ConstraintParser:
         return self.constraints_dict
 
     @staticmethod
-    def extract_constraints_from_dataset(model, train_features, train_labels, feature_names):
+    def extract_constraints_from_dataset(model, train_features, train_labels, feature_names, dpg_config=None):
         """
         Extract constraints from the dataset using Decision Predicate Graph (DPG).
         Uses DPG's graph-based boundary extraction to determine decision boundaries
@@ -224,6 +224,7 @@ class ConstraintParser:
             train_features: Training features array
             train_labels: Training labels array
             feature_names: List of feature names
+            dpg_config: Optional DPG config dict (from main config's counterfactual.dpg.config)
             
         Returns:
             Dictionary mapping class labels to feature constraints (min/max format)
@@ -234,7 +235,8 @@ class ConstraintParser:
             model=model,
             feature_names=feature_names,
             target_names=np.unique(train_labels).astype(str).tolist(),
-            config_file=config_path
+            config_file=config_path,
+            dpg_config=dpg_config
         )
         
         # Fit DPG to extract decision paths
