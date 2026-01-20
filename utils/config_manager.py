@@ -141,8 +141,9 @@ def load_config(config_path: str, method: str = None, repo_root: str = None) -> 
         defaults = config_dict['methods'].get('_default', {})
         merged_cf = {**defaults, **method_config}
         
-        # Set as counterfactual section
-        config_dict['counterfactual'] = merged_cf
+        # Preserve existing counterfactual settings (like actionability) and merge with method config
+        existing_cf = config_dict.get('counterfactual', {})
+        config_dict['counterfactual'] = deep_merge_dicts(existing_cf, merged_cf)
         
         # Ensure method is set in counterfactual
         config_dict['counterfactual']['method'] = method
