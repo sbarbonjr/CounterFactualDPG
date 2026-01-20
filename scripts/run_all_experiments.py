@@ -52,6 +52,7 @@ import select
 import termios
 import tty
 import fcntl
+import yaml
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass, field
@@ -909,6 +910,18 @@ def main():
     configs_dir = REPO_ROOT / 'configs'
     output_dir = REPO_ROOT / 'outputs'
     
+    # Load global config to get excluded datasets
+    config_file = REPO_ROOT / 'configs' / 'config.yaml'
+    excluded_datasets = []
+    if config_file.exists():
+        try:
+            with open(config_file, 'r') as f:
+                config = yaml.safe_load(f)
+                excluded_datasets = config.get('excluded_datasets', [])
+        except Exception:
+            # If config loading fails, just use empty list
+            excluded_datasets = []
+    
     # Get datasets
     if args.datasets:
         datasets = args.datasets
@@ -920,6 +933,15 @@ def main():
             return 1
     else:
         datasets = get_all_datasets(configs_dir)
+    
+    # Filter out excluded datasets
+    if excluded_datasets:
+        excluded_set = set(excluded_datasets)
+        original_count = len(datasets)
+        datasets = [d for d in datasets if d not in excluded_set]
+        filtered_count = original_count - len(datasets)
+        if filtered_count > 0:
+            print(f"Excluded {filtered_count} dataset(s): {sorted(excluded_set & set(datasets + excluded_datasets))}")
     
     if args.limit:
         datasets = datasets[:args.limit]
