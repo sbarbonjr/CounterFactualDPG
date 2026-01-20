@@ -23,7 +23,8 @@ def _run_single_replication_dpg(args):
     
     Args:
         args: Tuple containing (replication_num, ORIGINAL_SAMPLE, TARGET_CLASS, 
-              FEATURES_NAMES, dict_non_actionable, config_dict, model, constraints)
+              FEATURES_NAMES, dict_non_actionable, config_dict, model, constraints,
+              train_df, continuous_features, categorical_features)
     
     Returns:
         Dict with replication results or None if failed
@@ -37,13 +38,25 @@ def _run_single_replication_dpg(args):
         config_dict,
         model,
         constraints,
-        _,  # train_df (not used for DPG)
+        train_df,  # Training data for nearest neighbor fallback
         _,  # continuous_features (not used for DPG)
         _,  # categorical_features (not used for DPG)
     ) = args
     
     # Reconstruct config from dict
     config = DictConfig(config_dict)
+    
+    # Extract X_train and y_train from train_df for nearest neighbor fallback
+    X_train = None
+    y_train = None
+    if train_df is not None:
+        # train_df includes target column ('_target_' for DiCE compatibility)
+        target_col = '_target_' if '_target_' in train_df.columns else (
+            'target' if 'target' in train_df.columns else train_df.columns[-1]
+        )
+        if target_col in train_df.columns:
+            X_train = train_df.drop(columns=[target_col])
+            y_train = train_df[target_col]
     
     try:
         # Create CF model with config parameters (including dual-boundary parameters)
@@ -64,14 +77,23 @@ def _run_single_replication_dpg(args):
             prioritize_non_overlapping=getattr(config.counterfactual, 'prioritize_non_overlapping', True),
             # Fitness calculation parameters
             max_bonus_cap=getattr(config.counterfactual, 'max_bonus_cap', 50.0),
+            # Training data for nearest neighbor fallback
+            X_train=X_train,
+            y_train=y_train,
         )
+        
+        # Enable relaxation fallback for difficult samples
+        allow_relaxation = getattr(config.counterfactual, 'allow_relaxation', True)
+        relaxation_factor = getattr(config.counterfactual, 'relaxation_factor', 2.0)
         
         counterfactual = cf_model.generate_counterfactual(
             ORIGINAL_SAMPLE, 
             TARGET_CLASS, 
             config.counterfactual.population_size,
             config.counterfactual.max_generations,
-            mutation_rate=config.counterfactual.mutation_rate
+            mutation_rate=config.counterfactual.mutation_rate,
+            allow_relaxation=allow_relaxation,
+            relaxation_factor=relaxation_factor
         )
         
         if counterfactual is None:
