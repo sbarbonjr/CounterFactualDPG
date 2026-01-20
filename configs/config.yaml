@@ -6,6 +6,10 @@
 #   2. Dataset config (configs/<dataset>/config.yaml) - dataset-specific overrides
 #   3. CLI --set overrides
 
+# Excluded datasets (will be skipped by run_all_experiments.py)
+excluded_datasets:
+  - car_eval_4
+
 # Data defaults
 data:
   test_size: 0.2
