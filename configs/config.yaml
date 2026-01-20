@@ -9,6 +9,7 @@
 # Excluded datasets (will be skipped by run_all_experiments.py)
 excluded_datasets:
   - car_eval_4
+  - german_credit
 
 # Data defaults
 data:
