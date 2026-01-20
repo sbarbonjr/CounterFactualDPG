@@ -271,6 +271,13 @@ def run_single_sample(
                 if idx not in VARIABLE_INDICES:
                     dict_non_actionable[feature_name] = "no_change"
         
+        # Compute variable_features for metrics based on dict_non_actionable
+        # Features are actionable if their rule is NOT "no_change"
+        variable_features_for_metrics = [
+            idx for idx, feature_name in enumerate(FEATURES_NAMES)
+            if dict_non_actionable.get(feature_name, "none") != "no_change"
+        ]
+        
         # Log actionability rules on first iteration
         if combination_num == 0:
             frozen_features = [f for f, rule in dict_non_actionable.items() if rule == "no_change"]
@@ -439,7 +446,7 @@ def run_single_sample(
             metrics = explainer.get_all_metrics(
                 X_train=X_TRAIN,
                 X_test=X_TEST,
-                variable_features=VARIABLE_INDICES,
+                variable_features=variable_features_for_metrics,
                 continuous_features=CONTINUOUS_INDICES,
                 categorical_features=CATEGORICAL_INDICES,
                 compute_comprehensive=compute_comprehensive and COMPREHENSIVE_METRICS_AVAILABLE
@@ -545,7 +552,7 @@ def run_single_sample(
                     model=model,
                     y_val=ORIGINAL_SAMPLE_PREDICTED_CLASS,
                     max_nbr_cf=config.experiment_params.num_replications,
-                    variable_features=VARIABLE_INDICES,
+                    variable_features=variable_features_for_metrics,
                     continuous_features_all=CONTINUOUS_INDICES,
                     categorical_features_all=CATEGORICAL_INDICES,
                     X_train=X_TRAIN,
