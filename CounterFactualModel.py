@@ -14,7 +14,7 @@ class CounterFactualModel:
                  diversity_weight=0.5, repulsion_weight=4.0, boundary_weight=15.0, 
                  distance_factor=2.0, sparsity_factor=1.0, constraints_factor=3.0,
                  original_escape_weight=2.0, escape_pressure=0.5, prioritize_non_overlapping=True,
-                 max_bonus_cap=50.0, X_train=None, y_train=None):
+                 max_bonus_cap=50.0, X_train=None, y_train=None, min_probability_margin=0.05):
         """
         Initialize the CounterFactualDPG object.
 
@@ -37,6 +37,9 @@ class CounterFactualModel:
             max_bonus_cap (float): Maximum cap for diversity/repulsion bonuses to prevent unbounded negative fitness.
             X_train (DataFrame): Training data features for nearest neighbor fallback.
             y_train (Series): Training data labels for nearest neighbor fallback.
+            min_probability_margin (float): Minimum margin the target class probability must exceed the 
+                second-highest class probability by. Prevents accepting weak counterfactuals where
+                the prediction is essentially a tie. Default 0.05 (5% margin).
         """
         self.model = model
         self.constraints = constraints
@@ -64,6 +67,8 @@ class CounterFactualModel:
         # Store training data for nearest neighbor fallback
         self.X_train = X_train
         self.y_train = y_train
+        # Minimum probability margin for accepting counterfactuals
+        self.min_probability_margin = min_probability_margin
 
     def _analyze_boundary_overlap(self, original_class, target_class):
         """
@@ -1471,7 +1476,7 @@ class CounterFactualModel:
             return None
         
         # Final validation: verify the best individual actually predicts the target class
-        # This is necessary because soft class penalty doesn't guarantee correct prediction
+        # AND has sufficient probability margin over other classes
         best_individual = dict(hof[0])
         features = np.array([best_individual[f] for f in sample.keys()]).reshape(1, -1)
         
@@ -1479,13 +1484,29 @@ class CounterFactualModel:
             if self.feature_names is not None:
                 features_df = pd.DataFrame(features, columns=self.feature_names)
                 predicted_class = self.model.predict(features_df)[0]
+                proba = self.model.predict_proba(features_df)[0]
             else:
                 predicted_class = self.model.predict(features)[0]
+                proba = self.model.predict_proba(features)[0]
             
             if predicted_class != target_class:
                 if self.verbose:
                     print(f"Counterfactual generation failed: best individual predicts class {predicted_class}, not target {target_class}")
                 return None
+            
+            # Check probability margin - target class should be clearly higher than second-best
+            target_prob = proba[target_class]
+            sorted_probs = np.sort(proba)[::-1]  # Descending order
+            second_best_prob = sorted_probs[1] if len(sorted_probs) > 1 else 0.0
+            margin = target_prob - second_best_prob
+            
+            if margin < self.min_probability_margin:
+                if self.verbose:
+                    print(f"Counterfactual rejected: target class probability ({target_prob:.3f}) "
+                          f"not sufficiently higher than second-best ({second_best_prob:.3f}). "
+                          f"Margin {margin:.3f} < required {self.min_probability_margin:.3f}")
+                return None
+                
         except Exception as e:
             if self.verbose:
                 print(f"Counterfactual validation failed with error: {e}")
@@ -1677,16 +1698,29 @@ class CounterFactualModel:
             candidate = target_samples[idx].reshape(1, -1)
             
             if validate_prediction:
-                # Check that the model predicts this as target class
+                # Check that the model predicts this as target class with sufficient margin
                 try:
                     if self.feature_names is not None:
                         candidate_df = pd.DataFrame(candidate, columns=self.feature_names)
                         pred = self.model.predict(candidate_df)[0]
+                        proba = self.model.predict_proba(candidate_df)[0]
                     else:
                         pred = self.model.predict(candidate)[0]
+                        proba = self.model.predict_proba(candidate)[0]
                     
                     if pred != target_class:
                         continue  # Skip samples misclassified by model
+                    
+                    # Check probability margin
+                    target_prob = proba[target_class]
+                    sorted_probs = np.sort(proba)[::-1]
+                    second_best_prob = sorted_probs[1] if len(sorted_probs) > 1 else 0.0
+                    margin = target_prob - second_best_prob
+                    
+                    if margin < self.min_probability_margin:
+                        if self.verbose:
+                            print(f"  Skipping candidate with weak margin: {margin:.3f} < {self.min_probability_margin}")
+                        continue  # Skip samples with weak probability margin
                 except Exception as e:
                     if self.verbose:
                         print(f"Prediction failed: {e}")
