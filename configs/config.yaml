@@ -10,6 +10,8 @@
 excluded_datasets:
   - car_eval_4
   - german_credit
+  - abalone
+  - abalone_19
 
 # Data defaults
 data:
