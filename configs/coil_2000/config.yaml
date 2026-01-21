@@ -1,11 +1,3 @@
-# Configuration for coil_2000 dataset
-# Only dataset-specific overrides are included here.
-# Base defaults are loaded from configs/config.yaml
-#
-# Usage:
-#   python scripts/run_experiment.py --dataset coil_2000 --method dpg
-#   python scripts/run_experiment.py --dataset coil_2000 --method dice
-
 data:
   dataset: coil_2000
   dataset_path: configs/coil_2000/dataset.csv
@@ -14,3 +6,11 @@ experiment:
   tags:
   - coil_2000
   name: coil_2000
+model:
+  type: RandomForestClassifier
+  n_estimators: 25
+  min_samples_split: 12
+  min_impurity_decrease: 0.0
+  max_features: 0.7
+  max_depth: 8
+  criterion: entropy

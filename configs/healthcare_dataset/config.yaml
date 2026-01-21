@@ -1,11 +1,3 @@
-# Configuration for healthcare_dataset dataset
-# Only dataset-specific overrides are included here.
-# Base defaults are loaded from configs/config.yaml
-#
-# Usage:
-#   python scripts/run_experiment.py --dataset healthcare_dataset --method dpg
-#   python scripts/run_experiment.py --dataset healthcare_dataset --method dice
-
 data:
   dataset: healthcare_dataset
   dataset_path: configs/healthcare_dataset/dataset.csv
@@ -16,3 +8,11 @@ experiment:
   tags:
   - healthcare_dataset
   name: healthcare_dataset
+model:
+  type: RandomForestClassifier
+  n_estimators: 25
+  min_samples_split: 12
+  min_impurity_decrease: 0.0
+  max_features: 0.7
+  max_depth: 8
+  criterion: entropy

@@ -1,11 +1,3 @@
-# Configuration for finance_dataset dataset
-# Only dataset-specific overrides are included here.
-# Base defaults are loaded from configs/config.yaml
-#
-# Usage:
-#   python scripts/run_experiment.py --dataset finance_dataset --method dpg
-#   python scripts/run_experiment.py --dataset finance_dataset --method dice
-
 data:
   dataset: finance_dataset
   dataset_path: configs/finance_dataset/dataset.csv
@@ -16,3 +8,11 @@ experiment:
   tags:
   - finance_dataset
   name: finance_dataset
+model:
+  type: RandomForestClassifier
+  n_estimators: 12
+  min_samples_split: 12
+  min_impurity_decrease: 0.0
+  max_features: 0.5
+  max_depth: null
+  criterion: gini

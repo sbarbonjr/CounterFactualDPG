@@ -1,11 +1,3 @@
-# Configuration for breast_cancer_wisconsin dataset
-# Only dataset-specific overrides are included here.
-# Base defaults are loaded from configs/config.yaml
-#
-# Usage:
-#   python scripts/run_experiment.py --dataset breast_cancer_wisconsin --method dpg
-#   python scripts/run_experiment.py --dataset breast_cancer_wisconsin --method dice
-
 data:
   dataset: breast_cancer_wisconsin
   dataset_path: configs/breast_cancer_wisconsin/dataset.csv
@@ -14,3 +6,11 @@ experiment:
   tags:
   - breast_cancer_wisconsin
   name: breast_cancer_wisconsin
+model:
+  type: RandomForestClassifier
+  n_estimators: 25
+  min_samples_split: 10
+  min_impurity_decrease: 0.01
+  max_features: 0.3
+  max_depth: 5
+  criterion: entropy

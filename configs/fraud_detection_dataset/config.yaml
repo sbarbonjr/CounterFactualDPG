@@ -1,11 +1,3 @@
-# Configuration for fraud_detection_dataset dataset
-# Only dataset-specific overrides are included here.
-# Base defaults are loaded from configs/config.yaml
-#
-# Usage:
-#   python scripts/run_experiment.py --dataset fraud_detection_dataset --method dpg
-#   python scripts/run_experiment.py --dataset fraud_detection_dataset --method dice
-
 data:
   dataset: fraud_detection_dataset
   dataset_path: configs/fraud_detection_dataset/dataset.csv
@@ -17,3 +9,11 @@ experiment:
   tags:
   - fraud_detection_dataset
   name: fraud_detection_dataset
+model:
+  type: RandomForestClassifier
+  n_estimators: 2
+  min_samples_split: 15
+  min_impurity_decrease: 0.02
+  max_features: 0.7
+  max_depth: null
+  criterion: entropy
