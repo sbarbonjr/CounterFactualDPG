@@ -74,73 +74,102 @@ logger = logging.getLogger(__name__)
 DEFAULT_ENTITY = 'mllab-ts-universit-di-trieste'
 DEFAULT_PROJECT = 'CounterFactualDPG'
 
-# Key metrics for comparison (from RECOMMENDED_METRICS)
-# Note: Only using 'metrics/combination/' prefix for aggregated metrics across all CFs
-# The 'name' field now uses the original wandb key names for consistency in tables and visualizations
+# Key metrics for comparison (from CounterFactualMetrics.evaluate_cf_list)
+# The 'name' field uses the original wandb key names for consistency
 COMPARISON_METRICS = {
-    'perc_valid_cf_all': {
-        'name': 'perc_valid_cf_all',
-        'goal': 'maximize',
-        'description': 'Percentage of valid counterfactuals (all)',
-        'format': '.2%',
-        'wandb_keys': ['metrics/combination/perc_valid_cf_all'],
-    },
-    'perc_actionable_cf_all': {
-        'name': 'perc_actionable_cf_all',
-        'goal': 'maximize',
-        'description': 'Proportion of CFs that respect constraints',
-        'format': '.2%',
-        'wandb_keys': ['metrics/combination/perc_actionable_cf_all'],
-    },
-    'plausibility_nbr_cf': {
-        'name': 'plausibility_nbr_cf',
-        'goal': 'minimize',
-        'description': 'Mean distance from CFs to nearest instances in reference set',
-        'format': '.3f',
-        'wandb_keys': ['metrics/combination/plausibility_nbr_cf'],
-    },
-    'distance_mh': {
-        'name': 'distance_mh',
-        'goal': 'minimize',
-        'description': 'Mean distance between original and CFs',
-        'format': '.3f',
-        'wandb_keys': ['metrics/combination/distance_mh'],
-    },
-    'avg_nbr_changes': {
-        'name': 'avg_nbr_changes',
-        'goal': 'minimize',
-        'description': 'Proportion of modified features',
-        'format': '.2f',
-        'wandb_keys': ['metrics/combination/avg_nbr_changes'],
-    },
-    'diversity_mh': {
-        'name': 'diversity_mh',
-        'goal': 'maximize',
-        'description': 'Mean pairwise diversity (Manhattan)',
-        'format': '.3f',
-        'wandb_keys': ['metrics/combination/diversity_mh'],
-    },
-    'count_diversity_all': {
-        'name': 'count_diversity_all',
-        'goal': 'maximize',
-        'description': 'Proportion of different features between CFs',
-        'format': '.3f',
-        'wandb_keys': ['metrics/combination/count_diversity_all'],
-    },
-    'accuracy_knn_sklearn': {
-        'name': 'accuracy_knn_sklearn',
-        'goal': 'maximize',
-        'description': 'Discriminative power to distinguish classes using CFs',
-        'format': '.2%',
-        'wandb_keys': ['metrics/combination/accuracy_knn_sklearn'],
-    },
-    'runtime': {
-        'name': 'runtime',
-        'goal': 'minimize',
-        'description': 'Runtime in seconds',
-        'format': '.2f',
-        'wandb_keys': ['metrics/combination/runtime', 'runtime'],
-    },
+    # Validity metrics
+    'nbr_cf': {'name': 'nbr_cf', 'goal': 'maximize', 'format': '.0f', 'wandb_keys': ['metrics/combination/nbr_cf']},
+    'nbr_valid_cf': {'name': 'nbr_valid_cf', 'goal': 'maximize', 'format': '.0f', 'wandb_keys': ['metrics/combination/nbr_valid_cf']},
+    'perc_valid_cf': {'name': 'perc_valid_cf', 'goal': 'maximize', 'format': '.2%', 'wandb_keys': ['metrics/combination/perc_valid_cf']},
+    'perc_valid_cf_all': {'name': 'perc_valid_cf_all', 'goal': 'maximize', 'format': '.2%', 'wandb_keys': ['metrics/combination/perc_valid_cf_all']},
+    
+    # Actionability metrics
+    'nbr_actionable_cf': {'name': 'nbr_actionable_cf', 'goal': 'maximize', 'format': '.0f', 'wandb_keys': ['metrics/combination/nbr_actionable_cf']},
+    'perc_actionable_cf': {'name': 'perc_actionable_cf', 'goal': 'maximize', 'format': '.2%', 'wandb_keys': ['metrics/combination/perc_actionable_cf']},
+    'perc_actionable_cf_all': {'name': 'perc_actionable_cf_all', 'goal': 'maximize', 'format': '.2%', 'wandb_keys': ['metrics/combination/perc_actionable_cf_all']},
+    'nbr_valid_actionable_cf': {'name': 'nbr_valid_actionable_cf', 'goal': 'maximize', 'format': '.0f', 'wandb_keys': ['metrics/combination/nbr_valid_actionable_cf']},
+    'perc_valid_actionable_cf': {'name': 'perc_valid_actionable_cf', 'goal': 'maximize', 'format': '.2%', 'wandb_keys': ['metrics/combination/perc_valid_actionable_cf']},
+    'perc_valid_actionable_cf_all': {'name': 'perc_valid_actionable_cf_all', 'goal': 'maximize', 'format': '.2%', 'wandb_keys': ['metrics/combination/perc_valid_actionable_cf_all']},
+    'avg_nbr_violations_per_cf': {'name': 'avg_nbr_violations_per_cf', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/avg_nbr_violations_per_cf']},
+    'avg_nbr_violations': {'name': 'avg_nbr_violations', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/avg_nbr_violations']},
+    
+    # Distance metrics (mean)
+    'distance_l2': {'name': 'distance_l2', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_l2']},
+    'distance_mad': {'name': 'distance_mad', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_mad']},
+    'distance_j': {'name': 'distance_j', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_j']},
+    'distance_h': {'name': 'distance_h', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_h']},
+    'distance_l2j': {'name': 'distance_l2j', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_l2j']},
+    'distance_mh': {'name': 'distance_mh', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_mh']},
+    
+    # Distance metrics (min)
+    'distance_l2_min': {'name': 'distance_l2_min', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_l2_min']},
+    'distance_mad_min': {'name': 'distance_mad_min', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_mad_min']},
+    'distance_j_min': {'name': 'distance_j_min', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_j_min']},
+    'distance_h_min': {'name': 'distance_h_min', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_h_min']},
+    'distance_l2j_min': {'name': 'distance_l2j_min', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_l2j_min']},
+    'distance_mh_min': {'name': 'distance_mh_min', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_mh_min']},
+    
+    # Distance metrics (max)
+    'distance_l2_max': {'name': 'distance_l2_max', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_l2_max']},
+    'distance_mad_max': {'name': 'distance_mad_max', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_mad_max']},
+    'distance_j_max': {'name': 'distance_j_max', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_j_max']},
+    'distance_h_max': {'name': 'distance_h_max', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_h_max']},
+    'distance_l2j_max': {'name': 'distance_l2j_max', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_l2j_max']},
+    'distance_mh_max': {'name': 'distance_mh_max', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/distance_mh_max']},
+    
+    # Sparsity metrics
+    'avg_nbr_changes_per_cf': {'name': 'avg_nbr_changes_per_cf', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/avg_nbr_changes_per_cf']},
+    'avg_nbr_changes': {'name': 'avg_nbr_changes', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/avg_nbr_changes']},
+    
+    # Diversity metrics (mean)
+    'diversity_l2': {'name': 'diversity_l2', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_l2']},
+    'diversity_mad': {'name': 'diversity_mad', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_mad']},
+    'diversity_j': {'name': 'diversity_j', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_j']},
+    'diversity_h': {'name': 'diversity_h', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_h']},
+    'diversity_l2j': {'name': 'diversity_l2j', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_l2j']},
+    'diversity_mh': {'name': 'diversity_mh', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_mh']},
+    
+    # Diversity metrics (min)
+    'diversity_l2_min': {'name': 'diversity_l2_min', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_l2_min']},
+    'diversity_mad_min': {'name': 'diversity_mad_min', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_mad_min']},
+    'diversity_j_min': {'name': 'diversity_j_min', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_j_min']},
+    'diversity_h_min': {'name': 'diversity_h_min', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_h_min']},
+    'diversity_l2j_min': {'name': 'diversity_l2j_min', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_l2j_min']},
+    'diversity_mh_min': {'name': 'diversity_mh_min', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_mh_min']},
+    
+    # Diversity metrics (max)
+    'diversity_l2_max': {'name': 'diversity_l2_max', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_l2_max']},
+    'diversity_mad_max': {'name': 'diversity_mad_max', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_mad_max']},
+    'diversity_j_max': {'name': 'diversity_j_max', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_j_max']},
+    'diversity_h_max': {'name': 'diversity_h_max', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_h_max']},
+    'diversity_l2j_max': {'name': 'diversity_l2j_max', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_l2j_max']},
+    'diversity_mh_max': {'name': 'diversity_mh_max', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/diversity_mh_max']},
+    
+    # Count diversity
+    'count_diversity_cont': {'name': 'count_diversity_cont', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/count_diversity_cont']},
+    'count_diversity_cate': {'name': 'count_diversity_cate', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/count_diversity_cate']},
+    'count_diversity_all': {'name': 'count_diversity_all', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/count_diversity_all']},
+    
+    # Model fidelity
+    'accuracy_knn_sklearn': {'name': 'accuracy_knn_sklearn', 'goal': 'maximize', 'format': '.2%', 'wandb_keys': ['metrics/combination/accuracy_knn_sklearn']},
+    'accuracy_knn_dist': {'name': 'accuracy_knn_dist', 'goal': 'maximize', 'format': '.2%', 'wandb_keys': ['metrics/combination/accuracy_knn_dist']},
+    'lof': {'name': 'lof', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/lof']},
+    
+    # Delta metrics
+    'delta': {'name': 'delta', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/delta']},
+    'delta_min': {'name': 'delta_min', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/delta_min']},
+    'delta_max': {'name': 'delta_max', 'goal': 'maximize', 'format': '.3f', 'wandb_keys': ['metrics/combination/delta_max']},
+    
+    # Plausibility metrics
+    'plausibility_sum': {'name': 'plausibility_sum', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/plausibility_sum']},
+    'plausibility_max_nbr_cf': {'name': 'plausibility_max_nbr_cf', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/plausibility_max_nbr_cf']},
+    'plausibility_nbr_cf': {'name': 'plausibility_nbr_cf', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/plausibility_nbr_cf']},
+    'plausibility_nbr_valid_cf': {'name': 'plausibility_nbr_valid_cf', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/plausibility_nbr_valid_cf']},
+    'plausibility_nbr_actionable_cf': {'name': 'plausibility_nbr_actionable_cf', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/plausibility_nbr_actionable_cf']},
+    'plausibility_nbr_valid_actionable_cf': {'name': 'plausibility_nbr_valid_actionable_cf', 'goal': 'minimize', 'format': '.3f', 'wandb_keys': ['metrics/combination/plausibility_nbr_valid_actionable_cf']},
+    
+    # Runtime
+    'runtime': {'name': 'runtime', 'goal': 'minimize', 'format': '.2f', 'wandb_keys': ['metrics/combination/runtime', 'runtime']},
 }
 
 # Technique colors for consistent visualization
