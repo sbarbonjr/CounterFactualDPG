@@ -222,6 +222,18 @@ def _run_single_replication_dice(args):
         continuous_feature_names = [FEATURES_NAMES[i] for i in continuous_features] if continuous_features else []
         categorical_feature_names = [FEATURES_NAMES[i] for i in categorical_features] if categorical_features else []
         
+        # Ensure all continuous features are float type to avoid DiCE precision errors
+        # DiCE's internal precision calculation fails on integer values (e.g., 0, 1, -1)
+        # because str(value).split('.') returns only one element, causing IndexError
+        # We add a small epsilon to ensure decimal points exist
+        epsilon = 1e-10  # Small enough to not affect results but ensures decimal points
+        for feat in continuous_feature_names:
+            if feat in train_df_with_target.columns:
+                train_df_with_target[feat] = train_df_with_target[feat].astype(float) + epsilon
+        # Also ensure outcome column is float if it's numeric
+        if outcome_name in train_df_with_target.columns and train_df_with_target[outcome_name].dtype.kind in 'iu':
+            train_df_with_target[outcome_name] = train_df_with_target[outcome_name].astype(float) + epsilon
+        
         # Create DiCE Data object
         d = dice_ml.Data(
             dataframe=train_df_with_target,
