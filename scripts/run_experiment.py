@@ -214,8 +214,12 @@ def run_single_sample(
         print(f"INFO: Testing {num_combinations_to_test} rule combinations (legacy mode)")
     
     # Choose target class
-    n_classes = len(np.unique(LABELS))
-    TARGET_CLASS = 0 if ORIGINAL_SAMPLE_PREDICTED_CLASS != 0 else (ORIGINAL_SAMPLE_PREDICTED_CLASS + 1) % n_classes
+    # NOTE: Cannot assume classes are 0, 1, 2... - use actual unique class labels
+    unique_classes = np.unique(LABELS)
+    n_classes = len(unique_classes)
+    # Pick the first class that is different from the original predicted class
+    target_candidates = [c for c in unique_classes if c != ORIGINAL_SAMPLE_PREDICTED_CLASS]
+    TARGET_CLASS = target_candidates[0] if target_candidates else unique_classes[0]
     
     # Save sample metadata
     SAMPLE_ID = get_sample_id(sample_index)
