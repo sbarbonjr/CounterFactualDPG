@@ -156,6 +156,7 @@ def fetch_all_runs(
     techniques: Optional[List[str]] = None,
     datasets: Optional[List[str]] = None,
     limit: int = 10,
+    min_created_at: Optional[str] = None,
 ) -> pd.DataFrame:
     """Fetch runs from WandB and organize by dataset/technique.
     
@@ -165,6 +166,7 @@ def fetch_all_runs(
         techniques: Optional list of techniques to include (default: ['dpg', 'dice'])
         datasets: Optional list of datasets to include (default: all)
         limit: Maximum number of recent runs to fetch (default: 10)
+        min_created_at: Optional ISO 8601 timestamp to filter runs (only fetch runs newer than this)
         
     Returns:
         DataFrame with columns: dataset, technique, replication, and all metrics
@@ -179,8 +181,14 @@ def fetch_all_runs(
     
     print(f"Fetching up to {limit} runs from {entity}/{project}...")
     
+    # Build filters
+    filters = {}
+    if min_created_at:
+        filters["created_at"] = {"$gt": min_created_at}
+        print(f"Filtering runs created after: {min_created_at}")
+    
     # Order by created_at descending to get most recent first
-    runs = api.runs(f"{entity}/{project}", order="-created_at", per_page=limit)
+    runs = api.runs(f"{entity}/{project}", order="-created_at", per_page=limit, filters=filters)
     
     data = []
     for i, run in enumerate(runs):
