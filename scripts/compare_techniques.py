@@ -541,7 +541,7 @@ def print_comparison_summary(comparison_df: pd.DataFrame):
         if dpg_col not in comparison_df.columns or dice_col not in comparison_df.columns:
             continue
         
-        print(f"\n{metric_info['name']} ({metric_info['description']})")
+        print(f"\n{metric_info['name']}")
         print(f"  Goal: {metric_info['goal']}")
         print("-" * 80)
         print(f"  {'Dataset':<30} {'DPG':>15} {'DiCE':>15} {'Winner':>10}")
@@ -665,7 +665,7 @@ def plot_grouped_bar_chart(
     
     ax.set_xlabel('Dataset', fontsize=12)
     ax.set_ylabel(metric_info['name'], fontsize=12)
-    ax.set_title(f"{metric_info['name']}: DPG vs DiCE\n({metric_info.get('description', '')})", fontsize=14)
+    ax.set_title(f"{metric_info['name']}: DPG vs DiCE", fontsize=14)
     ax.set_xticks(x)
     ax.set_xticklabels(datasets, rotation=45, ha='right')
     ax.legend()
