@@ -470,6 +470,22 @@ def create_method_metrics_table(df: pd.DataFrame, dataset: Optional[str] = None,
     
     result = result.rename(columns=rename_map)
     
+    # Hide columns with identical values for all methods
+    cols_to_drop = []
+    for col in result.columns:
+        if col == 'Link':
+            continue
+        # Check if all values in the column are identical (ignoring NaN)
+        col_values = result[col].dropna()
+        if len(col_values) > 0 and col_values.nunique() == 1:
+            cols_to_drop.append(col)
+    
+    if cols_to_drop:
+        result = result.drop(columns=cols_to_drop)
+        # Also remove these columns from col_goals
+        for col in cols_to_drop:
+            col_goals.pop(col, None)
+    
     if not styled:
         return result
     
