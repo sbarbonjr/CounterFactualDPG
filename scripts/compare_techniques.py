@@ -78,68 +78,68 @@ DEFAULT_PROJECT = 'CounterFactualDPG'
 # Note: Only using 'metrics/combination/' prefix for aggregated metrics across all CFs
 # The 'name' field now uses the original wandb key names for consistency in tables and visualizations
 COMPARISON_METRICS = {
-    'perc_valid_cf': {
-        'name': 'perc_valid_cf',
+    'perc_valid_cf_all': {
+        'name': 'perc_valid_cf_all',
         'goal': 'maximize',
-        'description': 'Percentage of valid counterfactuals',
+        'description': 'Percentage of valid counterfactuals (all)',
         'format': '.2%',
-        'wandb_keys': ['metrics/combination/perc_valid_cf'],
+        'wandb_keys': ['metrics/combination/perc_valid_cf_all'],
     },
-    'plausibility_sum': {
-        'name': 'plausibility_sum',
+    'perc_actionable_cf_all': {
+        'name': 'perc_actionable_cf_all',
+        'goal': 'maximize',
+        'description': 'Percentage of actionable counterfactuals (all)',
+        'format': '.2%',
+        'wandb_keys': ['metrics/combination/perc_actionable_cf_all'],
+    },
+    'plausibility_nbr_cf': {
+        'name': 'plausibility_nbr_cf',
         'goal': 'minimize',
-        'description': 'Sum of distances to nearest training samples',
+        'description': 'Plausibility based on neighbor distance',
         'format': '.3f',
-        'wandb_keys': ['metrics/combination/plausibility_sum', 'metrics/combination/plausibility_nbr_cf'],
+        'wandb_keys': ['metrics/combination/plausibility_nbr_cf'],
     },
-    'distance_l2': {
-        'name': 'distance_l2',
+    'distance_mh': {
+        'name': 'distance_mh',
         'goal': 'minimize',
-        'description': 'Mean Euclidean distance from original',
+        'description': 'Manhattan distance from original',
         'format': '.3f',
-        'wandb_keys': ['metrics/combination/distance_l2'],
+        'wandb_keys': ['metrics/combination/distance_mh'],
     },
-    'distance_mad': {
-        'name': 'distance_mad',
-        'goal': 'minimize',
-        'description': 'Mean MAD-normalized distance',
-        'format': '.3f',
-        'wandb_keys': ['metrics/combination/distance_mad'],
-    },
-    'avg_nbr_changes_per_cf': {
-        'name': 'avg_nbr_changes_per_cf',
+    'avg_nbr_changes': {
+        'name': 'avg_nbr_changes',
         'goal': 'minimize',
         'description': 'Average number of feature changes',
         'format': '.2f',
-        'wandb_keys': ['metrics/combination/avg_nbr_changes_per_cf'],
+        'wandb_keys': ['metrics/combination/avg_nbr_changes'],
     },
-    'diversity_l2': {
-        'name': 'diversity_l2',
+    'diversity_mh': {
+        'name': 'diversity_mh',
         'goal': 'maximize',
-        'description': 'Mean pairwise diversity (L2)',
+        'description': 'Mean pairwise diversity (Manhattan)',
         'format': '.3f',
-        'wandb_keys': ['metrics/combination/diversity_l2'],
+        'wandb_keys': ['metrics/combination/diversity_mh'],
     },
-    'perc_valid_actionable_cf': {
-        'name': 'perc_valid_actionable_cf',
+    'count_diversity_all': {
+        'name': 'count_diversity_all',
         'goal': 'maximize',
-        'description': 'Percentage of valid and actionable CFs',
-        'format': '.2%',
-        'wandb_keys': ['metrics/combination/perc_valid_actionable_cf'],
+        'description': 'Count-based diversity metric (all)',
+        'format': '.3f',
+        'wandb_keys': ['metrics/combination/count_diversity_all'],
     },
     'accuracy_knn_sklearn': {
         'name': 'accuracy_knn_sklearn',
         'goal': 'maximize',
         'description': 'KNN classifier accuracy on CFs',
         'format': '.2%',
-        'wandb_keys': ['metrics/combination/accuracy_knn_sklearn', 'metrics/combination/accuracy_knn_dist'],
+        'wandb_keys': ['metrics/combination/accuracy_knn_sklearn'],
     },
-    'delta': {
-        'name': 'delta',
-        'goal': 'maximize',
-        'description': 'Mean prediction probability change',
-        'format': '.3f',
-        'wandb_keys': ['metrics/combination/delta'],
+    'runtime': {
+        'name': 'runtime',
+        'goal': 'minimize',
+        'description': 'Runtime in seconds',
+        'format': '.2f',
+        'wandb_keys': ['metrics/combination/runtime', 'runtime'],
     },
 }
 
