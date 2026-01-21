@@ -10,6 +10,10 @@ data:
   dataset: iris
   dataset_path: configs/iris/dataset.csv
   target_column: target
+
+model:
+  n_estimators: 5
+
 experiment:
   tags:
   - iris
