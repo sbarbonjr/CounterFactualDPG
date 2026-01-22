@@ -15,9 +15,9 @@ methods:
       fixed_acidity: non_increasing
 model:
   type: RandomForestClassifier
-  n_estimators: 25
+  n_estimators: 15
   min_samples_split: 3
   min_impurity_decrease: 0.0
   max_features: null
-  max_depth: null
+  max_depth: 10
   criterion: gini

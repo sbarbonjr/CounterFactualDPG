@@ -8,9 +8,9 @@ experiment:
   name: wheat-seeds
 model:
   type: RandomForestClassifier
-  n_estimators: 7
+  n_estimators: 4
   min_samples_split: 5
   min_impurity_decrease: 0.0
   max_features: null
-  max_depth: null
+  max_depth: 6
   criterion: entropy

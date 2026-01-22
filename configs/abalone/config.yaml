@@ -9,7 +9,7 @@ experiment:
 model:
   n_estimators: 2
   type: RandomForestClassifier
-  max_depth: 10
+  max_depth: 3
 output:
   save_visualizations: true
   save_visualization_images: true

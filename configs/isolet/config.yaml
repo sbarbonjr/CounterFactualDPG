@@ -1,11 +1,3 @@
-# Configuration for isolet dataset
-# Only dataset-specific overrides are included here.
-# Base defaults are loaded from configs/config.yaml
-#
-# Usage:
-#   python scripts/run_experiment.py --dataset isolet --method dpg
-#   python scripts/run_experiment.py --dataset isolet --method dice
-
 data:
   dataset: isolet
   dataset_path: configs/isolet/dataset.csv
@@ -14,3 +6,7 @@ experiment:
   tags:
   - isolet
   name: isolet
+model:
+  type: RandomForestClassifier
+  n_estimators: 20
+  max_depth: 10

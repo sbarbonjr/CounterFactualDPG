@@ -8,9 +8,9 @@ experiment:
   name: car_eval_4
 model:
   type: RandomForestClassifier
-  n_estimators: 25
+  n_estimators: 20
   min_samples_split: 2
   min_impurity_decrease: 0.0
   max_features: null
-  max_depth: null
+  max_depth: 10
   criterion: entropy

@@ -17,9 +17,9 @@ methods:
       BloodPressure: actionable
 model:
   type: RandomForestClassifier
-  n_estimators: 12
+  n_estimators: 10
   min_samples_split: 12
   min_impurity_decrease: 0.0
   max_features: 0.3
-  max_depth: 8
+  max_depth: 4
   criterion: entropy

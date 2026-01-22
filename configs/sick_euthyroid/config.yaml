@@ -8,9 +8,9 @@ experiment:
   name: sick_euthyroid
 model:
   type: RandomForestClassifier
-  n_estimators: 15
+  n_estimators: 20
   min_samples_split: 3
   min_impurity_decrease: 0.0
   max_features: 0.7
-  max_depth: 8
+  max_depth: 10
   criterion: entropy

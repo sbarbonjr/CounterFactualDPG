@@ -8,9 +8,9 @@ experiment:
   name: yeast_ml8
 model:
   type: RandomForestClassifier
-  n_estimators: 10
+  n_estimators: 4
   min_samples_split: 10
   min_impurity_decrease: 0.0
   max_features: 0.7
-  max_depth: null
+  max_depth: 3
   criterion: entropy

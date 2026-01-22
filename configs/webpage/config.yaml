@@ -12,5 +12,5 @@ model:
   min_samples_split: 4
   min_impurity_decrease: 0.0
   max_features: 0.3
-  max_depth: null
+  max_depth: 10
   criterion: gini

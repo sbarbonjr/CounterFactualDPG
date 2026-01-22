@@ -22,9 +22,9 @@ methods:
       thalach: non_increasing
 model:
   type: RandomForestClassifier
-  n_estimators: 25
+  n_estimators: 20
   min_samples_split: 10
   min_impurity_decrease: 0.01
   max_features: 0.3
-  max_depth: 5
+  max_depth: 7
   criterion: entropy
