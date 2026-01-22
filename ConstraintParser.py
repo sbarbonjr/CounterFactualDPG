@@ -259,8 +259,11 @@ class ConstraintParser:
         dpg_model, nodes_list = dpg.to_networkx(dot)
         
         if len(nodes_list) < 2:
-            # Fallback: if DPG extraction fails, return empty constraints
-            return {}
+            # Fallback: if DPG extraction fails, return empty constraints with expected structure
+            return {
+                'constraints': {},
+                'communities': []
+            }
         
         # Extract graph metrics which includes Class Bounds and Communities
         target_names = [str(c) for c in np.unique(train_labels)]
