@@ -47,25 +47,25 @@ from utils.config_manager import load_config
 # =============================================================================
 
 # Number of trees in the forest
-N_ESTIMATORS = [2,3,4, 5,7, 10,12, 15, 25]
+N_ESTIMATORS = [2,3,4, 5,7, 10,12, 15, 20]
 
 # Maximum depth of each tree (None means unlimited)
-MAX_DEPTH = [None, 5,8, 10]
+MAX_DEPTH = [3, 4, 5, 6, 7, 8, 10]
 
 # Minimum samples required to split an internal node
-MIN_SAMPLES_SPLIT = [2, 3, 4, 5, 7, 10,12, 15]
+# MIN_SAMPLES_SPLIT = [2, 3, 4, 5, 7, 10, 12, 15]
 
 # Minimum samples required at a leaf node
 # MIN_SAMPLES_LEAF = [1, 2, 4, 6, 8]
 
 # Number of features to consider for the best split
-MAX_FEATURES = [ None, 0.3, 0.5, 0.7]
+# MAX_FEATURES = [ None, 0.3, 0.5, 0.7]
 
 # Whether to bootstrap samples when building trees
-BOOTSTRAP = [True, False]
+# BOOTSTRAP = [True, False]
 
 # Criterion for measuring quality of a split
-CRITERION = ['entropy','gini']
+# CRITERION = ['entropy','gini']
 
 # Class weight options for imbalanced datasets
 # CLASS_WEIGHT = [None, 'balanced', 'balanced_subsample']
@@ -74,20 +74,20 @@ CRITERION = ['entropy','gini']
 # MAX_LEAF_NODES = [None, 10, 50, 100, 200]
 
 # Minimum impurity decrease for a split
-MIN_IMPURITY_DECREASE = [0.0,0.08, 0.01, 0.02, 0.05,0.1]
+# MIN_IMPURITY_DECREASE = [0.0,0.08, 0.01, 0.02, 0.05,0.1]
 
 # Complete parameter distribution for RandomizedSearchCV
 PARAM_DISTRIBUTIONS = {
     'n_estimators': N_ESTIMATORS,
     'max_depth': MAX_DEPTH,
-    'min_samples_split': MIN_SAMPLES_SPLIT,
+    # 'min_samples_split': MIN_SAMPLES_SPLIT,
     # 'min_samples_leaf': MIN_SAMPLES_LEAF,
-    'max_features': MAX_FEATURES,
+    # 'max_features': MAX_FEATURES,
     # 'bootstrap': BOOTSTRAP,
-    'criterion': CRITERION,
+    # 'criterion': CRITERION,
     # 'class_weight': CLASS_WEIGHT,
     # 'max_leaf_nodes': MAX_LEAF_NODES,
-    'min_impurity_decrease': MIN_IMPURITY_DECREASE,
+    # 'min_impurity_decrease': MIN_IMPURITY_DECREASE,
 }
 
 # Default RandomizedSearchCV settings
