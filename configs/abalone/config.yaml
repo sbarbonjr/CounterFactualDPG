@@ -7,10 +7,9 @@ experiment:
   - abalone
   name: abalone
 model:
+  n_estimators: 2
   type: RandomForestClassifier
-  n_estimators: 7
-  min_samples_split: 7
-  min_impurity_decrease: 0.1
-  max_features: 0.3
-  max_depth: 8
-  criterion: entropy
+  max_depth: 10
+output:
+  save_visualizations: true
+  save_visualization_images: true
