@@ -6,6 +6,15 @@ experiment:
   tags:
   - diabetes
   name: diabetes
+methods:
+  _default:
+    actionability:
+      Age: non_decreasing
+      Pregnancies: non_decreasing
+      DiabetesPedigreeFunction: no_change
+      BMI: actionable
+      Glucose: actionable
+      BloodPressure: actionable
 model:
   type: RandomForestClassifier
   n_estimators: 12

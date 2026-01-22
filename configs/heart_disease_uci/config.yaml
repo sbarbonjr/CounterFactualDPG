@@ -13,6 +13,13 @@ experiment:
   tags:
   - heart_disease_uci
   name: heart_disease_uci
+methods:
+  _default:
+    actionability:
+      age: non_decreasing
+      sex: no_change
+      chol: non_increasing
+      thalach: non_increasing
 model:
   type: RandomForestClassifier
   n_estimators: 25
