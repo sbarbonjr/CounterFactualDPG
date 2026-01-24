@@ -1135,8 +1135,8 @@ class CounterFactualModel:
         
         return ind1, ind2
 
-    def genetic_algorithm(self, sample, target_class, population_size=100, generations=100, mutation_rate=0.8, metric="euclidean", delta_threshold=0.01, patience=10, n_jobs=-1, original_class=None):
-        """Genetic algorithm implementation using DEAP framework.
+    def genetic_algorithm(self, sample, target_class, population_size=100, generations=100, mutation_rate=0.8, metric="euclidean", delta_threshold=0.01, patience=10, n_jobs=-1, original_class=None, num_best_results=1):
+        """Genetic algorithm implementation using DEAP framework
         
         Enhanced with dual-boundary support: uses both original and target class constraints
         to guide evolution. Mutations escape original class bounds while approaching target bounds.
@@ -1150,9 +1150,10 @@ class CounterFactualModel:
             metric (str): Distance metric for fitness calculation.
             delta_threshold (float): Convergence threshold.
             patience (int): Generations without improvement before early stopping.
-            n_jobs (int): Number of parallel jobs for fitness evaluation. 
+            n_jobs (int): Number of parallel jobs for fitness evaluation.
                          -1 = use all CPUs (default), 1 = sequential.
             original_class (int): Original class for escape-aware mutation (dual-boundary).
+            num_best_results (int): Number of top individuals to return from single GA run.
         """
         feature_names = list(sample.keys())
         original_features = np.array([sample[feature] for feature in feature_names])
@@ -1321,7 +1322,7 @@ class CounterFactualModel:
         stats.register("min", lambda x: np.nanmin([val[0] for val in x if not np.isinf(val[0]) and val[0] < INVALID_FITNESS]) if any(not np.isinf(val[0]) and val[0] < INVALID_FITNESS for val in x) else np.inf)
         
         # Setup hall of fame to keep best individuals
-        hof = tools.HallOfFame(1)
+        hof = tools.HallOfFame(num_best_results)
         
         self.best_fitness_list = []
         self.average_fitness_list = []
@@ -1466,66 +1467,76 @@ class CounterFactualModel:
             pool.close()
             pool.join()
         
-        # Return the best individual found
+        # Return the best individuals found
         # Check for both np.inf and INVALID_FITNESS (1e6) to detect failed counterfactuals
         INVALID_FITNESS = 1e6
-        best_fitness = hof[0].fitness.values[0]
-        if best_fitness == np.inf or best_fitness >= INVALID_FITNESS:
-            if self.verbose:
-                print(f"Counterfactual generation failed: best fitness = {best_fitness}")
-            return None
+        valid_counterfactuals = []
         
-        # Final validation: verify the best individual actually predicts the target class
-        # AND has sufficient probability margin over other classes
-        best_individual = dict(hof[0])
-        features = np.array([best_individual[f] for f in sample.keys()]).reshape(1, -1)
-        
-        try:
-            if self.feature_names is not None:
-                features_df = pd.DataFrame(features, columns=self.feature_names)
-                predicted_class = self.model.predict(features_df)[0]
-                proba = self.model.predict_proba(features_df)[0]
-            else:
-                predicted_class = self.model.predict(features)[0]
-                proba = self.model.predict_proba(features)[0]
-            
-            if predicted_class != target_class:
+        for i in range(len(hof)):
+            best_fitness = hof[i].fitness.values[0]
+            if best_fitness == np.inf or best_fitness >= INVALID_FITNESS:
                 if self.verbose:
-                    print(f"Counterfactual generation failed: best individual predicts class {predicted_class}, not target {target_class}")
-                return None
+                    print(f"Counterfactual #{i+1} generation failed: fitness = {best_fitness}")
+                continue
             
-            # Check probability margin - target class should be clearly higher than second-best
-            # NOTE: proba is indexed by position, not by class label.
-            # Use model.classes_ to find the correct index for target_class
-            if hasattr(self.model, 'classes_'):
-                class_list = list(self.model.classes_)
-                if target_class in class_list:
-                    target_idx = class_list.index(target_class)
+            # Final validation: verify the individual actually predicts the target class
+            # AND has sufficient probability margin over other classes
+            best_individual = dict(hof[i])
+            features = np.array([best_individual[f] for f in sample.keys()]).reshape(1, -1)
+            
+            try:
+                if self.feature_names is not None:
+                    features_df = pd.DataFrame(features, columns=self.feature_names)
+                    predicted_class = self.model.predict(features_df)[0]
+                    proba = self.model.predict_proba(features_df)[0]
                 else:
-                    target_idx = target_class  # Fallback to direct indexing
-            else:
-                target_idx = target_class
-            target_prob = proba[target_idx]
-            sorted_probs = np.sort(proba)[::-1]  # Descending order
-            second_best_prob = sorted_probs[1] if len(sorted_probs) > 1 else 0.0
-            margin = target_prob - second_best_prob
-            
-            if margin < self.min_probability_margin:
-                if self.verbose:
-                    print(f"Counterfactual rejected: target class probability ({target_prob:.3f}) "
-                          f"not sufficiently higher than second-best ({second_best_prob:.3f}). "
-                          f"Margin {margin:.3f} < required {self.min_probability_margin:.3f}")
-                return None
+                    predicted_class = self.model.predict(features)[0]
+                    proba = self.model.predict_proba(features)[0]
                 
-        except Exception as e:
-            if self.verbose:
-                print(f"Counterfactual validation failed with error: {e}")
-            return None
+                if predicted_class != target_class:
+                    if self.verbose:
+                        print(f"Counterfactual #{i+1} failed: predicts class {predicted_class}, not target {target_class}")
+                    continue
+                
+                # Check probability margin - target class should be clearly higher than second-best
+                # NOTE: proba is indexed by position, not by class label.
+                # Use model.classes_ to find the correct index for target_class
+                if hasattr(self.model, 'classes_'):
+                    class_list = list(self.model.classes_)
+                    if target_class in class_list:
+                        target_idx = class_list.index(target_class)
+                    else:
+                        target_idx = target_class  # Fallback to direct indexing
+                else:
+                    target_idx = target_class
+                target_prob = proba[target_idx]
+                sorted_probs = np.sort(proba)[::-1]  # Descending order
+                second_best_prob = sorted_probs[1] if len(sorted_probs) > 1 else 0.0
+                margin = target_prob - second_best_prob
+                
+                if margin < self.min_probability_margin:
+                    if self.verbose:
+                        print(f"Counterfactual #{i+1} rejected: target class probability ({target_prob:.3f}) "
+                              f"not sufficiently higher than second-best ({second_best_prob:.3f}). "
+                              f"Margin {margin:.3f} < required {self.min_probability_margin:.3f}")
+                    continue
+                    
+            except Exception as e:
+                if self.verbose:
+                    print(f"Counterfactual #{i+1} validation failed with error: {e}")
+                continue
+            
+            valid_counterfactuals.append(best_individual)
+            if len(valid_counterfactuals) >= num_best_results:
+                break
         
-        return best_individual
+        # Return None if no valid counterfactuals found, otherwise return the list
+        if not valid_counterfactuals:
+            return None
+        return valid_counterfactuals
 
     def generate_counterfactual(self, sample, target_class, population_size=100, generations=100, 
-                                  mutation_rate=0.8, n_jobs=-1, allow_relaxation=True, relaxation_factor=2.0):
+                                  mutation_rate=0.8, n_jobs=-1, allow_relaxation=True, relaxation_factor=2.0, num_best_results=1):
         """
         Generate a counterfactual for the given sample and target class using a genetic algorithm.
         
@@ -1544,9 +1555,10 @@ class CounterFactualModel:
             n_jobs (int): Number of parallel jobs. -1=all CPUs (default), 1=sequential.
             allow_relaxation (bool): If True, retry with relaxed constraints on failure.
             relaxation_factor (float): Factor to expand constraint bounds by (2.0 = double range).
+            num_best_results (int): Number of top individuals to return from single GA run.
 
         Returns:
-            dict: A modified sample representing the counterfactual or None if not found.
+            list or None: A list of modified samples representing counterfactuals, or None if not found.
         """
         sample_class = self.model.predict(pd.DataFrame([sample]))[0]
 
@@ -1554,13 +1566,13 @@ class CounterFactualModel:
             raise ValueError("Target class need to be different from the predicted class label.")
 
         # Pass original_class to enable dual-boundary GA
-        counterfactual = self.genetic_algorithm(
-            sample, target_class, population_size, generations, 
-            mutation_rate=mutation_rate, n_jobs=n_jobs, original_class=sample_class
+        counterfactuals = self.genetic_algorithm(
+            sample, target_class, population_size, generations,
+            mutation_rate=mutation_rate, n_jobs=n_jobs, original_class=sample_class, num_best_results=num_best_results
         )
         
         # If strict constraints failed and relaxation is allowed, try with relaxed constraints
-        if counterfactual is None and allow_relaxation and self.constraints:
+        if (counterfactuals is None or len(counterfactuals) == 0) and allow_relaxation and self.constraints:
             if self.verbose:
                 print("\nStrict constraints failed. Attempting with relaxed constraints...")
             
@@ -1579,35 +1591,39 @@ class CounterFactualModel:
                         print(f"  Attempting with {relax_level}x relaxed constraints...")
                     self.constraints = self._relax_constraints(original_constraints, relax_level)
                 
-                counterfactual = self.genetic_algorithm(
-                    sample, target_class, population_size, generations, 
-                    mutation_rate=mutation_rate, n_jobs=n_jobs, original_class=sample_class
+                counterfactuals = self.genetic_algorithm(
+                    sample, target_class, population_size, generations,
+                    mutation_rate=mutation_rate, n_jobs=n_jobs, original_class=sample_class, num_best_results=num_best_results
                 )
                 
-                if counterfactual is not None:
+                if counterfactuals is not None and len(counterfactuals) > 0:
                     if self.verbose:
                         # Check constraint validity with original constraints
                         is_valid, penalty = self.validate_constraints(
-                            counterfactual, sample, target_class, 
+                            counterfactuals[0], sample, target_class, 
                             original_class=sample_class, strict_mode=True
                         )
-                        print(f"  Found counterfactual (original constraint valid: {is_valid}, penalty: {penalty:.2f})")
+                        print(f"  Found {len(counterfactuals)} counterfactual(s) (original constraint valid: {is_valid}, penalty: {penalty:.2f}")
                     break
             
             # Restore original constraints
             self.constraints = original_constraints
         
         # Ultimate fallback: use nearest neighbor from training data
-        if counterfactual is None and allow_relaxation:
+        if (counterfactuals is None or len(counterfactuals) == 0) and allow_relaxation:
             if self.verbose:
                 print("\nGA methods failed. Attempting nearest neighbor fallback...")
-            counterfactual = self.find_nearest_counterfactual(
+            neighbor_cf = self.find_nearest_counterfactual(
                 sample, target_class, validate_prediction=True
             )
-            if counterfactual is not None and self.verbose:
-                print("  Nearest neighbor fallback succeeded!")
+            if neighbor_cf is not None:
+                if self.verbose:
+                    print("  Nearest neighbor fallback succeeded!")
+                counterfactuals = [neighbor_cf]
+            else:
+                counterfactuals = None
         
-        return counterfactual
+        return counterfactuals
     
     def _relax_constraints(self, constraints, factor=2.0):
         """

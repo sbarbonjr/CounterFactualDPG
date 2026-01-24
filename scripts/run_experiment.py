@@ -375,14 +375,21 @@ def run_single_sample(
         cf_method = getattr(config.counterfactual, 'method', 'dpg').lower()
         
         for result in replication_results:
-            valid_counterfactuals += 1
-            counterfactual = result['counterfactual']
-            all_counterfactuals = result.get('all_counterfactuals', [counterfactual])
             evolution_history = result['evolution_history']
             best_fitness_list = result['best_fitness_list']
             average_fitness_list = result['average_fitness_list']
             replication_num = result['replication_num']
             result_method = result.get('method', 'dpg')
+            
+            # Get all counterfactuals from this replication (num_best_results for DPG)
+            all_counterfactuals = result.get('all_counterfactuals', [])
+            
+            if not all_counterfactuals:
+                continue
+                
+            # Process each counterfactual in all_counterfactuals
+            for cf_idx, counterfactual in enumerate(all_counterfactuals):
+                valid_counterfactuals += 1
             
             # Calculate final best fitness
             best_fitness = best_fitness_list[-1] if best_fitness_list else 0.0

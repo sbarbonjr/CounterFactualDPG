@@ -86,15 +86,25 @@ def _run_single_replication_dpg(args):
         allow_relaxation = getattr(config.counterfactual, 'allow_relaxation', True)
         relaxation_factor = getattr(config.counterfactual, 'relaxation_factor', 2.0)
         
-        counterfactual = cf_model.generate_counterfactual(
+        num_best_results = getattr(config.experiment_params, 'num_best_results', 1)
+        
+        counterfactuals = cf_model.generate_counterfactual(
             ORIGINAL_SAMPLE, 
             TARGET_CLASS, 
             config.counterfactual.population_size,
             config.counterfactual.max_generations,
             mutation_rate=config.counterfactual.mutation_rate,
             allow_relaxation=allow_relaxation,
-            relaxation_factor=relaxation_factor
+            relaxation_factor=relaxation_factor,
+            num_best_results=num_best_results
         )
+        
+        # Handle list return from generate_counterfactual
+        if counterfactuals is None or len(counterfactuals) == 0:
+            return None
+        
+        # First counterfactual is the best one (for backward compatibility)
+        counterfactual = counterfactuals[0]
         
         if counterfactual is None:
             return None
@@ -117,7 +127,7 @@ def _run_single_replication_dpg(args):
         return {
             'replication_num': replication_num,
             'counterfactual': counterfactual,
-            'all_counterfactuals': [counterfactual],  # DPG returns single CF
+            'all_counterfactuals': counterfactuals,  # DPG returns multiple CFs (num_best_results)
             'evolution_history': evolution_history,
             'best_fitness_list': best_fitness_list,
             'average_fitness_list': average_fitness_list,
