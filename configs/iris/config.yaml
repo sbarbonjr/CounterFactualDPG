@@ -6,6 +6,9 @@ model:
   type: RandomForestClassifier
   max_depth: 3
   n_estimators: 5
+  max_features: 0.5
+  min_impurity_decrease: 0.1
+  
 experiment:
   tags:
   - iris
