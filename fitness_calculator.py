@@ -1,0 +1,392 @@
+"""
+FitnessCalculator: Calculates fitness scores for counterfactual candidates.
+
+Extracted from CounterFactualModel.py to provide focused fitness calculation
+functionality for counterfactual generation.
+"""
+
+import numpy as np
+import pandas as pd
+from scipy.spatial.distance import euclidean, cityblock, cosine
+
+
+class FitnessCalculator:
+    """
+    Calculates fitness scores and related metrics for counterfactual candidates.
+    """
+
+    def __init__(
+        self,
+        model,
+        feature_names=None,
+        diversity_weight=0.5,
+        repulsion_weight=4.0,
+        boundary_weight=15.0,
+        distance_factor=2.0,
+        sparsity_factor=1.0,
+        constraints_factor=3.0,
+        original_escape_weight=2.0,
+        max_bonus_cap=50.0,
+        constraint_validator=None,
+        boundary_analyzer=None,
+    ):
+        """
+        Initialize the FitnessCalculator.
+
+        Args:
+            model: The machine learning model used for predictions.
+            feature_names: List of feature names from the model.
+            diversity_weight (float): Weight for diversity bonus in fitness calculation.
+            repulsion_weight (float): Weight for repulsion bonus in fitness calculation.
+            boundary_weight (float): Weight for boundary proximity in fitness calculation.
+            distance_factor (float): Weight for distance component in fitness calculation.
+            sparsity_factor (float): Weight for sparsity component in fitness calculation.
+            constraints_factor (float): Weight for constraint violation component.
+            original_escape_weight (float): Weight for penalizing staying within original class bounds.
+            max_bonus_cap (float): Maximum cap for diversity/repulsion bonuses.
+            constraint_validator: ConstraintValidator instance for validation.
+            boundary_analyzer: BoundaryAnalyzer instance for escape penalty calculation.
+        """
+        self.model = model
+        self.feature_names = feature_names
+        self.diversity_weight = diversity_weight
+        self.repulsion_weight = repulsion_weight
+        self.boundary_weight = boundary_weight
+        self.distance_factor = distance_factor
+        self.sparsity_factor = sparsity_factor
+        self.constraints_factor = constraints_factor
+        self.original_escape_weight = original_escape_weight
+        self.max_bonus_cap = max_bonus_cap
+        self.constraint_validator = constraint_validator
+        self.boundary_analyzer = boundary_analyzer
+
+    def calculate_distance(
+        self, original_sample, counterfactual_sample, metric="euclidean"
+    ):
+        """
+        Calculates the distance between the original sample and the counterfactual sample.
+
+        Parameters:
+        - original_sample: Array-like, shape (n_features,), the original input sample.
+        - counterfactual_sample: Array-like, shape (n_features,), the counterfactual sample.
+        - metric: String, the distance metric to use. Options are "euclidean", "manhattan", or "cosine".
+
+        Returns:
+        - Distance between the original sample and the counterfactual sample.
+        """
+        # Ensure inputs are numpy arrays
+        original_sample = np.array(original_sample, dtype=float)
+        counterfactual_sample = np.array(counterfactual_sample, dtype=float)
+
+        # Check for NaN/Inf values and replace with 0 to avoid errors
+        if not np.all(np.isfinite(original_sample)):
+            original_sample = np.nan_to_num(
+                original_sample, nan=0.0, posinf=0.0, neginf=0.0
+            )
+        if not np.all(np.isfinite(counterfactual_sample)):
+            counterfactual_sample = np.nan_to_num(
+                counterfactual_sample, nan=0.0, posinf=0.0, neginf=0.0
+            )
+
+        # Validate metric and compute distance
+        if metric == "euclidean":
+            distance = euclidean(original_sample, counterfactual_sample)
+        elif metric == "manhattan":
+            distance = cityblock(original_sample, counterfactual_sample)
+        elif metric == "cosine":
+            # Avoid division by zero in cosine similarity
+            if np.all(original_sample == 0) or np.all(counterfactual_sample == 0):
+                distance = 1  # Max cosine distance if one vector is zero
+            else:
+                distance = cosine(original_sample, counterfactual_sample)
+        else:
+            raise ValueError(
+                "Invalid metric. Choose from 'euclidean', 'manhattan', or 'cosine'."
+            )
+
+        return distance
+
+    def calculate_sparsity(self, original_sample, counterfactual_sample):
+        """
+        Calculate sparsity as the ratio of changed features.
+
+        Args:
+            original_sample: dict of feature values
+            counterfactual_sample: dict of feature values
+
+        Returns:
+            float: Ratio of changed features (0=no changes, 1=all changed)
+        """
+        # Convert dicts to arrays in consistent order
+        feature_names = list(original_sample.keys())
+        original_array = np.array([original_sample[f] for f in feature_names])
+        counterfactual_array = np.array(
+            [counterfactual_sample[f] for f in feature_names]
+        )
+
+        # Count how many features differ
+        changed_features = np.sum(original_array != counterfactual_array)
+
+        # Return ratio of changed features
+        return changed_features / len(feature_names)
+
+    def individual_diversity(self, individual, population):
+        """
+        Calculate the average distance from this individual to all others in the population.
+
+        Args:
+            individual (dict): The individual to calculate diversity for.
+            population (list): List of all individuals in the population.
+
+        Returns:
+            float: Average distance to other individuals.
+        """
+        if len(population) <= 1:
+            return 0.0
+
+        ind_array = np.array([individual[key] for key in sorted(individual.keys())])
+        distances = []
+
+        for other in population:
+            other_array = np.array([other[key] for key in sorted(other.keys())])
+            if not np.array_equal(ind_array, other_array):
+                distances.append(np.linalg.norm(ind_array - other_array))
+
+        return np.mean(distances) if distances else 0.0
+
+    def min_distance_to_others(self, individual, population):
+        """
+        Calculate the minimum distance from this individual to any other in the population.
+
+        Args:
+            individual (dict): The individual to calculate distance for.
+            population (list): List of all individuals in the population.
+
+        Returns:
+            float: Minimum distance to nearest neighbor.
+        """
+        if len(population) <= 1:
+            return 0.0
+
+        ind_array = np.array([individual[key] for key in sorted(individual.keys())])
+        distances = []
+
+        for other in population:
+            other_array = np.array([other[key] for key in sorted(other.keys())])
+            if not np.array_equal(ind_array, other_array):
+                distances.append(np.linalg.norm(ind_array - other_array))
+
+        return min(distances) if distances else 0.0
+
+    def distance_to_boundary_line(self, individual, target_class):
+        """
+        Calculate distance to decision boundary based on class probabilities.
+
+        Args:
+            individual (dict): The individual to calculate boundary distance for.
+            target_class (int): The target class.
+
+        Returns:
+            float: Distance to decision boundary.
+        """
+        features = np.array(
+            [individual[key] for key in sorted(individual.keys())]
+        ).reshape(1, -1)
+
+        try:
+            # Convert to DataFrame with feature names if available for model compatibility
+            if self.feature_names is not None:
+                features_df = pd.DataFrame(features, columns=self.feature_names)
+                probs = self.model.predict_proba(features_df)[0]
+            else:
+                probs = self.model.predict_proba(features)[0]
+            target_prob = probs[target_class]
+            other_probs = [p for i, p in enumerate(probs) if i != target_class]
+            max_other_prob = max(other_probs) if other_probs else 0.0
+
+            # Distance to boundary is the difference between target and highest other class
+            boundary_distance = abs(target_prob - max_other_prob)
+            return boundary_distance
+        except:
+            # Fallback if model doesn't support predict_proba
+            return 0.05
+
+    def calculate_fitness(
+        self,
+        individual,
+        original_features,
+        sample,
+        target_class,
+        metric="cosine",
+        population=None,
+        original_class=None,
+    ):
+        """
+        Calculate the fitness score for an individual sample using weighted components.
+        Based on the total_fitness logic from dpg_aug.ipynb.
+
+        Enhanced with dual-boundary support: penalizes staying within original class bounds
+        while rewarding movement toward target class bounds.
+
+        Uses soft class penalty based on prediction probabilities to provide gradient
+        information even when the sample doesn't yet predict as target class.
+
+        Args:
+            individual (dict): The individual sample with feature values.
+            original_features (np.array): The original feature values.
+            sample (dict): The original sample with feature values.
+            target_class (int): The desired class for the counterfactual.
+            metric (str): The distance metric to use for calculating distance.
+            population (list): The current population for diversity calculations.
+            original_class (int): The original class of the sample for escape penalty.
+
+        Returns:
+            float: The fitness score for the individual (lower is better).
+        """
+        INVALID_FITNESS = 1e6  # Large penalty for invalid samples
+
+        # Convert individual feature values to a numpy array
+        features = np.array([individual[feature] for feature in sample.keys()]).reshape(
+            1, -1
+        )
+
+        # Check if the change is actionable (requires constraint_validator)
+        if self.constraint_validator and not self.constraint_validator.is_actionable_change(
+            individual, sample
+        ):
+            return INVALID_FITNESS
+
+        # Check if sample is identical to original
+        if np.array_equal(features.flatten(), original_features.flatten()):
+            return INVALID_FITNESS
+
+        # Check the constraints (pass original_class for smart overlap handling)
+        is_valid_constraint = True
+        penalty_constraints = 0.0
+        if self.constraint_validator:
+            is_valid_constraint, penalty_constraints = self.constraint_validator.validate_constraints(
+                individual, sample, target_class, original_class=original_class
+            )
+
+        # Calculate class prediction probability for soft penalty
+        # This provides gradient information even when not yet in target class
+        try:
+            if self.feature_names is not None:
+                features_df = pd.DataFrame(features, columns=self.feature_names)
+                probs = self.model.predict_proba(features_df)[0]
+            else:
+                probs = self.model.predict_proba(features)[0]
+
+            target_prob = probs[target_class]
+            predicted_class = np.argmax(probs)
+
+            # Soft class penalty: penalize low probability for target class
+            # Range: 0 (target_prob=1) to large value (target_prob=0)
+            # Use exponential to strongly penalize low probabilities
+            class_penalty = 100.0 * (1.0 - target_prob) ** 2
+
+            # Additional hard penalty if not predicting target class
+            if predicted_class != target_class:
+                class_penalty += 50.0  # Smaller than before, combined with soft penalty
+
+        except Exception:
+            # Fallback: use hard prediction
+            if self.constraint_validator:
+                is_valid_class = self.constraint_validator.check_validity(
+                    features.flatten(), original_features.flatten(), target_class
+                )
+                if not is_valid_class:
+                    return INVALID_FITNESS
+            class_penalty = 0.0
+
+        # Calculate core components
+        distance_score = self.calculate_distance(
+            original_features, features.flatten(), metric
+        )
+        sparsity_score = self.calculate_sparsity(sample, individual)
+
+        # Base fitness (minimize distance and sparsity, penalize constraint violations and wrong class)
+        base_fitness = (
+            self.distance_factor * distance_score
+            + self.sparsity_factor * sparsity_score
+            + self.constraints_factor * penalty_constraints
+            + class_penalty
+        )
+
+        # DUAL-BOUNDARY: Add original class escape penalty
+        # This penalizes individuals that haven't escaped the original class boundaries
+        # Only for non-overlapping features where escaping is meaningful
+        if (
+            original_class is not None
+            and self.original_escape_weight > 0
+            and self.boundary_analyzer
+        ):
+            escape_penalty = self.boundary_analyzer.calculate_original_escape_penalty(
+                individual, sample, original_class, target_class=target_class
+            )
+            base_fitness += self.original_escape_weight * escape_penalty
+
+        # If population is provided, add diversity and repulsion bonuses
+        if population is not None and len(population) > 1:
+            # Diversity bonus: reward being different from others
+            div = self.individual_diversity(individual, population)
+            div_bonus = self.diversity_weight * div
+
+            # Repulsion bonus: reward having minimum distance to nearest neighbor
+            min_d = self.min_distance_to_others(individual, population)
+            rep_bonus = self.repulsion_weight * min_d
+
+            # Boundary bonus: reward proximity to decision boundary
+            dist_line = self.distance_to_boundary_line(individual, target_class)
+            line_bonus = 1.0 / (1.0 + dist_line) * self.boundary_weight
+
+            # Cap bonuses to prevent unbounded negative fitness
+            # This is critical for high-dimensional datasets (e.g., German Credit with 20+ features)
+            total_bonus = div_bonus + rep_bonus + line_bonus
+            if total_bonus > self.max_bonus_cap:
+                scale_factor = self.max_bonus_cap / total_bonus
+                div_bonus *= scale_factor
+                rep_bonus *= scale_factor
+                line_bonus *= scale_factor
+
+            # Penalty for being too far from boundary (only if not yet predicting target)
+            boundary_penalty = 30.0 if dist_line > 0.1 and class_penalty > 0 else 0.0
+
+            # Total fitness (lower is better, so we subtract bonuses)
+            fitness = (
+                base_fitness - div_bonus - rep_bonus - line_bonus + boundary_penalty
+            )
+
+            # FITNESS SHARING: Penalize individuals in crowded regions to maintain diversity
+            # This prevents population collapse to identical clones
+            # Dynamic sigma_share: scale with sqrt(n_features) to account for dimensionality
+            n_features = len(individual)
+            sigma_share = max(
+                1.0, np.sqrt(n_features)
+            )  # Scale sharing radius with dimensionality
+            niche_count = 1.0  # Start at 1 (counting self)
+
+            ind_array = np.array([individual[key] for key in sorted(individual.keys())])
+            for other in population:
+                if other is not individual:
+                    other_array = np.array([other[key] for key in sorted(other.keys())])
+                    dist = np.linalg.norm(ind_array - other_array)
+
+                    # Triangular sharing function: nearby individuals increase niche count
+                    if dist < sigma_share:
+                        niche_count += 1.0 - (dist / sigma_share)
+
+            # Apply fitness sharing: multiply fitness by niche count
+            # This makes crowded regions less attractive (higher fitness = worse for minimization)
+            fitness *= niche_count
+        else:
+            # Without population, just use base fitness
+            fitness = base_fitness
+
+        # Additional penalty for constraint violations
+        if not is_valid_constraint:
+            fitness *= (
+                2.0  # Reduced from 5.0 - constraints are already penalized in base
+            )
+
+        return fitness
