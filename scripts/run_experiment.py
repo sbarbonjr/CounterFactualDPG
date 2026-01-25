@@ -148,6 +148,12 @@ from scripts.visualization_helpers import (
     create_radar_chart,
     create_pairwise_feature_evolution_plot,
 )
+from scripts.experiment_helpers import (
+    save_replication_and_combination_metrics,
+    log_sample_artifacts_to_wandb,
+    save_experiment_level_metrics,
+    log_experiment_summary_to_wandb,
+)
 
 # Config utilities moved to utils/config_manager.py
 # Replication workers moved to utils/replication_runner.py
@@ -1561,55 +1567,12 @@ Final Results
             f,
         )
 
-    # Save comprehensive metrics to CSV files
-    try:
-        # Collect all replication-level metrics
-        replication_metrics_list = []
-        for combination_viz in visualizations:
-            for replication_idx, replication_viz in enumerate(
-                combination_viz["replication"]
-            ):
-                if "metrics" in replication_viz:
-                    metrics_row = {
-                        "sample_id": SAMPLE_ID,
-                        "combination": str(combination_viz["label"]),
-                        "replication_idx": replication_idx,
-                    }
-                    metrics_row.update(replication_viz["metrics"])
-                    replication_metrics_list.append(metrics_row)
-
-        if replication_metrics_list:
-            replication_metrics_df = pd.DataFrame(replication_metrics_list)
-            replication_metrics_csv = os.path.join(
-                sample_dir, "replication_metrics.csv"
-            )
-            replication_metrics_df.to_csv(replication_metrics_csv, index=False)
-            print(f"INFO: Saved replication metrics to {replication_metrics_csv}")
-
-        # Collect all combination-level metrics
-        combination_metrics_list = []
-        for combination_viz in visualizations:
-            if "comprehensive_metrics" in combination_viz:
-                metrics_row = {
-                    "sample_id": SAMPLE_ID,
-                    "combination": str(combination_viz["label"]),
-                }
-                metrics_row.update(combination_viz["comprehensive_metrics"])
-                combination_metrics_list.append(metrics_row)
-
-        if combination_metrics_list:
-            combination_metrics_df = pd.DataFrame(combination_metrics_list)
-            combination_metrics_csv = os.path.join(
-                sample_dir, "combination_metrics.csv"
-            )
-            combination_metrics_df.to_csv(combination_metrics_csv, index=False)
-            print(f"INFO: Saved combination metrics to {combination_metrics_csv}")
-
-    except Exception as exc:
-        print(f"WARNING: Failed to save metrics CSV files: {exc}")
-        import traceback
-
-        traceback.print_exc()
+    # Save comprehensive metrics to CSV files using helper
+    save_replication_and_combination_metrics(
+        sample_id=SAMPLE_ID,
+        sample_dir=sample_dir,
+        visualizations=visualizations
+    )
 
     # Use the storage helper to save structured data (as in experiment_generation.py)
     try:
@@ -1627,11 +1590,7 @@ Final Results
         print(f"WARNING: save_visualizations_data failed: {exc}")
 
     # Log artifacts to WandB
-    if wandb_run:
-        artifact = wandb.Artifact(f"sample_{SAMPLE_ID}_results", type="results")
-        artifact.add_file(raw_filepath)
-        artifact.add_file(viz_filepath)
-        wandb.log_artifact(artifact)
+    log_sample_artifacts_to_wandb(wandb_run, SAMPLE_ID, raw_filepath, viz_filepath)
 
     print(
         f"INFO: Completed sample {SAMPLE_ID}: {valid_counterfactuals}/{total_replications} successful counterfactuals"
@@ -1932,95 +1891,18 @@ def run_experiment(config: DictConfig, wandb_run=None):
     print(f"{'=' * 60}\n")
 
     if wandb_run:
-        # Log experiment-level summary (single values for the entire run)
-        wandb.run.summary["experiment/total_samples"] = len(results)
-        wandb.run.summary["experiment/total_valid_counterfactuals"] = total_valid
-        wandb.run.summary["experiment/total_replications"] = total_replications
-        wandb.run.summary["experiment/overall_success_rate"] = total_success_rate
-
-        # Create summary table
-        summary_data = []
-        for r in results:
-            summary_data.append(
-                [
-                    r["sample_id"],
-                    r["valid_counterfactuals"],
-                    r["total_replications"],
-                    f"{r['success_rate']:.2%}",
-                ]
-            )
-
-        summary_table = wandb.Table(
-            columns=["Sample ID", "Valid CFs", "Total Attempts", "Success Rate"],
-            data=summary_data,
+        # Log experiment-level summary using helper
+        log_experiment_summary_to_wandb(
+            wandb_run=wandb_run,
+            results=results,
+            total_valid=total_valid,
+            total_replications=total_replications,
+            total_success_rate=total_success_rate
         )
-        wandb.log({"experiment/summary_table": summary_table})
 
     # Save experiment-level summary metrics to CSV
-    try:
-        output_dir = getattr(config.output, "local_dir", "outputs")
-        experiment_name = getattr(config.experiment, "name", "experiment")
-        experiment_dir = os.path.join(output_dir, experiment_name)
-        os.makedirs(experiment_dir, exist_ok=True)
-
-        # Aggregate all metrics from all samples
-        all_replication_metrics = []
-        all_combination_metrics = []
-
-        for r in results:
-            sample_dir = r["sample_dir"]
-
-            # Load replication metrics
-            replication_csv = os.path.join(sample_dir, "replication_metrics.csv")
-            if os.path.exists(replication_csv):
-                rep_df = pd.read_csv(replication_csv)
-                all_replication_metrics.append(rep_df)
-
-            # Load combination metrics
-            combination_csv = os.path.join(sample_dir, "combination_metrics.csv")
-            if os.path.exists(combination_csv):
-                comb_df = pd.read_csv(combination_csv)
-                all_combination_metrics.append(comb_df)
-
-        # Save aggregated metrics
-        if all_replication_metrics:
-            aggregated_rep_df = pd.concat(all_replication_metrics, ignore_index=True)
-            aggregated_rep_csv = os.path.join(
-                experiment_dir, "all_replication_metrics.csv"
-            )
-            aggregated_rep_df.to_csv(aggregated_rep_csv, index=False)
-            print(f"INFO: Saved aggregated replication metrics to {aggregated_rep_csv}")
-
-        if all_combination_metrics:
-            aggregated_comb_df = pd.concat(all_combination_metrics, ignore_index=True)
-            aggregated_comb_csv = os.path.join(
-                experiment_dir, "all_combination_metrics.csv"
-            )
-            aggregated_comb_df.to_csv(aggregated_comb_csv, index=False)
-            print(
-                f"INFO: Saved aggregated combination metrics to {aggregated_comb_csv}"
-            )
-
-            # Compute and save summary statistics
-            numeric_cols = aggregated_comb_df.select_dtypes(include=[np.number]).columns
-            summary_stats = aggregated_comb_df[numeric_cols].describe()
-            summary_stats_csv = os.path.join(
-                experiment_dir, "metrics_summary_statistics.csv"
-            )
-            summary_stats.to_csv(summary_stats_csv)
-            print(f"INFO: Saved summary statistics to {summary_stats_csv}")
-
-        # Save experiment configuration
-        config_copy_path = os.path.join(experiment_dir, "experiment_config.yaml")
-        with open(config_copy_path, "w") as f:
-            yaml.dump(config.to_dict(), f)
-        print(f"INFO: Saved experiment config to {config_copy_path}")
-
-    except Exception as exc:
-        print(f"WARNING: Failed to save experiment-level metrics: {exc}")
-        import traceback
-
-        traceback.print_exc()
+    output_dir = getattr(config.output, "local_dir", "outputs")
+    save_experiment_level_metrics(results, config, output_dir)
 
     return results
 
