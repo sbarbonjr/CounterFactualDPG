@@ -138,22 +138,26 @@ class CounterFactualModel:
                     escape_dir = 'both'
                 else:
                     # Case 1: Target has upper bound, Original has lower bound
-                    # Example: target_max=2.45, orig_min=2.50 -> must DECREASE to escape
-                    # Use strict inequality to avoid false positives when bounds touch
+                    # Example: target_max=5.45, orig_min=5.45 -> must DECREASE to escape
+                    # Target_max <= orig_min means target requires values at/below where origin starts
+                    # Use <= to catch boundary cases where constraints meet exactly
                     if target_max is not None and orig_min is not None:
-                        if target_max < orig_min:
+                        if target_max <= orig_min:
+                            # Target's max is at or below origin's min - clear escape by decreasing
                             non_overlapping = True
-                            escape_dir = 'decrease'  # Must decrease to get below target_max
+                            escape_dir = 'decrease'  # Must decrease to get at/below target_max
                         elif target_max < orig_min + (orig_max - orig_min if orig_max else 1):
                             escape_dir = 'decrease'  # Prefer decreasing
                     
                     # Case 2: Target has lower bound, Original has upper bound
                     # Example: target_min=5, orig_max=4 -> must INCREASE to escape
-                    # Use strict inequality
+                    # Target_min >= orig_max means target requires values at/above where origin ends
+                    # Use >= to catch boundary cases where constraints meet exactly
                     if target_min is not None and orig_max is not None:
-                        if target_min > orig_max:
+                        if target_min >= orig_max:
+                            # Target's min is at or above origin's max - clear escape by increasing
                             non_overlapping = True
-                            escape_dir = 'increase'  # Must increase to get above target_min
+                            escape_dir = 'increase'  # Must increase to get at/above target_min
                         elif target_min > orig_min if orig_min else 0:
                             escape_dir = 'increase'  # Prefer increasing
                     
@@ -613,12 +617,49 @@ class CounterFactualModel:
                 max_value = original_value + 0.5 * (abs(original_value) + 1.0)
 
             # Determine target value based on escape direction and dual-boundary awareness
-            if escape_dir == 'increase' and max_value != np.inf:
-                # Bias toward upper bound to escape original class
-                target_value = min_value + (max_value - min_value) * (0.5 + 0.3 * self.escape_pressure)
-            elif escape_dir == 'decrease' and min_value != -np.inf:
-                # Bias toward lower bound to escape original class
-                target_value = min_value + (max_value - min_value) * (0.5 - 0.3 * self.escape_pressure)
+            # Key insight: we need to move FROM original bounds TO target bounds
+            # Use a small epsilon to step just outside origin bounds
+            epsilon = 0.01
+            
+            if escape_dir == 'increase':
+                # Target requires higher values than origin allows
+                # Example: orig_max=4, target_min=5 -> value should be just above target_min
+                if orig_max is not None and max_value is not None:
+                    # Step just above origin's max (into target range)
+                    if min_value is not None and min_value > orig_max:
+                        # Target's min is above origin's max - step to just at/above target's min
+                        target_value = min_value + epsilon
+                    else:
+                        # No clear boundary gap - go to origin's max + epsilon
+                        target_value = orig_max + epsilon
+                elif min_value is not None:
+                    # Only have target min bound - go just above it
+                    target_value = min_value + epsilon
+                else:
+                    # Bias toward upper bound to escape original class
+                    target_value = min_value + (max_value - min_value) * (0.5 + 0.3 * self.escape_pressure)
+                    
+            elif escape_dir == 'decrease':
+                # Target requires lower values than origin allows
+                # Example: orig_min=5.45, target_max=5.45 -> value should be 5.44 (just below origin's min)
+                if orig_min is not None and max_value is not None:
+                    # Step just below origin's min (into target range)
+                    if max_value is not None and max_value < orig_min:
+                        # Target's max is below origin's min - step to just at/below target's max
+                        target_value = max_value - epsilon
+                    elif max_value is not None and max_value <= orig_min:
+                        # Target's max equals or is just at origin's min boundary
+                        # Step just below origin's min to escape
+                        target_value = orig_min - epsilon
+                    else:
+                        # No clear boundary gap - go to origin's min - epsilon
+                        target_value = orig_min - epsilon
+                elif max_value is not None:
+                    # Only have target max bound - go just below it
+                    target_value = max_value - epsilon
+                else:
+                    # Bias toward lower bound to escape original class
+                    target_value = min_value + (max_value - min_value) * (0.5 - 0.3 * self.escape_pressure)
             else:
                 # Default: keep original value if within bounds, otherwise use midpoint
                 if min_value <= original_value <= max_value:
@@ -626,7 +667,7 @@ class CounterFactualModel:
                 else:
                     target_value = (min_value + max_value) / 2
 
-            # Clip to bounds and set
+            # Clip to target bounds and set
             adjusted_sample[feature] = np.clip(target_value, min_value, max_value)
             
         return adjusted_sample
@@ -1009,6 +1050,10 @@ class CounterFactualModel:
         - escape_pressure=0.0: Fully focused on approaching target bounds
         - escape_pressure=0.5 (default): Balanced approach
         
+        Enhanced to handle boundary cases where target and origin constraints meet:
+        - When origin_min=5.45 and target_max=5.45, mutate toward values just below origin_min
+        - When origin_max=X and target_min>X, mutate toward values just above origin_max
+        
         Args:
             current_value: Current feature value
             target_min, target_max: Target class bounds
@@ -1019,12 +1064,30 @@ class CounterFactualModel:
             float: Mutated value
         """
         escape_pressure = self.escape_pressure
+        epsilon = 0.01  # Small step for boundary crossing
         
         # Calculate mutation based on escape direction and pressure
         if escape_dir == 'increase':
             # Must increase to escape original and reach target
             # Target point is the min of target range (the threshold we need to cross)
-            if target_min is not None:
+            if orig_max is not None and target_min is not None and target_min >= orig_max:
+                # Clear boundary case: origin_max <= target_min
+                # We need to cross from below orig_max to above target_min
+                # Mutate toward just above the origin's max (entering target's valid range)
+                if current_value <= orig_max:
+                    # Still in/below original bounds - push toward the boundary
+                    target_point = orig_max + epsilon
+                    range_to_target = max(0.1, target_point - current_value)
+                    mutation_range = max(0.1, range_to_target * 0.2)
+                    return current_value + np.random.uniform(0, mutation_range)
+                else:
+                    # Already past origin's max - continue into target range
+                    if target_max is not None:
+                        mutation_range = max(0.1, (target_max - current_value) * 0.15)
+                    else:
+                        mutation_range = 0.5
+                    return current_value + np.random.uniform(0, mutation_range)
+            elif target_min is not None:
                 target_point = target_min
                 range_to_target = max(0.1, target_point - current_value)
                 mutation_range = max(0.1, range_to_target * 0.15)
@@ -1040,7 +1103,24 @@ class CounterFactualModel:
         elif escape_dir == 'decrease':
             # Must decrease to escape original and reach target
             # Target point is the max of target range (the threshold we need to cross below)
-            if target_max is not None:
+            if orig_min is not None and target_max is not None and target_max <= orig_min:
+                # Clear boundary case: target_max <= origin_min
+                # We need to cross from above orig_min to below target_max
+                # Mutate toward just below the origin's min (entering target's valid range)
+                if current_value >= orig_min:
+                    # Still in/above original bounds - push toward the boundary
+                    target_point = orig_min - epsilon
+                    range_to_target = max(0.1, current_value - target_point)
+                    mutation_range = max(0.1, range_to_target * 0.2)
+                    return current_value - np.random.uniform(0, mutation_range)
+                else:
+                    # Already past origin's min - continue into target range
+                    if target_min is not None:
+                        mutation_range = max(0.1, (current_value - target_min) * 0.15)
+                    else:
+                        mutation_range = 0.5
+                    return current_value - np.random.uniform(0, mutation_range)
+            elif target_max is not None:
                 target_point = target_max
                 range_to_target = max(0.1, current_value - target_point)
                 mutation_range = max(0.1, range_to_target * 0.15)
