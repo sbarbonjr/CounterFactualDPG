@@ -850,6 +850,27 @@ def run_single_sample(
             # dict_non_actionable is now stored directly in combination_viz['label']
             dict_non_actionable = combination_viz["label"]
 
+            # Generate fitness curve once per combination (shared by all CFs from same GA run)
+            fitness_fig = None
+            if combination_viz["counterfactuals"]:
+                # All CFs share the same fitness history, so use the first one's cf_model
+                first_cf_model = combination_viz["counterfactuals"][0]["cf_model"]
+                fitness_fig = plot_fitness(first_cf_model) if first_cf_model else None
+
+            # Save fitness curve locally (once per combination, not per CF)
+            if fitness_fig and getattr(config.output, "save_visualization_images", False):
+                os.makedirs(sample_dir, exist_ok=True)
+                fitness_path = os.path.join(sample_dir, "fitness.png")
+                fitness_fig.savefig(fitness_path, bbox_inches="tight", dpi=150)
+
+            # Log fitness curve to WandB (once per combination, not per CF)
+            if fitness_fig and wandb_run:
+                wandb.log({
+                    "viz/sample_id": SAMPLE_ID,
+                    "viz/combination": str(combination_viz["label"]),
+                    "visualizations/fitness_curve": wandb.Image(fitness_fig),
+                })
+
             # Per-counterfactual visualizations
             for cf_idx, cf_viz in enumerate(
                 combination_viz["counterfactuals"]
@@ -880,13 +901,61 @@ def run_single_sample(
                         class_colors_list,
                     )
 
-                    fitness_fig = plot_fitness(cf_model) if cf_model else None
+                    # Generate radar chart for this specific counterfactual
+                    radar_fig = None
+                    try:
+                        # Filter actionable features
+                        actionable_features = [
+                            f
+                            for f in FEATURE_NAMES
+                            if dict_non_actionable.get(f, "none") != "no_change"
+                        ]
 
-                    # Store visualizations
+                        # Calculate feature changes for this CF
+                        feature_changes = {}
+                        for feat in actionable_features:
+                            orig_val = ORIGINAL_SAMPLE.get(feat, 0)
+                            cf_val = counterfactual.get(feat, 0)
+                            feature_changes[feat] = abs(cf_val - orig_val)
+
+                        # Filter features with non-zero changes
+                        features_for_radar = [
+                            feat
+                            for feat, change in feature_changes.items()
+                            if change > 0.001
+                        ]
+
+                        # Create radar chart if there are features with changes
+                        if features_for_radar:
+                            from visualization_helpers import create_radar_chart
+
+                            radar_fig_path = os.path.join(
+                                sample_dir, f"radar_cf_{cf_idx}.png"
+                            ) if getattr(config.output, "save_visualization_images", False) else None
+
+                            # Note: create_radar_chart returns bool, not figure, so we'll need to track the path
+                            if getattr(config.output, "save_visualization_images", False):
+                                os.makedirs(sample_dir, exist_ok=True)
+                                create_radar_chart(
+                                    features_for_radar,
+                                    counterfactual,
+                                    ORIGINAL_SAMPLE,
+                                    constraints,
+                                    ORIGINAL_SAMPLE_PREDICTED_CLASS,
+                                    TARGET_CLASS,
+                                    class_colors_list,
+                                    radar_fig_path,
+                                )
+                                radar_fig = radar_fig_path  # Store path for logging
+                    except Exception as exc:
+                        print(f"WARNING: Failed to create radar chart for CF {cf_idx}: {exc}")
+
+                    # Store visualizations (fitness_fig is now shared across all CFs)
                     cf_viz["visualizations"] = [
                         heatmap_fig,
                         comparison_fig,
-                        fitness_fig,
+                        fitness_fig,  # Same for all CFs from this combination
+                        radar_fig,  # Per-CF radar chart path
                     ]
 
                     # Save counterfactual-level visualizations locally
@@ -911,16 +980,7 @@ def run_single_sample(
                                 comparison_path, bbox_inches="tight", dpi=150
                             )
 
-                        if fitness_fig:
-                            fitness_path = os.path.join(
-                                sample_dir,
-                                f"fitness_cf_{cf_idx}.png",
-                            )
-                            fitness_fig.savefig(
-                                fitness_path, bbox_inches="tight", dpi=150
-                            )
-
-                    # Log to WandB
+                    # Log per-CF visualizations to WandB (fitness_curve already logged before loop)
                     if wandb_run:
                         log_dict = {
                             "viz/sample_id": SAMPLE_ID,
@@ -936,9 +996,9 @@ def run_single_sample(
                             log_dict["visualizations/comparison"] = wandb.Image(
                                 comparison_fig
                             )
-                        if fitness_fig:
-                            log_dict["visualizations/fitness_curve"] = wandb.Image(
-                                fitness_fig
+                        if radar_fig and os.path.exists(radar_fig):
+                            log_dict["visualizations/feature_changes_radar"] = wandb.Image(
+                                radar_fig
                             )
 
                         wandb.log(log_dict)
@@ -1265,8 +1325,8 @@ Final Results
                                         pca_pairplot_path,
                                     )
 
-                                    # Calculate feature changes and filter for visualization
-                                    # 1. Get final counterfactual from last generation of first counterfactual
+                                    # Calculate feature changes for pairwise evolution plot
+                                    # Get final counterfactual from last generation of first counterfactual
                                     final_cf = None
                                     if combination_viz["counterfactuals"]:
                                         evolution_history = combination_viz[
@@ -1275,7 +1335,7 @@ Final Results
                                         if evolution_history:
                                             final_cf = evolution_history[-1]
 
-                                    # 2. Filter actionable features and calculate changes
+                                    # Filter actionable features and calculate changes
                                     actionable_features = [
                                         f
                                         for f in FEATURE_NAMES_LOCAL
@@ -1293,7 +1353,7 @@ Final Results
                                                 cf_val - orig_val
                                             )
 
-                                    # 3. Sort features by change magnitude and filter non-zero changes
+                                    # Sort features by change magnitude and filter non-zero changes
                                     sorted_features = sorted(
                                         feature_changes.items(),
                                         key=lambda x: x[1],
@@ -1321,11 +1381,6 @@ Final Results
                                         ]
                                     ]
 
-                                    # For radar chart, use all features with non-zero changes
-                                    features_for_radar = [
-                                        feat for feat, _ in sorted_features_nonzero
-                                    ]
-
                                     # Create 4D visualization (pairwise scatter matrix) of feature evolution
                                     pairwise_4d_path = os.path.join(
                                         sample_dir, "feature_evolution_4d.png"
@@ -1341,21 +1396,6 @@ Final Results
                                         TARGET_CLASS,
                                         class_colors_list,
                                         pairwise_4d_path,
-                                    )
-
-                                    # Create radar chart for features with non-zero changes
-                                    radar_chart_path = os.path.join(
-                                        sample_dir, "feature_changes_radar.png"
-                                    )
-                                    create_radar_chart(
-                                        features_for_radar,
-                                        final_cf,
-                                        ORIGINAL_SAMPLE,
-                                        constraints,
-                                        ORIGINAL_SAMPLE_PREDICTED_CLASS,
-                                        TARGET_CLASS,
-                                        class_colors_list,
-                                        radar_chart_path,
                                     )
 
                                     # Save loadings
@@ -1405,16 +1445,6 @@ Final Results
                         if os.path.exists(feature_4d_path):
                             log_dict["visualizations/feature_evolution_4d"] = (
                                 wandb.Image(feature_4d_path)
-                            )
-
-                        # Log radar chart
-                        radar_path = os.path.join(
-                            sample_dir,
-                            "feature_changes_radar.png",
-                        )
-                        if os.path.exists(radar_path):
-                            log_dict["visualizations/feature_changes_radar"] = (
-                                wandb.Image(radar_path)
                             )
 
                         # Log seaborn pairplot
