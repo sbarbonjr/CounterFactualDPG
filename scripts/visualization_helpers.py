@@ -896,3 +896,476 @@ def create_radar_chart(
         print(f"ERROR: Failed to save radar chart: {exc}")
         traceback.print_exc()
         return False
+
+
+def create_pairwise_feature_evolution_plot(
+    features_to_plot: List[str],
+    combination_viz: Dict[str, Any],
+    original_sample: Dict[str, Any],
+    feature_names_local: List[str],
+    model: Any,
+    constraints: Dict[str, Any],
+    original_sample_predicted_class: int,
+    target_class: int,
+    class_colors_list: List[str],
+    output_path: str,
+) -> bool:
+    """Create 4D pairwise scatter matrix showing feature evolution with DPG constraints.
+    
+    Args:
+        features_to_plot: List of top feature names to include
+        combination_viz: Dictionary with replication data including evolution_history
+        original_sample: Dictionary with original sample values
+        feature_names_local: All feature names for prediction
+        model: Trained model for predicting class of generations
+        constraints: DPG constraints dictionary (by class)
+        original_sample_predicted_class: Original predicted class label
+        target_class: Target class label
+        class_colors_list: List of colors for each class
+        output_path: Full path where to save the plot PNG
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        if len(features_to_plot) == 0:
+            print(
+                f"INFO: Skipping pairwise plot - no actionable features with changes"
+            )
+            return False
+
+        print(
+            f"INFO: Creating pairwise feature evolution plot for top {len(features_to_plot)} changed features..."
+        )
+        
+        import pandas as pd
+        
+        n_features = len(features_to_plot)
+        fig_4d, axes = plt.subplots(n_features, n_features, figsize=(14, 14))
+
+        # Use class colors from the main visualization
+        orig_class_color = class_colors_list[
+            original_sample_predicted_class % len(class_colors_list)
+        ]
+        target_class_color = class_colors_list[
+            target_class % len(class_colors_list)
+        ]
+
+        # Extract DPG constraints for original and target classes
+        orig_class_key = f"Class {original_sample_predicted_class}"
+        target_class_key = f"Class {target_class}"
+
+        orig_constraints = {}
+        target_constraints = {}
+
+        if orig_class_key in constraints:
+            for constraint in constraints[orig_class_key]:
+                feat = constraint.get("feature")
+                if feat:
+                    orig_constraints[feat] = {
+                        "min": constraint.get("min"),
+                        "max": constraint.get("max"),
+                    }
+
+        if target_class_key in constraints:
+            for constraint in constraints[target_class_key]:
+                feat = constraint.get("feature")
+                if feat:
+                    target_constraints[feat] = {
+                        "min": constraint.get("min"),
+                        "max": constraint.get("max"),
+                    }
+
+        for i, feat_y in enumerate(features_to_plot):
+            for j, feat_x in enumerate(features_to_plot):
+                ax = axes[i, j] if n_features > 1 else axes
+
+                if i == j:
+                    # Diagonal: show feature name
+                    ax.text(
+                        0.5,
+                        0.5,
+                        feat_x,
+                        ha="center",
+                        va="center",
+                        fontsize=10,
+                        weight="bold",
+                        transform=ax.transAxes,
+                    )
+                    ax.set_xlim(0, 1)
+                    ax.set_ylim(0, 1)
+                    ax.axis("off")
+                else:
+                    # Off-diagonal: scatter plot
+                    # Plot original sample with its class color
+                    ax.scatter(
+                        original_sample[feat_x],
+                        original_sample[feat_y],
+                        marker="o",
+                        s=200,
+                        c=orig_class_color,
+                        edgecolors="black",
+                        linewidths=2,
+                        zorder=10,
+                        alpha=0.7,
+                    )
+                    ax.text(
+                        original_sample[feat_x],
+                        original_sample[feat_y],
+                        "S",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        color="white",
+                        weight="bold",
+                        zorder=11,
+                    )
+
+                    # Plot evolution for each replication
+                    for rep_idx, rep in enumerate(combination_viz["replication"]):
+                        evolution_history = rep.get("evolution_history", [])
+                        if evolution_history:
+                            # Plot path (use target class color)
+                            x_vals = [
+                                gen_sample.get(feat_x, np.nan)
+                                for gen_sample in evolution_history
+                            ]
+                            y_vals = [
+                                gen_sample.get(feat_y, np.nan)
+                                for gen_sample in evolution_history
+                            ]
+                            ax.plot(
+                                x_vals,
+                                y_vals,
+                                color=target_class_color,
+                                alpha=0.3,
+                                linewidth=1,
+                                zorder=3,
+                            )
+
+                            # Plot generation points colored by predicted class
+                            for gen_idx, gen_sample in enumerate(
+                                evolution_history
+                            ):
+                                x_val = gen_sample.get(feat_x, np.nan)
+                                y_val = gen_sample.get(feat_y, np.nan)
+
+                                # Predict class for this generation
+                                gen_sample_df = pd.DataFrame([gen_sample])[
+                                    feature_names_local
+                                ]
+                                gen_pred_class = int(
+                                    model.predict(gen_sample_df)[0]
+                                )
+                                gen_color = class_colors_list[
+                                    gen_pred_class % len(class_colors_list)
+                                ]
+
+                                # Determine if this is the last generation (final counterfactual)
+                                is_final = gen_idx == len(evolution_history) - 1
+                                marker_size = 120 if is_final else 80
+                                alpha_val = (
+                                    1.0
+                                    if is_final
+                                    else 0.3
+                                    + (
+                                        0.5
+                                        * gen_idx
+                                        / max(1, len(evolution_history) - 1)
+                                    )
+                                )
+                                # Clamp alpha to [0, 1] to avoid floating-point precision errors
+                                alpha_val = np.clip(alpha_val, 0.0, 1.0)
+
+                                ax.scatter(
+                                    x_val,
+                                    y_val,
+                                    marker="o",
+                                    s=marker_size,
+                                    c="none",
+                                    edgecolors=gen_color,
+                                    linewidths=1.5 if is_final else 1,
+                                    alpha=alpha_val,
+                                    zorder=5,
+                                )
+
+                                # Add label
+                                label = "C" if is_final else str(gen_idx + 1)
+                                ax.text(
+                                    x_val,
+                                    y_val,
+                                    label,
+                                    ha="center",
+                                    va="center",
+                                    fontsize=7 if is_final else 6,
+                                    color=gen_color,
+                                    weight="bold",
+                                    zorder=6,
+                                    alpha=alpha_val,
+                                )
+
+                    # Now add constraint boundaries with labels (after data is plotted)
+                    # Plot constraint lines/regions
+                    # Original class constraints (dashed) - positioned at edges
+                    if feat_x in orig_constraints:
+                        x_min = orig_constraints[feat_x].get("min")
+                        x_max = orig_constraints[feat_x].get("max")
+                        if x_min is not None:
+                            ax.axvline(
+                                x=x_min,
+                                color=orig_class_color,
+                                linestyle="--",
+                                linewidth=1,
+                                alpha=0.5,
+                                zorder=1,
+                            )
+                            ax.text(
+                                x_min,
+                                0.98,
+                                f"C{original_sample_predicted_class} min={x_min:.2f}",
+                                rotation=90,
+                                va="top",
+                                ha="right",
+                                fontsize=4,
+                                color=orig_class_color,
+                                alpha=0.9,
+                                transform=ax.get_xaxis_transform(),
+                                bbox=dict(
+                                    boxstyle="round,pad=0.2",
+                                    facecolor="white",
+                                    edgecolor=orig_class_color,
+                                    alpha=0.7,
+                                    linewidth=0.5,
+                                ),
+                            )
+                        if x_max is not None:
+                            ax.axvline(
+                                x=x_max,
+                                color=orig_class_color,
+                                linestyle="--",
+                                linewidth=1,
+                                alpha=0.5,
+                                zorder=1,
+                            )
+                            ax.text(
+                                x_max,
+                                0.98,
+                                f"C{original_sample_predicted_class} max={x_max:.2f}",
+                                rotation=90,
+                                va="top",
+                                ha="left",
+                                fontsize=4,
+                                color=orig_class_color,
+                                alpha=0.9,
+                                transform=ax.get_xaxis_transform(),
+                                bbox=dict(
+                                    boxstyle="round,pad=0.2",
+                                    facecolor="white",
+                                    edgecolor=orig_class_color,
+                                    alpha=0.7,
+                                    linewidth=0.5,
+                                ),
+                            )
+
+                    if feat_y in orig_constraints:
+                        y_min = orig_constraints[feat_y].get("min")
+                        y_max = orig_constraints[feat_y].get("max")
+                        if y_min is not None:
+                            ax.axhline(
+                                y=y_min,
+                                color=orig_class_color,
+                                linestyle="--",
+                                linewidth=1,
+                                alpha=0.5,
+                                zorder=1,
+                            )
+                            ax.text(
+                                0.98,
+                                y_min,
+                                f"C{original_sample_predicted_class} min={y_min:.2f}",
+                                rotation=0,
+                                va="bottom",
+                                ha="right",
+                                fontsize=4,
+                                color=orig_class_color,
+                                alpha=0.9,
+                                transform=ax.get_yaxis_transform(),
+                                bbox=dict(
+                                    boxstyle="round,pad=0.2",
+                                    facecolor="white",
+                                    edgecolor=orig_class_color,
+                                    alpha=0.7,
+                                    linewidth=0.5,
+                                ),
+                            )
+                        if y_max is not None:
+                            ax.axhline(
+                                y=y_max,
+                                color=orig_class_color,
+                                linestyle="--",
+                                linewidth=1,
+                                alpha=0.5,
+                                zorder=1,
+                            )
+                            ax.text(
+                                0.98,
+                                y_max,
+                                f"C{original_sample_predicted_class} max={y_max:.2f}",
+                                rotation=0,
+                                va="top",
+                                ha="right",
+                                fontsize=4,
+                                color=orig_class_color,
+                                alpha=0.9,
+                                transform=ax.get_yaxis_transform(),
+                                bbox=dict(
+                                    boxstyle="round,pad=0.2",
+                                    facecolor="white",
+                                    edgecolor=orig_class_color,
+                                    alpha=0.7,
+                                    linewidth=0.5,
+                                ),
+                            )
+
+                    # Target class constraints (solid) - positioned at opposite edges
+                    if feat_x in target_constraints:
+                        x_min = target_constraints[feat_x].get("min")
+                        x_max = target_constraints[feat_x].get("max")
+                        if x_min is not None:
+                            ax.axvline(
+                                x=x_min,
+                                color=target_class_color,
+                                linestyle="-",
+                                linewidth=1.5,
+                                alpha=0.6,
+                                zorder=2,
+                            )
+                            ax.text(
+                                x_min,
+                                0.02,
+                                f"C{target_class} min={x_min:.2f}",
+                                rotation=90,
+                                va="bottom",
+                                ha="right",
+                                fontsize=4,
+                                color=target_class_color,
+                                alpha=0.9,
+                                transform=ax.get_xaxis_transform(),
+                                bbox=dict(
+                                    boxstyle="round,pad=0.2",
+                                    facecolor="white",
+                                    edgecolor=target_class_color,
+                                    alpha=0.7,
+                                    linewidth=0.5,
+                                ),
+                            )
+                        if x_max is not None:
+                            ax.axvline(
+                                x=x_max,
+                                color=target_class_color,
+                                linestyle="-",
+                                linewidth=1.5,
+                                alpha=0.6,
+                                zorder=2,
+                            )
+                            ax.text(
+                                x_max,
+                                0.02,
+                                f"C{target_class} max={x_max:.2f}",
+                                rotation=90,
+                                va="bottom",
+                                ha="left",
+                                fontsize=4,
+                                color=target_class_color,
+                                alpha=0.9,
+                                transform=ax.get_xaxis_transform(),
+                                bbox=dict(
+                                    boxstyle="round,pad=0.2",
+                                    facecolor="white",
+                                    edgecolor=target_class_color,
+                                    alpha=0.7,
+                                    linewidth=0.5,
+                                ),
+                            )
+
+                    if feat_y in target_constraints:
+                        y_min = target_constraints[feat_y].get("min")
+                        y_max = target_constraints[feat_y].get("max")
+                        if y_min is not None:
+                            ax.axhline(
+                                y=y_min,
+                                color=target_class_color,
+                                linestyle="-",
+                                linewidth=1.5,
+                                alpha=0.6,
+                                zorder=2,
+                            )
+                            ax.text(
+                                0.02,
+                                y_min,
+                                f"C{target_class} min={y_min:.2f}",
+                                rotation=0,
+                                va="bottom",
+                                ha="left",
+                                fontsize=4,
+                                color=target_class_color,
+                                alpha=0.9,
+                                transform=ax.get_yaxis_transform(),
+                                bbox=dict(
+                                    boxstyle="round,pad=0.2",
+                                    facecolor="white",
+                                    edgecolor=target_class_color,
+                                    alpha=0.7,
+                                    linewidth=0.5,
+                                ),
+                            )
+                        if y_max is not None:
+                            ax.axhline(
+                                y=y_max,
+                                color=target_class_color,
+                                linestyle="-",
+                                linewidth=1.5,
+                                alpha=0.6,
+                                zorder=2,
+                            )
+                            ax.text(
+                                0.02,
+                                y_max,
+                                f"C{target_class} max={y_max:.2f}",
+                                rotation=0,
+                                va="top",
+                                ha="left",
+                                fontsize=4,
+                                color=target_class_color,
+                                alpha=0.9,
+                                transform=ax.get_yaxis_transform(),
+                                bbox=dict(
+                                    boxstyle="round,pad=0.2",
+                                    facecolor="white",
+                                    edgecolor=target_class_color,
+                                    alpha=0.7,
+                                    linewidth=0.5,
+                                ),
+                            )
+
+                    ax.set_xlabel(
+                        feat_x if i == n_features - 1 else "", fontsize=8
+                    )
+                    ax.set_ylabel(feat_y if j == 0 else "", fontsize=8)
+                    ax.tick_params(labelsize=7)
+
+        try:
+            plt.tight_layout()
+        except:
+            pass  # Ignore tight_layout warnings
+        fig_4d.savefig(output_path, bbox_inches="tight", dpi=150)
+        plt.close(fig_4d)
+        print(
+            f"INFO: Successfully saved pairwise feature evolution plot with {len(features_to_plot)} features"
+        )
+        return True
+
+    except Exception as exc:
+        print(f"ERROR: Failed to save pairwise feature evolution plot: {exc}")
+        traceback.print_exc()
+        return False
