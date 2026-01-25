@@ -1716,11 +1716,11 @@ Final Results
                                 except Exception as exc:
                                     print(f"ERROR: Failed to save PCA numeric data: {exc}")
                                     traceback.print_exc()
-                        except Exception as exc:
-                            print(f"ERROR: Failed saving visualization images: {exc}")
-                            traceback.print_exc()
+            except Exception as exc:
+                print(f"ERROR: Failed saving visualization images: {exc}")
+                traceback.print_exc()
                     
-                    # Log to WandB (outside of save_visualization_images check)
+            # Log to WandB (outside of save_visualization_images check)
                     print(f"DEBUG: Logging combination-level visualizations to WandB...")
                     if wandb_run:
                         log_dict = {
