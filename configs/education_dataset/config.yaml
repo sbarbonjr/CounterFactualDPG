@@ -8,9 +8,9 @@ experiment:
   name: education_dataset
 model:
   type: RandomForestClassifier
-  n_estimators: 12
+  n_estimators: 15
   min_samples_split: 4
-  min_impurity_decrease: 0.02
+  min_impurity_decrease: 0.01
   max_features: 0.3
-  max_depth: 6
+  max_depth: 3
   criterion: entropy

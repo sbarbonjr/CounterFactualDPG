@@ -8,9 +8,7 @@ experiment:
   name: optical_digits
 model:
   type: RandomForestClassifier
-  n_estimators: 20
-  min_samples_split: 5
-  min_impurity_decrease: 0.0
-  max_features: 0.3
   max_depth: 10
-  criterion: entropy
+  max_features: 0.3
+  min_impurity_decrease: 0.0
+  n_estimators: 20

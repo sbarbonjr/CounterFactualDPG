@@ -11,6 +11,6 @@ model:
   n_estimators: 12
   min_samples_split: 2
   min_impurity_decrease: 0.0
-  max_features: null
+  max_features: 0.5
   max_depth: 7
   criterion: entropy

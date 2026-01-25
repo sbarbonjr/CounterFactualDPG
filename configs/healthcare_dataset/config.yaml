@@ -12,7 +12,7 @@ model:
   type: RandomForestClassifier
   n_estimators: 4
   min_samples_split: 12
-  min_impurity_decrease: 0.0
-  max_features: 0.7
-  max_depth: 3
+  min_impurity_decrease: 0.01
+  max_features: null
+  max_depth: 6
   criterion: entropy

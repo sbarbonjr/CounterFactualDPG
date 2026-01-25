@@ -14,9 +14,9 @@ output:
   save_visualization_images: true
 model:
   type: RandomForestClassifier
-  n_estimators: 4
+  n_estimators: 10
   min_samples_split: 3
   min_impurity_decrease: 0.0
-  max_features: 0.7
-  max_depth: 4
+  max_features: null
+  max_depth: 6
   criterion: entropy
