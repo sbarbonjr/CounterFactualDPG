@@ -355,27 +355,6 @@ class CounterFactualModel:
         else:
             return False
 
-    def plot_fitness(self):
-        """
-        Delegate plotting to CounterFactualVisualizer.plot_fitness to keep visualizations centralized.
-        """
-        try:
-            from CounterFactualVisualizer import plot_fitness as _plot_fitness
-            return _plot_fitness(self)
-        except Exception:
-            # Fallback: minimal inline plot in case visualizer import fails
-            import matplotlib.pyplot as plt
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.plot(self.best_fitness_list, label='Best Fitness', color='blue')
-            ax.plot(self.average_fitness_list, label='Average Fitness', color='green')
-            ax.set_title('Fitness Over Generations')
-            ax.set_xlabel('Generation')
-            ax.set_ylabel('Fitness')
-            ax.legend()
-            plt.tight_layout()
-            plt.close(fig)
-            return fig
-
     def calculate_distance(self,original_sample, counterfactual_sample, metric="euclidean"):
         """
         Calculates the distance between the original sample and the counterfactual sample.
