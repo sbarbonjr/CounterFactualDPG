@@ -16,7 +16,7 @@ experiment:
   entity: mllab-ts-universit-di-trieste
   notes: Initial baseline run with default parameters
 experiment_params:
-  num_best_results: 5
+  requested_counterfactuals: 5
   num_samples: 1
   sample_indices:
   - 2
