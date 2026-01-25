@@ -278,8 +278,11 @@ def create_pca_pairplot(
         evolution_pc_rows = []
         cf_pc_rows = []
 
-        for rep_idx, rep in enumerate(combination_viz["replication"]):
-            evolution_history = rep.get("evolution_history", [])
+        # Support both old "replication" and new "counterfactuals" keys
+        cf_data_list = combination_viz.get("replication", combination_viz.get("counterfactuals", []))
+
+        for cf_idx, cf_data in enumerate(cf_data_list):
+            evolution_history = cf_data.get("evolution_history", [])
             if evolution_history:
                 for gen_idx, gen_sample in enumerate(evolution_history):
                     gen_numeric = pd.DataFrame([gen_sample])[
@@ -914,7 +917,7 @@ def create_pairwise_feature_evolution_plot(
     
     Args:
         features_to_plot: List of top feature names to include
-        combination_viz: Dictionary with replication data including evolution_history
+        combination_viz: Dictionary with counterfactuals data including evolution_history
         original_sample: Dictionary with original sample values
         feature_names_local: All feature names for prediction
         model: Trained model for predicting class of generations
@@ -976,6 +979,9 @@ def create_pairwise_feature_evolution_plot(
                         "max": constraint.get("max"),
                     }
 
+        # Support both old "replication" and new "counterfactuals" keys
+        cf_data_list = combination_viz.get("replication", combination_viz.get("counterfactuals", []))
+
         for i, feat_y in enumerate(features_to_plot):
             for j, feat_x in enumerate(features_to_plot):
                 ax = axes[i, j] if n_features > 1 else axes
@@ -1021,9 +1027,9 @@ def create_pairwise_feature_evolution_plot(
                         zorder=11,
                     )
 
-                    # Plot evolution for each replication
-                    for rep_idx, rep in enumerate(combination_viz["replication"]):
-                        evolution_history = rep.get("evolution_history", [])
+                    # Plot evolution for each counterfactual (was "replication" in old code)
+                    for cf_idx, cf_data in enumerate(cf_data_list):
+                        evolution_history = cf_data.get("evolution_history", [])
                         if evolution_history:
                             # Plot path (use target class color)
                             x_vals = [
