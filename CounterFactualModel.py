@@ -1,13 +1,10 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 
-import ast
 from scipy.spatial.distance import euclidean, cityblock, cosine
-from scipy.spatial.distance import cdist
 
-from deap import base, creator, tools, algorithms
+from deap import base, creator, tools
 
 class CounterFactualModel:
     def __init__(self, model, constraints, dict_non_actionable=None, verbose=False, 
