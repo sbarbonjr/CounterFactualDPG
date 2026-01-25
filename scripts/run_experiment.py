@@ -1209,6 +1209,7 @@ Final Results
                     cf_viz["explanations"] = {}
 
             # Sample-level visualizations (after all counterfactuals)
+            pca_fig = None  # Initialize for proper error handling
             try:
                 if combination_viz["counterfactuals"]:
                     counterfactuals_list = [
@@ -1222,14 +1223,28 @@ Final Results
                         for cf_data in combination_viz["counterfactuals"]
                     ]
                     
-                    # Note: pairwise, pca, pairplot, and pca_pairplot are now generated per-CF
-                    # (moved to the per-CF loop above)
+                    # Generate combination-level PCA visualization (shows ALL CFs on dataset)
+                    # This is different from per-CF pca_pairplot which shows PC dimensions
+                    pca_fig = plot_pca_with_counterfactuals(
+                        model,
+                        pd.DataFrame(FEATURES, columns=FEATURE_NAMES),
+                        LABELS,
+                        ORIGINAL_SAMPLE,
+                        cf_features_df,
+                        evolution_histories=evolution_histories,
+                    )
+                    combination_viz["pca"] = pca_fig
 
                     # Optionally save PCA numeric data and other combination-level CSVs locally
                     try:
                         if getattr(config.output, "save_visualization_images", False):
                             # Ensure sample_dir exists
                             os.makedirs(sample_dir, exist_ok=True)
+
+                            # Save the PCA figure
+                            if pca_fig:
+                                pca_path = os.path.join(sample_dir, "pca.png")
+                                pca_fig.savefig(pca_path, bbox_inches="tight", dpi=150)
 
                             # Also compute and save PCA numeric data (coords & loadings)
                             try:
@@ -1505,6 +1520,10 @@ Final Results
                             "viz_combo/sample_id": SAMPLE_ID,
                             "viz_combo/combination": str(combination_viz["label"]),
                         }
+
+                        # Log combination-level PCA visualization (shows all CFs on dataset)
+                        if pca_fig:
+                            log_dict["visualizations/pca"] = wandb.Image(pca_fig)
 
                         # Note: pairwise, pairplot, and pca_pairplot are now logged per-CF
 
