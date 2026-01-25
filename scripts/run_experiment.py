@@ -903,7 +903,7 @@ def run_single_sample(
         if hasattr(config, "output")
         else True
     ):
-        for combination_idx, combination_viz in enumerate(visualizations):
+        for combination_viz in visualizations:
             # dict_non_actionable is now stored directly in combination_viz['label']
             dict_non_actionable = combination_viz["label"]
 
@@ -953,7 +953,7 @@ def run_single_sample(
                         if heatmap_fig:
                             heatmap_path = os.path.join(
                                 sample_dir,
-                                f"heatmap_combo_{combination_idx}_rep_{replication_idx}.png",
+                                f"heatmap_rep_{replication_idx}.png",
                             )
                             heatmap_fig.savefig(
                                 heatmap_path, bbox_inches="tight", dpi=150
@@ -962,7 +962,7 @@ def run_single_sample(
                         if comparison_fig:
                             comparison_path = os.path.join(
                                 sample_dir,
-                                f"comparison_combo_{combination_idx}_rep_{replication_idx}.png",
+                                f"comparison_rep_{replication_idx}.png",
                             )
                             comparison_fig.savefig(
                                 comparison_path, bbox_inches="tight", dpi=150
@@ -971,7 +971,7 @@ def run_single_sample(
                         if fitness_fig:
                             fitness_path = os.path.join(
                                 sample_dir,
-                                f"fitness_combo_{combination_idx}_rep_{replication_idx}.png",
+                                f"fitness_rep_{replication_idx}.png",
                             )
                             fitness_fig.savefig(
                                 fitness_path, bbox_inches="tight", dpi=150
@@ -1017,7 +1017,7 @@ def run_single_sample(
                     # Save explanations locally as text file
                     if getattr(config.output, "save_visualization_images", False):
                         os.makedirs(sample_dir, exist_ok=True)
-                        explanation_text = f"""Sample {SAMPLE_ID} - Combination {combination_idx} - Replication {replication_idx}
+                        explanation_text = f"""Sample {SAMPLE_ID} - Replication {replication_idx}
 
 Feature Modifications
 {explanations["Feature Modifications"]}
@@ -1033,14 +1033,14 @@ Final Results
 """
                         explanation_path = os.path.join(
                             sample_dir,
-                            f"explanation_combo_{combination_idx}_rep_{replication_idx}.txt",
+                            f"explanation_rep_{replication_idx}.txt",
                         )
                         with open(explanation_path, "w") as f:
                             f.write(explanation_text)
 
                     # Log explanations to WandB as text
                     if wandb_run:
-                        explanation_text = f"""## Sample {SAMPLE_ID} - Combination {combination_idx} - Replication {replication_idx}
+                        explanation_text = f"""## Sample {SAMPLE_ID} - Replication {replication_idx}
 
 ### Feature Modifications
 {explanations["Feature Modifications"]}
@@ -1115,13 +1115,13 @@ Final Results
 
                             if pairwise_fig:
                                 pairwise_path = os.path.join(
-                                    sample_dir, f"pairwise_combo_{combination_idx}.png"
+                                    sample_dir, "pairwise.png"
                                 )
                                 pairwise_fig.savefig(pairwise_path, bbox_inches="tight")
 
                             if pca_fig:
                                 pca_path = os.path.join(
-                                    sample_dir, f"pca_combo_{combination_idx}.png"
+                                    sample_dir, "pca.png"
                                 )
                                 pca_fig.savefig(pca_path, bbox_inches="tight")
 
@@ -1181,7 +1181,7 @@ Final Results
                                     coords_df.to_csv(
                                         os.path.join(
                                             sample_dir,
-                                            f"pca_coords_combo_{combination_idx}.csv",
+                                            "pca_coords.csv",
                                         ),
                                         index=False,
                                     )
@@ -1231,7 +1231,7 @@ Final Results
                                     gen_df.to_csv(
                                         os.path.join(
                                             sample_dir,
-                                            f"pca_generations_combo_{combination_idx}.csv",
+                                            "pca_generations.csv",
                                         ),
                                         index=False,
                                     )
@@ -1287,7 +1287,7 @@ Final Results
                                     feature_df.to_csv(
                                         os.path.join(
                                             sample_dir,
-                                            f"feature_values_generations_combo_{combination_idx}.csv",
+                                            "feature_values_generations.csv",
                                         ),
                                         index=False,
                                     )
@@ -1487,7 +1487,7 @@ Final Results
                                             # Save the pairplot
                                             pairplot_path = os.path.join(
                                                 sample_dir,
-                                                f"pairplot_combo_{combination_idx}.png",
+                                                "pairplot.png",
                                             )
                                             g.savefig(
                                                 pairplot_path,
@@ -1737,7 +1737,7 @@ Final Results
                                             # Save the PCA pairplot
                                             pca_pairplot_path = os.path.join(
                                                 sample_dir,
-                                                f"pca_pairplot_combo_{combination_idx}.png",
+                                                "pca_pairplot.png",
                                             )
                                             g_pc.savefig(
                                                 pca_pairplot_path,
@@ -2352,7 +2352,7 @@ Final Results
                                             fig_4d.savefig(
                                                 os.path.join(
                                                     sample_dir,
-                                                    f"feature_evolution_4d_combo_{combination_idx}.png",
+                                                    "feature_evolution_4d.png",
                                                 ),
                                                 bbox_inches="tight",
                                                 dpi=150,
@@ -2972,7 +2972,7 @@ Final Results
                                             fig_radar.savefig(
                                                 os.path.join(
                                                     sample_dir,
-                                                    f"feature_changes_radar_combo_{combination_idx}.png",
+                                                    "feature_changes_radar.png",
                                                 ),
                                                 bbox_inches="tight",
                                                 dpi=150,
@@ -3003,7 +3003,7 @@ Final Results
                                     loadings_df.to_csv(
                                         os.path.join(
                                             sample_dir,
-                                            f"pca_loadings_combo_{combination_idx}.csv",
+                                            "pca_loadings.csv",
                                         )
                                     )
 
@@ -3033,7 +3033,7 @@ Final Results
                         # Log 4D feature evolution plot
                         feature_4d_path = os.path.join(
                             sample_dir,
-                            f"feature_evolution_4d_combo_{combination_idx}.png",
+                            "feature_evolution_4d.png",
                         )
                         if os.path.exists(feature_4d_path):
                             log_dict["visualizations/feature_evolution_4d"] = (
@@ -3043,7 +3043,7 @@ Final Results
                         # Log radar chart
                         radar_path = os.path.join(
                             sample_dir,
-                            f"feature_changes_radar_combo_{combination_idx}.png",
+                            "feature_changes_radar.png",
                         )
                         if os.path.exists(radar_path):
                             log_dict["visualizations/feature_changes_radar"] = (
@@ -3052,7 +3052,7 @@ Final Results
 
                         # Log seaborn pairplot
                         pairplot_path = os.path.join(
-                            sample_dir, f"pairplot_combo_{combination_idx}.png"
+                            sample_dir, "pairplot.png"
                         )
                         if os.path.exists(pairplot_path):
                             log_dict["visualizations/pairplot"] = wandb.Image(
@@ -3061,7 +3061,7 @@ Final Results
 
                         # Log PCA pairplot
                         pca_pairplot_path = os.path.join(
-                            sample_dir, f"pca_pairplot_combo_{combination_idx}.png"
+                            sample_dir, "pca_pairplot.png"
                         )
                         if os.path.exists(pca_pairplot_path):
                             log_dict["visualizations/pca_pairplot"] = wandb.Image(
@@ -3070,7 +3070,7 @@ Final Results
 
                         # Log CSV files as wandb Tables
                         pca_coords_path = os.path.join(
-                            sample_dir, f"pca_coords_combo_{combination_idx}.csv"
+                            sample_dir, "pca_coords.csv"
                         )
                         if os.path.exists(pca_coords_path):
                             pca_coords_table = wandb.Table(
@@ -3079,7 +3079,7 @@ Final Results
                             log_dict["data/pca_coords"] = pca_coords_table
 
                         pca_generations_path = os.path.join(
-                            sample_dir, f"pca_generations_combo_{combination_idx}.csv"
+                            sample_dir, "pca_generations.csv"
                         )
                         if os.path.exists(pca_generations_path):
                             pca_generations_table = wandb.Table(
@@ -3089,7 +3089,7 @@ Final Results
 
                         feature_values_path = os.path.join(
                             sample_dir,
-                            f"feature_values_generations_combo_{combination_idx}.csv",
+                            "feature_values_generations.csv",
                         )
                         if os.path.exists(feature_values_path):
                             feature_values_table = wandb.Table(
@@ -3100,7 +3100,7 @@ Final Results
                             )
 
                         pca_loadings_path = os.path.join(
-                            sample_dir, f"pca_loadings_combo_{combination_idx}.csv"
+                            sample_dir, "pca_loadings.csv"
                         )
                         if os.path.exists(pca_loadings_path):
                             pca_loadings_table = wandb.Table(
@@ -3135,14 +3135,13 @@ Final Results
     try:
         # Collect all replication-level metrics
         replication_metrics_list = []
-        for combination_idx, combination_viz in enumerate(visualizations):
+        for combination_viz in visualizations:
             for replication_idx, replication_viz in enumerate(
                 combination_viz["replication"]
             ):
                 if "metrics" in replication_viz:
                     metrics_row = {
                         "sample_id": SAMPLE_ID,
-                        "combination_idx": combination_idx,
                         "combination": str(combination_viz["label"]),
                         "replication_idx": replication_idx,
                     }
@@ -3159,11 +3158,10 @@ Final Results
 
         # Collect all combination-level metrics
         combination_metrics_list = []
-        for combination_idx, combination_viz in enumerate(visualizations):
+        for combination_viz in visualizations:
             if "comprehensive_metrics" in combination_viz:
                 metrics_row = {
                     "sample_id": SAMPLE_ID,
-                    "combination_idx": combination_idx,
                     "combination": str(combination_viz["label"]),
                 }
                 metrics_row.update(combination_viz["comprehensive_metrics"])

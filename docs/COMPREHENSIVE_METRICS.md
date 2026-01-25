@@ -199,7 +199,6 @@ All metrics are logged to Weights & Biases under organized namespaces:
 ```
 replication/sample_id
 replication/combination
-replication/replication_num
 replication/success
 replication/final_fitness
 replication/generations_to_converge
