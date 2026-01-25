@@ -145,7 +145,7 @@ def run_visualization_profiling(visualizations):
                 plot_sample_and_counterfactual_comparison(
                     MODEL, ORIGINAL_SAMPLE, SAMPLE_DATAFRAME, counterfactual, CLASS_COLORS_LIST
                 ),
-                cf_dpg.plot_fitness()  # Use the stored model's fitness data
+                CounterFactualVisualizer.plot_fitness(cf_dpg)  # Use the stored model's fitness data
             ]
             
             # Store visualizations in the replication object
