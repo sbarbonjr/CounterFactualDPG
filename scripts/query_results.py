@@ -130,7 +130,7 @@ def compare_runs(project: str, run_ids: List[str], entity: str = 'mllab-ts-unive
                 # Default metrics
                 row['Success Rate'] = summary.get('experiment/overall_success_rate', 'N/A')
                 row['Valid CFs'] = summary.get('experiment/total_valid_counterfactuals', 'N/A')
-                row['Total Reps'] = summary.get('experiment/total_replications', 'N/A')
+                row['Total Attempts'] = summary.get('experiment/total_attempts', 'N/A')
             
             comparison_data.append(row)
             
