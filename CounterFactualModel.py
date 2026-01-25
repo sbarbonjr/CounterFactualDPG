@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from scipy.spatial.distance import euclidean, cityblock, cosine
 
@@ -321,7 +320,6 @@ class CounterFactualModel:
 
       return True
 
-
     def check_validity(self, counterfactual_sample, original_sample, desired_class):
         """
         Checks the validity of a counterfactual sample.
@@ -358,21 +356,25 @@ class CounterFactualModel:
             return False
 
     def plot_fitness(self):
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-        # Plot best fitness and average fitness on the same graph
-        ax.plot(self.best_fitness_list, label='Best Fitness', color='blue')
-        ax.plot(self.average_fitness_list, label='Average Fitness', color='green')
-        ax.set_title('Fitness Over Generations')
-        ax.set_xlabel('Generation')
-        ax.set_ylabel('Fitness')
-        ax.legend()
-
-        plt.tight_layout()
-        plt.close(fig)
-        return fig
-
-
+        """
+        Delegate plotting to CounterFactualVisualizer.plot_fitness to keep visualizations centralized.
+        """
+        try:
+            from CounterFactualVisualizer import plot_fitness as _plot_fitness
+            return _plot_fitness(self)
+        except Exception:
+            # Fallback: minimal inline plot in case visualizer import fails
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(self.best_fitness_list, label='Best Fitness', color='blue')
+            ax.plot(self.average_fitness_list, label='Average Fitness', color='green')
+            ax.set_title('Fitness Over Generations')
+            ax.set_xlabel('Generation')
+            ax.set_ylabel('Fitness')
+            ax.legend()
+            plt.tight_layout()
+            plt.close(fig)
+            return fig
 
     def calculate_distance(self,original_sample, counterfactual_sample, metric="euclidean"):
         """
@@ -550,7 +552,6 @@ class CounterFactualModel:
 
         #print('Total Penalty:', penalty)
         return valid_change, penalty
-
 
     def get_valid_sample(self, sample, target_class, original_class=None):
         """
@@ -898,7 +899,6 @@ class CounterFactualModel:
                 fitness *= 2.0  # Reduced from 5.0 - constraints are already penalized in base
 
             return fitness
-
 
     def _create_deap_individual(self, sample_dict, feature_names):
         """Create a DEAP individual from a dictionary."""

@@ -390,6 +390,37 @@ def plot_pca_with_counterfactual(model, dataset, target, sample, counterfactual)
     #plt.show()
     return(plt)
 
+
+def plot_fitness(cf_model, figsize=(10, 6), title='Fitness Over Generations'):
+    """
+    Plot fitness curves using stored fitness history on a model instance.
+
+    Args:
+        cf_model: Object with attributes `best_fitness_list` and `average_fitness_list` (e.g., CounterFactualModel instance).
+        figsize: Figure size tuple.
+        title: Plot title.
+
+    Returns:
+        matplotlib.figure.Figure: The generated figure (closed to avoid display side effects).
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+
+    best = getattr(cf_model, 'best_fitness_list', []) or []
+    avg = getattr(cf_model, 'average_fitness_list', []) or []
+
+    # Plot best fitness and average fitness on the same graph
+    ax.plot(best, label='Best Fitness', color='blue')
+    ax.plot(avg, label='Average Fitness', color='green')
+    ax.set_title(title)
+    ax.set_xlabel('Generation')
+    ax.set_ylabel('Fitness')
+    ax.legend()
+
+    plt.tight_layout()
+    plt.close(fig)
+    return fig
+
+
 def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterfactual, constraints=None, class_colors_list=None):
     """
     Enhanced visualization combining original and counterfactual samples with:
@@ -992,7 +1023,7 @@ def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactual
                 # Plot circle outline marker
                 plt.scatter(
                     coords[0], coords[1],
-                    facecolors='none', edgecolors=color, marker='o', s=size,
+                    facecolors='none', edgecolors=color, marker='o', s=size*2,
                     alpha=alpha, linewidths=1.5,
                     zorder=5
                 )
