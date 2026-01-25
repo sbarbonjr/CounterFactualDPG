@@ -950,12 +950,133 @@ def run_single_sample(
                     except Exception as exc:
                         print(f"WARNING: Failed to create radar chart for CF {cf_idx}: {exc}")
 
+                    # Generate per-CF evolution visualizations (pairplot, pairwise, pca_pairplot)
+                    pairplot_fig_path = None
+                    pairwise_fig_path = None
+                    pca_pairplot_fig_path = None
+
+                    if getattr(config.output, "save_visualization_images", False):
+                        try:
+                            from visualization_helpers import (
+                                create_feature_evolution_pairplot,
+                                create_pca_pairplot,
+                            )
+
+                            # Get evolution history for this specific CF
+                            # Note: evolution_history is shared across all CFs (single GA run)
+                            # But each CF has different final counterfactual values
+                            evolution_history = cf_viz.get("evolution_history", [])
+
+                            if evolution_history or counterfactual:
+                                # Build feature_df for THIS CF only (original + evolution + this CF)
+                                feature_rows = []
+
+                                # Add original sample row (use "replication" column name for compatibility)
+                                orig_row = {
+                                    "replication": "original",
+                                    "generation": 0,
+                                    "predicted_class": ORIGINAL_SAMPLE_PREDICTED_CLASS,
+                                }
+                                orig_row.update({f: ORIGINAL_SAMPLE[f] for f in FEATURE_NAMES})
+                                feature_rows.append(orig_row)
+
+                                # Add evolution generation rows (shared across CFs)
+                                for gen_idx, gen_sample in enumerate(evolution_history):
+                                    gen_sample_df = pd.DataFrame([gen_sample])[FEATURE_NAMES]
+                                    gen_pred_class = int(model.predict(gen_sample_df)[0])
+
+                                    gen_row = {
+                                        "replication": cf_idx,  # Use cf_idx but column name is "replication"
+                                        "generation": gen_idx + 1,
+                                        "predicted_class": gen_pred_class,
+                                    }
+                                    gen_row.update({f: gen_sample.get(f, np.nan) for f in FEATURE_NAMES})
+                                    feature_rows.append(gen_row)
+
+                                # Add THIS specific counterfactual as the final generation
+                                # (may differ from evolution_history[-1] since we return top-X from final population)
+                                max_gen = len(evolution_history) + 1
+                                cf_row = {
+                                    "replication": cf_idx,
+                                    "generation": max_gen,  # Final generation for this CF
+                                    "predicted_class": cf_pred_class,
+                                }
+                                cf_row.update({f: counterfactual.get(f, np.nan) for f in FEATURE_NAMES})
+                                feature_rows.append(cf_row)
+
+                                feature_df_single = pd.DataFrame(feature_rows)
+
+                                # Create pairplot for this CF
+                                pairplot_fig_path = os.path.join(
+                                    sample_dir, f"pairplot_cf_{cf_idx}.png"
+                                )
+                                create_feature_evolution_pairplot(
+                                    FEATURES,
+                                    LABELS,
+                                    FEATURE_NAMES,
+                                    feature_df_single,
+                                    str(SAMPLE_ID),  # Convert to string as expected by helper
+                                    ORIGINAL_SAMPLE_PREDICTED_CLASS,
+                                    TARGET_CLASS,
+                                    class_colors_list,
+                                    pairplot_fig_path,
+                                )
+
+                                # Create single-CF combination for pca_pairplot
+                                # Append this specific counterfactual as the final point
+                                # (since evolution_history is shared, we add the actual CF at the end)
+                                cf_evolution = evolution_history.copy() if evolution_history else []
+                                cf_evolution.append(counterfactual)  # Add this CF's actual values as endpoint
+                                
+                                single_cf_combination = {
+                                    "replication": [{"evolution_history": cf_evolution}],
+                                    "label": combination_viz["label"],
+                                }
+
+                                # Create PCA pairplot for this CF
+                                pca_pairplot_fig_path = os.path.join(
+                                    sample_dir, f"pca_pairplot_cf_{cf_idx}.png"
+                                )
+                                create_pca_pairplot(
+                                    FEATURES,
+                                    FEATURE_NAMES,
+                                    ORIGINAL_SAMPLE,
+                                    single_cf_combination,
+                                    str(SAMPLE_ID),  # Convert to string as expected by helper
+                                    ORIGINAL_SAMPLE_PREDICTED_CLASS,
+                                    TARGET_CLASS,
+                                    class_colors_list,
+                                    pca_pairplot_fig_path,
+                                )
+
+                                # Create pairwise plot for this CF
+                                pairwise_fig_path = os.path.join(
+                                    sample_dir, f"pairwise_cf_{cf_idx}.png"
+                                )
+                                cf_single_df = pd.DataFrame([counterfactual])
+                                pairwise_fig_single = plot_pairwise_with_counterfactual_df(
+                                    model, FEATURES, LABELS, ORIGINAL_SAMPLE, cf_single_df
+                                )
+                                if pairwise_fig_single:
+                                    pairwise_fig_single.savefig(
+                                        pairwise_fig_path, bbox_inches="tight", dpi=150
+                                    )
+                                    plt.close(pairwise_fig_single)
+
+                        except Exception as exc:
+                            print(f"WARNING: Failed to create per-CF evolution plots for CF {cf_idx}: {exc}")
+                            import traceback
+                            traceback.print_exc()
+
                     # Store visualizations (fitness_fig is now shared across all CFs)
                     cf_viz["visualizations"] = [
                         heatmap_fig,
                         comparison_fig,
                         fitness_fig,  # Same for all CFs from this combination
                         radar_fig,  # Per-CF radar chart path
+                        pairplot_fig_path,  # Per-CF pairplot path
+                        pairwise_fig_path,  # Per-CF pairwise path
+                        pca_pairplot_fig_path,  # Per-CF pca_pairplot path
                     ]
 
                     # Save counterfactual-level visualizations locally
@@ -999,6 +1120,18 @@ def run_single_sample(
                         if radar_fig and os.path.exists(radar_fig):
                             log_dict["visualizations/feature_changes_radar"] = wandb.Image(
                                 radar_fig
+                            )
+                        if pairplot_fig_path and os.path.exists(pairplot_fig_path):
+                            log_dict["visualizations/pairplot"] = wandb.Image(
+                                pairplot_fig_path
+                            )
+                        if pairwise_fig_path and os.path.exists(pairwise_fig_path):
+                            log_dict["visualizations/pairwise"] = wandb.Image(
+                                pairwise_fig_path
+                            )
+                        if pca_pairplot_fig_path and os.path.exists(pca_pairplot_fig_path):
+                            log_dict["visualizations/pca_pairplot"] = wandb.Image(
+                                pca_pairplot_fig_path
                             )
 
                         wandb.log(log_dict)
@@ -1089,336 +1222,279 @@ Final Results
                         for cf_data in combination_viz["counterfactuals"]
                     ]
                     
-                    # Debug: Check if evolution histories have data
-                    total_gens = sum(len(h) for h in evolution_histories)
-                    print(f"DEBUG: Evolution histories - {len(evolution_histories)} reps, {total_gens} total generations")
+                    # Note: pairwise, pca, pairplot, and pca_pairplot are now generated per-CF
+                    # (moved to the per-CF loop above)
 
-                    # Create combination-level visualizations
-                    pairwise_fig = plot_pairwise_with_counterfactual_df(
-                        model, FEATURES, LABELS, ORIGINAL_SAMPLE, cf_features_df
-                    )
-
-                    pca_fig = plot_pca_with_counterfactuals(
-                        model,
-                        pd.DataFrame(FEATURES, columns=FEATURE_NAMES),
-                        LABELS,
-                        ORIGINAL_SAMPLE,
-                        cf_features_df,
-                        evolution_histories=evolution_histories,  # Pass evolution data
-                    )
-
-                    combination_viz["pairwise"] = pairwise_fig
-                    combination_viz["pca"] = pca_fig
-
-                    # Optionally save images and CSVs locally
+                    # Optionally save PCA numeric data and other combination-level CSVs locally
                     try:
                         if getattr(config.output, "save_visualization_images", False):
                             # Ensure sample_dir exists
                             os.makedirs(sample_dir, exist_ok=True)
 
-                            if pairwise_fig:
-                                pairwise_path = os.path.join(
-                                    sample_dir, "pairwise.png"
+                            # Also compute and save PCA numeric data (coords & loadings)
+                            try:
+                                from sklearn.preprocessing import StandardScaler
+                                from sklearn.decomposition import PCA
+
+                                FEATURES_ARR = np.array(FEATURES)
+                                FEATURE_NAMES_LOCAL = FEATURE_NAMES
+                                df_features = pd.DataFrame(
+                                    FEATURES_ARR, columns=FEATURE_NAMES_LOCAL
+                                ).select_dtypes(include=[np.number])
+
+                                scaler = StandardScaler()
+                                df_scaled = scaler.fit_transform(df_features)
+                                pca_local = PCA(n_components=2)
+                                pca_local.fit(df_scaled)
+
+                                # Original sample coords
+                                sample_df_local = pd.DataFrame([ORIGINAL_SAMPLE])[
+                                    FEATURE_NAMES_LOCAL
+                                ].select_dtypes(include=[np.number])
+                                sample_scaled = scaler.transform(sample_df_local)
+                                sample_coords = pca_local.transform(sample_scaled)
+
+                                # Counterfactual coords
+                                cf_list_local = [
+                                    cf_data["counterfactual"]
+                                    for cf_data in combination_viz["counterfactuals"]
+                                ]
+                                cf_df_local = pd.DataFrame(cf_list_local)[
+                                    FEATURE_NAMES_LOCAL
+                                ].select_dtypes(include=[np.number])
+                                cf_scaled = scaler.transform(cf_df_local)
+                                cf_coords = pca_local.transform(cf_scaled)
+
+                                # Save coords CSV
+                                coords_rows = []
+                                coords_rows.append(
+                                    {
+                                        "type": "original",
+                                        "pc1": float(sample_coords[0, 0]),
+                                        "pc2": float(sample_coords[0, 1]),
+                                    }
                                 )
-                                pairwise_fig.savefig(pairwise_path, bbox_inches="tight")
-
-                            if pca_fig:
-                                pca_path = os.path.join(
-                                    sample_dir, "pca.png"
-                                )
-                                pca_fig.savefig(pca_path, bbox_inches="tight")
-
-                                # Also compute and save PCA numeric data (coords & loadings)
-                                try:
-                                    from sklearn.preprocessing import StandardScaler
-                                    from sklearn.decomposition import PCA
-
-                                    FEATURES_ARR = np.array(FEATURES)
-                                    FEATURE_NAMES_LOCAL = FEATURE_NAMES
-                                    df_features = pd.DataFrame(
-                                        FEATURES_ARR, columns=FEATURE_NAMES_LOCAL
-                                    ).select_dtypes(include=[np.number])
-
-                                    scaler = StandardScaler()
-                                    df_scaled = scaler.fit_transform(df_features)
-                                    pca_local = PCA(n_components=2)
-                                    pca_local.fit(df_scaled)
-
-                                    # Original sample coords
-                                    sample_df_local = pd.DataFrame([ORIGINAL_SAMPLE])[
-                                        FEATURE_NAMES_LOCAL
-                                    ].select_dtypes(include=[np.number])
-                                    sample_scaled = scaler.transform(sample_df_local)
-                                    sample_coords = pca_local.transform(sample_scaled)
-
-                                    # Counterfactual coords
-                                    cf_list_local = [
-                                        cf_data["counterfactual"]
-                                        for cf_data in combination_viz["counterfactuals"]
-                                    ]
-                                    cf_df_local = pd.DataFrame(cf_list_local)[
-                                        FEATURE_NAMES_LOCAL
-                                    ].select_dtypes(include=[np.number])
-                                    cf_scaled = scaler.transform(cf_df_local)
-                                    cf_coords = pca_local.transform(cf_scaled)
-
-                                    # Save coords CSV
-                                    coords_rows = []
+                                for i, row in enumerate(cf_coords):
                                     coords_rows.append(
                                         {
-                                            "type": "original",
-                                            "pc1": float(sample_coords[0, 0]),
-                                            "pc2": float(sample_coords[0, 1]),
-                                        }
-                                    )
-                                    for i, row in enumerate(cf_coords):
-                                        coords_rows.append(
-                                            {
-                                                "type": f"counterfactual_{i}",
-                                                "pc1": float(row[0]),
-                                                "pc2": float(row[1]),
-                                            }
-                                        )
-
-                                    coords_df = pd.DataFrame(coords_rows)
-                                    coords_df.to_csv(
-                                        os.path.join(
-                                            sample_dir,
-                                            "pca_coords.csv",
-                                        ),
-                                        index=False,
-                                    )
-
-                                    # Save all generations evolution data
-                                    gen_rows = []
-                                    gen_rows.append(
-                                        {
-                                            "cf_index": "original",
-                                            "generation": 0,
-                                            "pc1": float(sample_coords[0, 0]),
-                                            "pc2": float(sample_coords[0, 1]),
+                                            "type": f"counterfactual_{i}",
+                                            "pc1": float(row[0]),
+                                            "pc2": float(row[1]),
                                         }
                                     )
 
-                                    for cf_idx, cf_data in enumerate(
-                                        combination_viz["counterfactuals"]
-                                    ):
-                                        evolution_history = cf_data.get(
-                                            "evolution_history", []
-                                        )
-                                        if evolution_history:
-                                            history_df = pd.DataFrame(evolution_history)
-                                            history_numeric = history_df[
-                                                FEATURE_NAMES_LOCAL
-                                            ].select_dtypes(include=[np.number])
-                                            history_scaled = scaler.transform(
-                                                history_numeric
-                                            )
-                                            history_pca = pca_local.transform(
-                                                history_scaled
-                                            )
+                                coords_df = pd.DataFrame(coords_rows)
+                                coords_df.to_csv(
+                                    os.path.join(
+                                        sample_dir,
+                                        "pca_coords.csv",
+                                    ),
+                                    index=False,
+                                )
 
-                                            for gen_idx, coords in enumerate(
-                                                history_pca
-                                            ):
-                                                gen_rows.append(
-                                                    {
-                                                        "cf_index": cf_idx,
-                                                        "generation": gen_idx + 1,
-                                                        "pc1": float(coords[0]),
-                                                        "pc2": float(coords[1]),
-                                                    }
-                                                )
-
-                                    gen_df = pd.DataFrame(gen_rows)
-                                    gen_df.to_csv(
-                                        os.path.join(
-                                            sample_dir,
-                                            "pca_generations.csv",
-                                        ),
-                                        index=False,
-                                    )
-
-                                    # Save feature values for original, all generations, and final counterfactuals
-                                    feature_rows = []
-                                    # Add original sample
-                                    orig_row = {
+                                # Save all generations evolution data
+                                gen_rows = []
+                                gen_rows.append(
+                                    {
                                         "cf_index": "original",
                                         "generation": 0,
-                                        "predicted_class": ORIGINAL_SAMPLE_PREDICTED_CLASS,
+                                        "pc1": float(sample_coords[0, 0]),
+                                        "pc2": float(sample_coords[0, 1]),
                                     }
-                                    orig_row.update(
-                                        {
-                                            f: ORIGINAL_SAMPLE[f]
-                                            for f in FEATURE_NAMES_LOCAL
-                                        }
+                                )
+
+                                for cf_idx, cf_data in enumerate(
+                                    combination_viz["counterfactuals"]
+                                ):
+                                    evolution_history = cf_data.get(
+                                        "evolution_history", []
                                     )
-                                    feature_rows.append(orig_row)
-
-                                    for cf_idx, cf_data in enumerate(
-                                        combination_viz["counterfactuals"]
-                                    ):
-                                        evolution_history = cf_data.get(
-                                            "evolution_history", []
+                                    if evolution_history:
+                                        history_df = pd.DataFrame(evolution_history)
+                                        history_numeric = history_df[
+                                            FEATURE_NAMES_LOCAL
+                                        ].select_dtypes(include=[np.number])
+                                        history_scaled = scaler.transform(
+                                            history_numeric
                                         )
-                                        if evolution_history:
-                                            for gen_idx, gen_sample in enumerate(
-                                                evolution_history
-                                            ):
-                                                # Predict class for this generation
-                                                gen_sample_df = pd.DataFrame(
-                                                    [gen_sample]
-                                                )[FEATURE_NAMES_LOCAL]
-                                                gen_pred_class = int(
-                                                    model.predict(gen_sample_df)[0]
-                                                )
+                                        history_pca = pca_local.transform(
+                                            history_scaled
+                                        )
 
-                                                gen_row = {
+                                        for gen_idx, coords in enumerate(
+                                            history_pca
+                                        ):
+                                            gen_rows.append(
+                                                {
                                                     "cf_index": cf_idx,
                                                     "generation": gen_idx + 1,
-                                                    "predicted_class": gen_pred_class,
+                                                    "pc1": float(coords[0]),
+                                                    "pc2": float(coords[1]),
                                                 }
-                                                gen_row.update(
-                                                    {
-                                                        f: gen_sample.get(f, np.nan)
-                                                        for f in FEATURE_NAMES_LOCAL
-                                                    }
-                                                )
-                                                feature_rows.append(gen_row)
-
-                                    feature_df = pd.DataFrame(feature_rows)
-                                    feature_df.to_csv(
-                                        os.path.join(
-                                            sample_dir,
-                                            "feature_values_generations.csv",
-                                        ),
-                                        index=False,
-                                    )
-
-                                    # Create seaborn pairplot for feature evolution visualization
-                                    pairplot_path = os.path.join(sample_dir, "pairplot.png")
-                                    create_feature_evolution_pairplot(
-                                        FEATURES,
-                                        LABELS,
-                                        FEATURE_NAMES_LOCAL,
-                                        feature_df,
-                                        SAMPLE_ID,
-                                        ORIGINAL_SAMPLE_PREDICTED_CLASS,
-                                        TARGET_CLASS,
-                                        class_colors_list,
-                                        pairplot_path,
-                                    )
-
-                                    # Create PCA pairplot (one PC per feature, max 5)
-                                    pca_pairplot_path = os.path.join(
-                                        sample_dir, "pca_pairplot.png"
-                                    )
-                                    create_pca_pairplot(
-                                        FEATURES,
-                                        FEATURE_NAMES_LOCAL,
-                                        ORIGINAL_SAMPLE,
-                                        combination_viz,
-                                        SAMPLE_ID,
-                                        ORIGINAL_SAMPLE_PREDICTED_CLASS,
-                                        TARGET_CLASS,
-                                        class_colors_list,
-                                        pca_pairplot_path,
-                                    )
-
-                                    # Calculate feature changes for pairwise evolution plot
-                                    # Get final counterfactual from last generation of first counterfactual
-                                    final_cf = None
-                                    if combination_viz["counterfactuals"]:
-                                        evolution_history = combination_viz[
-                                            "counterfactuals"
-                                        ][0].get("evolution_history", [])
-                                        if evolution_history:
-                                            final_cf = evolution_history[-1]
-
-                                    # Filter actionable features and calculate changes
-                                    actionable_features = [
-                                        f
-                                        for f in FEATURE_NAMES_LOCAL
-                                        if dict_non_actionable.get(f, "none")
-                                        != "no_change"
-                                    ]
-
-                                    feature_changes = {}
-                                    if final_cf:
-                                        for feat in actionable_features:
-                                            orig_val = ORIGINAL_SAMPLE.get(feat, 0)
-                                            cf_val = final_cf.get(feat, 0)
-                                            # Calculate absolute change
-                                            feature_changes[feat] = abs(
-                                                cf_val - orig_val
                                             )
 
-                                    # Sort features by change magnitude and filter non-zero changes
-                                    sorted_features = sorted(
-                                        feature_changes.items(),
-                                        key=lambda x: x[1],
-                                        reverse=True,
-                                    )
-                                    # Filter out features with zero or negligible change (< 0.001)
-                                    sorted_features_nonzero = [
-                                        (feat, change)
-                                        for feat, change in sorted_features
-                                        if change > 0.001
-                                    ]
+                                gen_df = pd.DataFrame(gen_rows)
+                                gen_df.to_csv(
+                                    os.path.join(
+                                        sample_dir,
+                                        "pca_generations.csv",
+                                    ),
+                                    index=False,
+                                )
 
-                                    print(
-                                        f"\nINFO: Feature changes ranked (most to least):"
-                                    )
-                                    for feat, change in sorted_features_nonzero:
-                                        print(f"  {feat}: {change:.4f}")
+                                # Save feature values for original, all generations, and final counterfactuals
+                                feature_rows = []
+                                # Add original sample
+                                orig_row = {
+                                    "cf_index": "original",
+                                    "generation": 0,
+                                    "predicted_class": ORIGINAL_SAMPLE_PREDICTED_CLASS,
+                                }
+                                orig_row.update(
+                                    {
+                                        f: ORIGINAL_SAMPLE[f]
+                                        for f in FEATURE_NAMES_LOCAL
+                                    }
+                                )
+                                feature_rows.append(orig_row)
 
-                                    # Select top 6 most changed features for pairwise matrix
-                                    max_features_for_pairwise = 6
-                                    features_to_plot = [
-                                        feat
-                                        for feat, _ in sorted_features_nonzero[
-                                            :max_features_for_pairwise
-                                        ]
-                                    ]
+                                for cf_idx, cf_data in enumerate(
+                                    combination_viz["counterfactuals"]
+                                ):
+                                    evolution_history = cf_data.get(
+                                        "evolution_history", []
+                                    )
+                                    if evolution_history:
+                                        for gen_idx, gen_sample in enumerate(
+                                            evolution_history
+                                        ):
+                                            # Predict class for this generation
+                                            gen_sample_df = pd.DataFrame(
+                                                [gen_sample]
+                                            )[FEATURE_NAMES_LOCAL]
+                                            gen_pred_class = int(
+                                                model.predict(gen_sample_df)[0]
+                                            )
 
-                                    # Create 4D visualization (pairwise scatter matrix) of feature evolution
-                                    pairwise_4d_path = os.path.join(
-                                        sample_dir, "feature_evolution_4d.png"
-                                    )
-                                    create_pairwise_feature_evolution_plot(
-                                        features_to_plot,
-                                        combination_viz,
-                                        ORIGINAL_SAMPLE,
-                                        FEATURE_NAMES_LOCAL,
-                                        model,
-                                        constraints,
-                                        ORIGINAL_SAMPLE_PREDICTED_CLASS,
-                                        TARGET_CLASS,
-                                        class_colors_list,
-                                        pairwise_4d_path,
-                                    )
+                                            gen_row = {
+                                                "cf_index": cf_idx,
+                                                "generation": gen_idx + 1,
+                                                "predicted_class": gen_pred_class,
+                                            }
+                                            gen_row.update(
+                                                {
+                                                    f: gen_sample.get(f, np.nan)
+                                                    for f in FEATURE_NAMES_LOCAL
+                                                }
+                                            )
+                                            feature_rows.append(gen_row)
 
-                                    # Save loadings
-                                    loadings = pca_local.components_.T * (
-                                        pca_local.explained_variance_**0.5
-                                    )
-                                    loadings_df = pd.DataFrame(
-                                        loadings,
-                                        index=FEATURE_NAMES_LOCAL,
-                                        columns=["pc1_loading", "pc2_loading"],
-                                    )
-                                    loadings_df.to_csv(
-                                        os.path.join(
-                                            sample_dir,
-                                            "pca_loadings.csv",
+                                feature_df = pd.DataFrame(feature_rows)
+                                feature_df.to_csv(
+                                    os.path.join(
+                                        sample_dir,
+                                        "feature_values_generations.csv",
+                                    ),
+                                    index=False,
+                                )
+
+                                # Note: pairplot and pca_pairplot are now generated per-CF
+                                # (moved to the per-CF loop)
+
+                                # Calculate feature changes for pairwise evolution plot
+                                # Get final counterfactual from last generation of first counterfactual
+                                final_cf = None
+                                if combination_viz["counterfactuals"]:
+                                    evolution_history = combination_viz[
+                                        "counterfactuals"
+                                    ][0].get("evolution_history", [])
+                                    if evolution_history:
+                                        final_cf = evolution_history[-1]
+
+                                # Filter actionable features and calculate changes
+                                actionable_features = [
+                                    f
+                                    for f in FEATURE_NAMES_LOCAL
+                                    if dict_non_actionable.get(f, "none")
+                                    != "no_change"
+                                ]
+
+                                feature_changes = {}
+                                if final_cf:
+                                    for feat in actionable_features:
+                                        orig_val = ORIGINAL_SAMPLE.get(feat, 0)
+                                        cf_val = final_cf.get(feat, 0)
+                                        # Calculate absolute change
+                                        feature_changes[feat] = abs(
+                                            cf_val - orig_val
                                         )
-                                    )
 
-                                except Exception as exc:
-                                    print(
-                                        f"ERROR: Failed to save PCA numeric data: {exc}"
+                                # Sort features by change magnitude and filter non-zero changes
+                                sorted_features = sorted(
+                                    feature_changes.items(),
+                                    key=lambda x: x[1],
+                                    reverse=True,
+                                )
+                                # Filter out features with zero or negligible change (< 0.001)
+                                sorted_features_nonzero = [
+                                    (feat, change)
+                                    for feat, change in sorted_features
+                                    if change > 0.001
+                                ]
+
+                                print(
+                                    f"\nINFO: Feature changes ranked (most to least):"
+                                )
+                                for feat, change in sorted_features_nonzero:
+                                    print(f"  {feat}: {change:.4f}")
+
+                                # Select top 6 most changed features for pairwise matrix
+                                max_features_for_pairwise = 6
+                                features_to_plot = [
+                                    feat
+                                    for feat, _ in sorted_features_nonzero[
+                                        :max_features_for_pairwise
+                                    ]
+                                ]
+
+                                # Create 4D visualization (pairwise scatter matrix) of feature evolution
+                                pairwise_4d_path = os.path.join(
+                                    sample_dir, "feature_evolution_4d.png"
+                                )
+                                create_pairwise_feature_evolution_plot(
+                                    features_to_plot,
+                                    combination_viz,
+                                    ORIGINAL_SAMPLE,
+                                    FEATURE_NAMES_LOCAL,
+                                    model,
+                                    constraints,
+                                    ORIGINAL_SAMPLE_PREDICTED_CLASS,
+                                    TARGET_CLASS,
+                                    class_colors_list,
+                                    pairwise_4d_path,
+                                )
+
+                                # Save loadings
+                                loadings = pca_local.components_.T * (
+                                    pca_local.explained_variance_**0.5
+                                )
+                                loadings_df = pd.DataFrame(
+                                    loadings,
+                                    index=FEATURE_NAMES_LOCAL,
+                                    columns=["pc1_loading", "pc2_loading"],
+                                )
+                                loadings_df.to_csv(
+                                    os.path.join(
+                                        sample_dir,
+                                        "pca_loadings.csv",
                                     )
-                                    traceback.print_exc()
+                                )
+
+                            except Exception as exc:
+                                print(
+                                    f"ERROR: Failed to save PCA numeric data: {exc}"
+                                )
+                                traceback.print_exc()
                     except Exception as exc:
                         print(f"ERROR: Failed saving visualization images: {exc}")
                         traceback.print_exc()
@@ -1430,12 +1506,7 @@ Final Results
                             "viz_combo/combination": str(combination_viz["label"]),
                         }
 
-                        if pairwise_fig:
-                            log_dict["visualizations/pairwise"] = wandb.Image(
-                                pairwise_fig
-                            )
-                        if pca_fig:
-                            log_dict["visualizations/pca"] = wandb.Image(pca_fig)
+                        # Note: pairwise, pairplot, and pca_pairplot are now logged per-CF
 
                         # Log 4D feature evolution plot
                         feature_4d_path = os.path.join(
@@ -1447,23 +1518,7 @@ Final Results
                                 wandb.Image(feature_4d_path)
                             )
 
-                        # Log seaborn pairplot
-                        pairplot_path = os.path.join(
-                            sample_dir, "pairplot.png"
-                        )
-                        if os.path.exists(pairplot_path):
-                            log_dict["visualizations/pairplot"] = wandb.Image(
-                                pairplot_path
-                            )
-
-                        # Log PCA pairplot
-                        pca_pairplot_path = os.path.join(
-                            sample_dir, "pca_pairplot.png"
-                        )
-                        if os.path.exists(pca_pairplot_path):
-                            log_dict["visualizations/pca_pairplot"] = wandb.Image(
-                                pca_pairplot_path
-                            )
+                        # Note: pairplot and pca_pairplot are now logged per-CF (not combination-level)
 
                         # Log CSV files as wandb Tables
                         pca_coords_path = os.path.join(
@@ -1509,10 +1564,10 @@ Final Results
 
             except Exception as exc:
                 print(
-                    f"WARNING: Combination-level visualization generation failed: {exc}"
+                    f"WARNING: Combination-level data processing failed: {exc}"
                 )
-                combination_viz["pairwise"] = None
-                combination_viz["pca"] = None
+                import traceback
+                traceback.print_exc()
 
     # Save visualizations data
     viz_filepath = os.path.join(sample_dir, "after_viz_generation.pkl")
