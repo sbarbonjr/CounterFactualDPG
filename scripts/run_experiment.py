@@ -144,6 +144,7 @@ from utils.experiment_status import (
 )
 from scripts.visualization_helpers import (
     create_feature_evolution_pairplot,
+    create_pca_pairplot,
 )
 
 # Config utilities moved to utils/config_manager.py
@@ -1310,254 +1311,20 @@ Final Results
                                     )
 
                                     # Create PCA pairplot (one PC per feature, max 5)
-                                    try:
-                                        import seaborn as sns
-                                        from sklearn.decomposition import (
-                                            PCA as PCA_pairplot,
-                                        )
-                                        from sklearn.preprocessing import (
-                                            StandardScaler as Scaler_pairplot,
-                                        )
-
-                                        # Determine number of PCs (one per feature, max 5)
-                                        n_pcs = min(5, len(FEATURE_NAMES_LOCAL))
-
-                                        if n_pcs >= 2:
-                                            print(
-                                                f"INFO: Creating PCA pairplot with {n_pcs} principal components..."
-                                            )
-
-                                            # Fit PCA on dataset
-                                            dataset_numeric = pd.DataFrame(
-                                                FEATURES, columns=FEATURE_NAMES_LOCAL
-                                            ).select_dtypes(include=[np.number])
-                                            scaler_pp = Scaler_pairplot()
-                                            dataset_scaled = scaler_pp.fit_transform(
-                                                dataset_numeric
-                                            )
-
-                                            pca_pp = PCA_pairplot(n_components=n_pcs)
-                                            dataset_pcs = pca_pp.fit_transform(
-                                                dataset_scaled
-                                            )
-
-                                            # Create PC column names
-                                            pc_names = [
-                                                f"PC{i + 1}" for i in range(n_pcs)
-                                            ]
-
-                                            # Dataset PCs
-                                            dataset_pc_df = pd.DataFrame(
-                                                dataset_pcs, columns=pc_names
-                                            )
-                                            dataset_pc_df["point_type"] = "Dataset"
-
-                                            # Original sample PCs
-                                            orig_numeric = pd.DataFrame(
-                                                [ORIGINAL_SAMPLE]
-                                            )[FEATURE_NAMES_LOCAL].select_dtypes(
-                                                include=[np.number]
-                                            )
-                                            orig_scaled = scaler_pp.transform(
-                                                orig_numeric
-                                            )
-                                            orig_pcs = pca_pp.transform(orig_scaled)
-                                            orig_pc_df = pd.DataFrame(
-                                                orig_pcs, columns=pc_names
-                                            )
-                                            orig_pc_df["point_type"] = "Original"
-
-                                            # Evolution and counterfactual PCs
-                                            evolution_pc_rows = []
-                                            cf_pc_rows = []
-
-                                            for rep_idx, rep in enumerate(
-                                                combination_viz["replication"]
-                                            ):
-                                                evolution_history = rep.get(
-                                                    "evolution_history", []
-                                                )
-                                                if evolution_history:
-                                                    for (
-                                                        gen_idx,
-                                                        gen_sample,
-                                                    ) in enumerate(evolution_history):
-                                                        gen_numeric = pd.DataFrame(
-                                                            [gen_sample]
-                                                        )[
-                                                            FEATURE_NAMES_LOCAL
-                                                        ].select_dtypes(
-                                                            include=[np.number]
-                                                        )
-                                                        gen_scaled = (
-                                                            scaler_pp.transform(
-                                                                gen_numeric
-                                                            )
-                                                        )
-                                                        gen_pcs = pca_pp.transform(
-                                                            gen_scaled
-                                                        )
-
-                                                        is_final = (
-                                                            gen_idx
-                                                            == len(evolution_history)
-                                                            - 1
-                                                        )
-                                                        pc_row = {
-                                                            pc_names[i]: gen_pcs[0, i]
-                                                            for i in range(n_pcs)
-                                                        }
-                                                        pc_row["point_type"] = (
-                                                            "Counterfactual"
-                                                            if is_final
-                                                            else "Evolution"
-                                                        )
-
-                                                        if is_final:
-                                                            cf_pc_rows.append(pc_row)
-                                                        else:
-                                                            evolution_pc_rows.append(
-                                                                pc_row
-                                                            )
-
-                                            evolution_pc_df = (
-                                                pd.DataFrame(evolution_pc_rows)
-                                                if evolution_pc_rows
-                                                else pd.DataFrame(
-                                                    columns=pc_names + ["point_type"]
-                                                )
-                                            )
-                                            cf_pc_df = (
-                                                pd.DataFrame(cf_pc_rows)
-                                                if cf_pc_rows
-                                                else pd.DataFrame(
-                                                    columns=pc_names + ["point_type"]
-                                                )
-                                            )
-
-                                            # Combine all data
-                                            combined_pc_df = pd.concat(
-                                                [
-                                                    dataset_pc_df,
-                                                    evolution_pc_df,
-                                                    orig_pc_df,
-                                                    cf_pc_df,
-                                                ],
-                                                ignore_index=True,
-                                            )
-
-                                            # Define colors
-                                            orig_class_color = class_colors_list[
-                                                ORIGINAL_SAMPLE_PREDICTED_CLASS
-                                                % len(class_colors_list)
-                                            ]
-                                            target_class_color = class_colors_list[
-                                                TARGET_CLASS % len(class_colors_list)
-                                            ]
-
-                                            # Define full palette and markers mapping
-                                            full_palette_pc = {
-                                                "Dataset": "lightgray",
-                                                "Evolution": "gray",
-                                                "Original": orig_class_color,
-                                                "Counterfactual": target_class_color,
-                                            }
-                                            full_markers_pc = {
-                                                "Dataset": "o",
-                                                "Evolution": ".",
-                                                "Original": "o",
-                                                "Counterfactual": "s",
-                                            }
-                                            full_hue_order_pc = [
-                                                "Dataset",
-                                                "Evolution",
-                                                "Original",
-                                                "Counterfactual",
-                                            ]
-
-                                            sns.set_style("whitegrid")
-
-                                            # Determine actual unique point types present in data
-                                            actual_point_types_pc = (
-                                                combined_pc_df["point_type"]
-                                                .unique()
-                                                .tolist()
-                                            )
-
-                                            # Filter hue_order, palette, and markers to only include actual values
-                                            hue_order_pc = [
-                                                h
-                                                for h in full_hue_order_pc
-                                                if h in actual_point_types_pc
-                                            ]
-                                            palette_pc = {
-                                                k: full_palette_pc[k]
-                                                for k in hue_order_pc
-                                            }
-                                            markers_pc = [
-                                                full_markers_pc[k] for k in hue_order_pc
-                                            ]
-
-                                            g_pc = sns.pairplot(
-                                                combined_pc_df,
-                                                hue="point_type",
-                                                hue_order=hue_order_pc,
-                                                palette=palette_pc,
-                                                markers=markers_pc,
-                                                diag_kind="kde",
-                                                plot_kws={"alpha": 0.6},
-                                                diag_kws={"alpha": 0.5, "linewidth": 2},
-                                                corner=False,
-                                                height=2.5,
-                                                aspect=1,
-                                            )
-
-                                            # Add explained variance to title
-                                            explained_var = (
-                                                pca_pp.explained_variance_ratio_
-                                            )
-                                            var_str = ", ".join(
-                                                [
-                                                    f"PC{i + 1}:{v:.1%}"
-                                                    for i, v in enumerate(explained_var)
-                                                ]
-                                            )
-
-                                            g_pc.fig.suptitle(
-                                                f"PCA Pairplot - Sample {SAMPLE_ID}\n"
-                                                f"Original (Class {ORIGINAL_SAMPLE_PREDICTED_CLASS}) → Counterfactual (Class {TARGET_CLASS})\n"
-                                                f"Explained Variance: {var_str}",
-                                                y=1.04,
-                                                fontsize=11,
-                                                weight="bold",
-                                            )
-
-                                            if g_pc._legend:
-                                                g_pc._legend.set_title("Point Type")
-
-                                            # Save the PCA pairplot
-                                            pca_pairplot_path = os.path.join(
-                                                sample_dir,
-                                                "pca_pairplot.png",
-                                            )
-                                            g_pc.savefig(
-                                                pca_pairplot_path,
-                                                bbox_inches="tight",
-                                                dpi=150,
-                                            )
-                                            plt.close(g_pc.fig)
-                                            print(
-                                                f"INFO: Successfully saved PCA pairplot to {pca_pairplot_path}"
-                                            )
-                                        else:
-                                            print(
-                                                f"INFO: Skipping PCA pairplot - not enough features for multiple PCs"
-                                            )
-                                    except Exception as exc:
-                                        print(
-                                            f"ERROR: Failed to create PCA pairplot: {exc}"
-                                        )
-                                        traceback.print_exc()
+                                    pca_pairplot_path = os.path.join(
+                                        sample_dir, "pca_pairplot.png"
+                                    )
+                                    create_pca_pairplot(
+                                        FEATURES,
+                                        FEATURE_NAMES_LOCAL,
+                                        ORIGINAL_SAMPLE,
+                                        combination_viz,
+                                        SAMPLE_ID,
+                                        ORIGINAL_SAMPLE_PREDICTED_CLASS,
+                                        TARGET_CLASS,
+                                        class_colors_list,
+                                        pca_pairplot_path,
+                                    )
 
                                     # Calculate feature changes and filter for visualization
                                     # 1. Get final counterfactual from last generation of first replication
