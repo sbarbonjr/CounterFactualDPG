@@ -1,3 +1,10 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
 import warnings
 # Suppress matplotlib tight_layout warnings which occur with complex multi-panel figures
 warnings.filterwarnings('ignore', message='.*tight_layout.*')
@@ -43,15 +50,6 @@ def plot_explainer_summary(explainer, original_sample, counterfactual):
     plt.tight_layout()
     plt.close(fig)
     return fig
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import seaborn as sns
-from matplotlib.lines import Line2D
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-from typing import Dict, List, Optional
 
 
 # Set larger font sizes globally
@@ -827,10 +825,6 @@ def plot_sample_and_counterfactual_heatmap(sample, class_sample, counterfactual,
 #plot_sample_and_counterfactual_heatmap(sample, class_sample,  counterfactual, class_counterfactual, restrictions)
 
 
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-
 def plot_pairwise_with_counterfactual_df(model, dataset, target, sample, counterfactual_df):
     """
     Plot pairwise plots of the dataset, highlighting the original sample and multiple counterfactuals using matplotlib.
@@ -907,12 +901,6 @@ def plot_pairwise_with_counterfactual_df(model, dataset, target, sample, counter
 # Example usage
 # Assuming you have a trained model, a dataset (as a DataFrame or array), target labels, original sample, and counterfactual_df
 #plot_pairwise_with_counterfactual_df(model, X, y, sample, counterfactuals_df)
-
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
 
 def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactuals_df, evolution_histories=None):
     """
