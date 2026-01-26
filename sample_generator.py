@@ -9,6 +9,13 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
 
+from constants import (
+    MUTATION_EPSILON,
+    SAMPLE_GEN_RANGE_SCALE,
+    SAMPLE_GEN_ESCAPE_BIAS,
+    ACTIONABILITY_RANGE_ADJUST,
+)
+
 
 class SampleGenerator:
     """
@@ -172,13 +179,13 @@ class SampleGenerator:
                     min_value = max(min_value, original_value)
                     if min_value > max_value:
                         max_value = (
-                            min_value + min_value * 0.1
+                            min_value + min_value * ACTIONABILITY_RANGE_ADJUST
                         )  # Adjust to ensure valid range
                 elif actionability == "non_increasing":
                     max_value = min(max_value, original_value)
                     if max_value < min_value:
                         min_value = (
-                            max_value + max_value * 0.1
+                            max_value + max_value * ACTIONABILITY_RANGE_ADJUST
                         )  # Adjust to ensure valid range
                 elif actionability == "no_change":
                     adjusted_sample[feature] = original_value
@@ -186,14 +193,18 @@ class SampleGenerator:
 
             # If no explicit min/max constraints, use range around original value
             if min_value == -np.inf:
-                min_value = original_value - 0.5 * (abs(original_value) + 1.0)
+                min_value = original_value - SAMPLE_GEN_RANGE_SCALE * (
+                    abs(original_value) + 1.0
+                )
             if max_value == np.inf:
-                max_value = original_value + 0.5 * (abs(original_value) + 1.0)
+                max_value = original_value + SAMPLE_GEN_RANGE_SCALE * (
+                    abs(original_value) + 1.0
+                )
 
             # Determine target value based on escape direction and dual-boundary awareness
             # Key insight: we need to move FROM original bounds TO target bounds
             # Use a small epsilon to step just outside origin bounds
-            epsilon = 0.01
+            epsilon = MUTATION_EPSILON
 
             if escape_dir == "increase":
                 # Target requires higher values than origin allows
@@ -212,7 +223,7 @@ class SampleGenerator:
                 else:
                     # Bias toward upper bound to escape original class
                     target_value = min_value + (max_value - min_value) * (
-                        0.5 + 0.3 * self.escape_pressure
+                        0.5 + SAMPLE_GEN_ESCAPE_BIAS * self.escape_pressure
                     )
 
             elif escape_dir == "decrease":
@@ -236,7 +247,7 @@ class SampleGenerator:
                 else:
                     # Bias toward lower bound to escape original class
                     target_value = min_value + (max_value - min_value) * (
-                        0.5 - 0.3 * self.escape_pressure
+                        0.5 - SAMPLE_GEN_ESCAPE_BIAS * self.escape_pressure
                     )
             else:
                 # Default: keep original value if within bounds, otherwise use midpoint

@@ -8,6 +8,17 @@ functionality for counterfactual generation.
 import numpy as np
 from deap import creator
 
+from constants import (
+    MUTATION_EPSILON,
+    MUTATION_RANGE_SCALE_ACTIONABLE,
+    MUTATION_RANGE_SCALE_GENERAL,
+    MUTATION_RANGE_SCALE_BOUNDARY_PUSH,
+    MUTATION_RANGE_DEFAULT,
+    MUTATION_RANGE_MIN,
+    MUTATION_RATE_BOOST_NON_OVERLAPPING,
+    FEATURE_VALUE_PRECISION,
+)
+
 
 class MutationStrategy:
     """
@@ -130,7 +141,9 @@ class MutationStrategy:
                 and norm_feature in non_overlapping_features
             ):
                 # Boost mutation rate for features with clear escape paths
-                effective_mutation_rate = min(1.0, mutation_rate * 1.5)
+                effective_mutation_rate = min(
+                    1.0, mutation_rate * MUTATION_RATE_BOOST_NON_OVERLAPPING
+                )
 
             if np.random.rand() < effective_mutation_rate:
                 # Get target constraint boundaries for this feature
@@ -175,20 +188,24 @@ class MutationStrategy:
                         # Only allow increase - use escape pressure to bias toward target upper bound
                         if target_max is not None:
                             mutation_range = min(
-                                0.5, (target_max - individual[feature]) * 0.1
+                                MUTATION_RANGE_DEFAULT,
+                                (target_max - individual[feature])
+                                * MUTATION_RANGE_SCALE_ACTIONABLE,
                             )
                         else:
-                            mutation_range = 0.5
+                            mutation_range = MUTATION_RANGE_DEFAULT
                         individual[feature] += np.random.uniform(0, mutation_range)
 
                     elif actionability == "non_increasing":
                         # Only allow decrease - use escape pressure to bias toward target lower bound
                         if target_min is not None:
                             mutation_range = min(
-                                0.5, (individual[feature] - target_min) * 0.1
+                                MUTATION_RANGE_DEFAULT,
+                                (individual[feature] - target_min)
+                                * MUTATION_RANGE_SCALE_ACTIONABLE,
                             )
                         else:
-                            mutation_range = 0.5
+                            mutation_range = MUTATION_RANGE_DEFAULT
                         individual[feature] += np.random.uniform(-mutation_range, 0)
 
                     elif actionability == "no_change":
@@ -221,7 +238,9 @@ class MutationStrategy:
                     individual[feature] = min(target_max, individual[feature])
 
                 # Ensure non-negative values and round
-                individual[feature] = np.round(max(0, individual[feature]), 2)
+                individual[feature] = np.round(
+                    max(0, individual[feature]), FEATURE_VALUE_PRECISION
+                )
 
         return (individual,)
 
@@ -256,7 +275,7 @@ class MutationStrategy:
             float: Mutated value
         """
         escape_pressure = self.escape_pressure
-        epsilon = 0.01  # Small step for boundary crossing
+        epsilon = MUTATION_EPSILON  # Small step for boundary crossing
 
         # Calculate mutation based on escape direction and pressure
         if escape_dir == "increase":
@@ -273,28 +292,35 @@ class MutationStrategy:
                 if current_value <= orig_max:
                     # Still in/below original bounds - push toward the boundary
                     target_point = orig_max + epsilon
-                    range_to_target = max(0.1, target_point - current_value)
-                    mutation_range = max(0.1, range_to_target * 0.2)
+                    range_to_target = max(MUTATION_RANGE_MIN, target_point - current_value)
+                    mutation_range = max(
+                        MUTATION_RANGE_MIN, range_to_target * MUTATION_RANGE_SCALE_BOUNDARY_PUSH
+                    )
                     return current_value + np.random.uniform(0, mutation_range)
                 else:
                     # Already past origin's max - continue into target range
                     if target_max is not None:
-                        mutation_range = max(0.1, (target_max - current_value) * 0.15)
+                        mutation_range = max(
+                            MUTATION_RANGE_MIN,
+                            (target_max - current_value) * MUTATION_RANGE_SCALE_GENERAL,
+                        )
                     else:
-                        mutation_range = 0.5
+                        mutation_range = MUTATION_RANGE_DEFAULT
                     return current_value + np.random.uniform(0, mutation_range)
             elif target_min is not None:
                 target_point = target_min
-                range_to_target = max(0.1, target_point - current_value)
-                mutation_range = max(0.1, range_to_target * 0.15)
+                range_to_target = max(MUTATION_RANGE_MIN, target_point - current_value)
+                mutation_range = max(MUTATION_RANGE_MIN, range_to_target * MUTATION_RANGE_SCALE_GENERAL)
                 # Bias toward increase
                 return current_value + np.random.uniform(0, mutation_range)
             elif target_max is not None:
                 # Only upper bound - move toward middle of range below it
-                mutation_range = max(0.1, (target_max - current_value) * 0.15)
+                mutation_range = max(
+                    MUTATION_RANGE_MIN, (target_max - current_value) * MUTATION_RANGE_SCALE_GENERAL
+                )
                 return current_value + np.random.uniform(0, mutation_range)
             else:
-                return current_value + np.random.uniform(0, 0.5)
+                return current_value + np.random.uniform(0, MUTATION_RANGE_DEFAULT)
 
         elif escape_dir == "decrease":
             # Must decrease to escape original and reach target
@@ -310,60 +336,73 @@ class MutationStrategy:
                 if current_value >= orig_min:
                     # Still in/above original bounds - push toward the boundary
                     target_point = orig_min - epsilon
-                    range_to_target = max(0.1, current_value - target_point)
-                    mutation_range = max(0.1, range_to_target * 0.2)
+                    range_to_target = max(MUTATION_RANGE_MIN, current_value - target_point)
+                    mutation_range = max(
+                        MUTATION_RANGE_MIN, range_to_target * MUTATION_RANGE_SCALE_BOUNDARY_PUSH
+                    )
                     return current_value - np.random.uniform(0, mutation_range)
                 else:
                     # Already past origin's min - continue into target range
                     if target_min is not None:
-                        mutation_range = max(0.1, (current_value - target_min) * 0.15)
+                        mutation_range = max(
+                            MUTATION_RANGE_MIN,
+                            (current_value - target_min) * MUTATION_RANGE_SCALE_GENERAL,
+                        )
                     else:
-                        mutation_range = 0.5
+                        mutation_range = MUTATION_RANGE_DEFAULT
                     return current_value - np.random.uniform(0, mutation_range)
             elif target_max is not None:
                 target_point = target_max
-                range_to_target = max(0.1, current_value - target_point)
-                mutation_range = max(0.1, range_to_target * 0.15)
+                range_to_target = max(MUTATION_RANGE_MIN, current_value - target_point)
+                mutation_range = max(MUTATION_RANGE_MIN, range_to_target * MUTATION_RANGE_SCALE_GENERAL)
                 # Bias toward decrease
                 return current_value - np.random.uniform(0, mutation_range)
             elif target_min is not None:
                 # Only lower bound - move toward middle of range above it
-                mutation_range = max(0.1, (current_value - target_min) * 0.15)
+                mutation_range = max(
+                    MUTATION_RANGE_MIN, (current_value - target_min) * MUTATION_RANGE_SCALE_GENERAL
+                )
                 return current_value - np.random.uniform(0, mutation_range)
             else:
-                return current_value - np.random.uniform(0, 0.5)
+                return current_value - np.random.uniform(0, MUTATION_RANGE_DEFAULT)
 
         else:  # 'both' - no clear escape direction
             # Use standard bounded mutation with bias based on escape_pressure
             if target_min is not None and target_max is not None:
                 range_size = target_max - target_min
-                mutation_range = range_size * 0.1
+                mutation_range = range_size * MUTATION_RANGE_SCALE_ACTIONABLE
 
                 # Calculate center of target range
                 target_center = (target_min + target_max) / 2
 
                 # Bias mutation toward target center based on escape_pressure
-                bias = (target_center - current_value) * escape_pressure * 0.1
+                bias = (target_center - current_value) * escape_pressure * MUTATION_RANGE_SCALE_ACTIONABLE
                 mutation = np.random.uniform(-mutation_range, mutation_range) + bias
                 return current_value + mutation
 
             elif target_min is not None:
                 # Only min bound - prefer staying above it
-                mutation_range = max(0.5, (current_value - target_min) * 0.1)
+                mutation_range = max(
+                    MUTATION_RANGE_DEFAULT, (current_value - target_min) * MUTATION_RANGE_SCALE_ACTIONABLE
+                )
                 return current_value + np.random.uniform(
                     -mutation_range * 0.3, mutation_range
                 )
 
             elif target_max is not None:
                 # Only max bound - prefer staying below it
-                mutation_range = max(0.5, (target_max - current_value) * 0.1)
+                mutation_range = max(
+                    MUTATION_RANGE_DEFAULT, (target_max - current_value) * MUTATION_RANGE_SCALE_ACTIONABLE
+                )
                 return current_value + np.random.uniform(
                     -mutation_range, mutation_range * 0.3
                 )
 
             else:
                 # No constraints - use default mutation
-                return current_value + np.random.uniform(-0.5, 0.5)
+                return current_value + np.random.uniform(
+                    -MUTATION_RANGE_DEFAULT, MUTATION_RANGE_DEFAULT
+                )
 
     def crossover_dict(self, ind1, ind2, indpb, sample=None):
         """Custom crossover operator for dict-based individuals.

@@ -9,6 +9,17 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import euclidean, cityblock, cosine
 
+from constants import (
+    INVALID_FITNESS,
+    CLASS_PENALTY_SOFT_BASE,
+    CLASS_PENALTY_HARD_BOOST,
+    BOUNDARY_PENALTY_THRESHOLD,
+    BOUNDARY_PENALTY_VALUE,
+    CONSTRAINT_VIOLATION_MULTIPLIER,
+    DEFAULT_BOUNDARY_DISTANCE,
+    FITNESS_SHARING_BASE_SIGMA,
+)
+
 
 class FitnessCalculator:
     """
@@ -209,7 +220,7 @@ class FitnessCalculator:
             return boundary_distance
         except:
             # Fallback if model doesn't support predict_proba
-            return 0.05
+            return DEFAULT_BOUNDARY_DISTANCE
 
     def calculate_fitness(
         self,
@@ -243,8 +254,6 @@ class FitnessCalculator:
         Returns:
             float: The fitness score for the individual (lower is better).
         """
-        INVALID_FITNESS = 1e6  # Large penalty for invalid samples
-
         # Convert individual feature values to a numpy array
         features = np.array([individual[feature] for feature in sample.keys()]).reshape(
             1, -1
@@ -283,11 +292,11 @@ class FitnessCalculator:
             # Soft class penalty: penalize low probability for target class
             # Range: 0 (target_prob=1) to large value (target_prob=0)
             # Use exponential to strongly penalize low probabilities
-            class_penalty = 100.0 * (1.0 - target_prob) ** 2
+            class_penalty = CLASS_PENALTY_SOFT_BASE * (1.0 - target_prob) ** 2
 
             # Additional hard penalty if not predicting target class
             if predicted_class != target_class:
-                class_penalty += 50.0  # Smaller than before, combined with soft penalty
+                class_penalty += CLASS_PENALTY_HARD_BOOST
 
         except Exception:
             # Fallback: use hard prediction
@@ -350,7 +359,11 @@ class FitnessCalculator:
                 line_bonus *= scale_factor
 
             # Penalty for being too far from boundary (only if not yet predicting target)
-            boundary_penalty = 30.0 if dist_line > 0.1 and class_penalty > 0 else 0.0
+            boundary_penalty = (
+                BOUNDARY_PENALTY_VALUE
+                if dist_line > BOUNDARY_PENALTY_THRESHOLD and class_penalty > 0
+                else 0.0
+            )
 
             # Total fitness (lower is better, so we subtract bonuses)
             fitness = (
@@ -362,7 +375,7 @@ class FitnessCalculator:
             # Dynamic sigma_share: scale with sqrt(n_features) to account for dimensionality
             n_features = len(individual)
             sigma_share = max(
-                1.0, np.sqrt(n_features)
+                FITNESS_SHARING_BASE_SIGMA, np.sqrt(n_features)
             )  # Scale sharing radius with dimensionality
             niche_count = 1.0  # Start at 1 (counting self)
 
@@ -385,8 +398,6 @@ class FitnessCalculator:
 
         # Additional penalty for constraint violations
         if not is_valid_constraint:
-            fitness *= (
-                2.0  # Reduced from 5.0 - constraints are already penalized in base
-            )
+            fitness *= CONSTRAINT_VIOLATION_MULTIPLIER
 
         return fitness

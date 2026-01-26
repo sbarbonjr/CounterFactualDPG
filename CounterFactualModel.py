@@ -10,6 +10,7 @@ from constraint_validator import ConstraintValidator
 from fitness_calculator import FitnessCalculator
 from mutation_strategy import MutationStrategy
 from sample_generator import SampleGenerator
+from constants import INVALID_FITNESS
 
 
 class CounterFactualModel:
@@ -562,8 +563,8 @@ class CounterFactualModel:
         )
 
         # Setup statistics
-        # Define INVALID_FITNESS threshold for filtering statistics
-        INVALID_FITNESS = 1e6
+        # Use INVALID_FITNESS threshold for filtering statistics
+        # (imported from constants module)
         stats = tools.Statistics(lambda ind: ind.fitness.values)
         stats.register(
             "avg",
@@ -809,8 +810,8 @@ class CounterFactualModel:
         self.hof_evolution_histories = hof_evolution_histories
 
         # Return the best individuals found
-        # Check for both np.inf and INVALID_FITNESS (1e6) to detect failed counterfactuals
-        INVALID_FITNESS = 1e6
+        # Check for both np.inf and INVALID_FITNESS to detect failed counterfactuals
+        # (INVALID_FITNESS imported from constants module)
         valid_counterfactuals = []
         valid_cf_hof_indices = []  # Track which HOF indices correspond to valid CFs
 
