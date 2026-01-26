@@ -927,90 +927,129 @@ class GeneticAlgorithmRunner:
         """
         Validate counterfactuals and build evolution histories.
         
-        Uses DistanceBasedHOF which ranks by distance to original (not total fitness with bonuses).
-        This ensures we return the truly closest valid CFs.
+        Uses GREEDY DIVERSE SELECTION to balance:
+        - Proximity: CFs should be close to original sample
+        - Diversity: CFs should be different from each other
         
-        Since DistanceBasedHOF already validates prediction and margin, we can use
-        its items directly with minimal re-validation.
+        Algorithm:
+        1. Always pick the closest valid CF first
+        2. For subsequent CFs, use MMR-style scoring:
+           score = diversity_weight * min_dist_to_selected - proximity_weight * dist_to_original
+        
+        This ensures we get the closest CF plus diverse alternatives.
         """
         feature_names = list(sample.keys())
         original_features = self._original_features
         
+        # Tunable parameter: how much to weight diversity vs proximity
+        # Higher diversity_lambda = more spread out CFs
+        # Lower diversity_lambda = CFs closer to original but more similar
+        diversity_lambda = 0.6  # 60% diversity, 40% proximity for subsequent selections
+        
         if self.verbose:
-            print("\n=== CF Selection from Distance-Based HOF ===")
+            print("\n=== CF Selection (Greedy Diverse) ===")
             print(f"Requested: {num_best_results} CFs")
             print(f"Available in DistanceBasedHOF: {len(hof_obj)}")
-            print(f"Available in best_minimal_cfs: {len(self.best_minimal_cfs)}")
+            print(f"Diversity lambda: {diversity_lambda}")
+        
+        # Build candidate pool from DistanceBasedHOF
+        candidates = []
+        for distance, ind in hof_obj.items:
+            cf_dict = dict(ind)
+            cf_array = np.array([cf_dict[f] for f in feature_names])
+            candidates.append({
+                'cf': cf_dict,
+                'array': cf_array,
+                'distance': distance,
+            })
+        
+        # Also add from best_minimal_cfs as backup
+        for minimal_cf in self.best_minimal_cfs:
+            cf_dict = minimal_cf['individual']
+            cf_array = np.array([cf_dict[f] for f in feature_names])
+            
+            # Check if already in candidates (avoid duplicates)
+            is_dup = False
+            for cand in candidates:
+                if np.allclose(cf_array, cand['array'], atol=0.01):
+                    is_dup = True
+                    break
+            if not is_dup:
+                candidates.append({
+                    'cf': cf_dict,
+                    'array': cf_array,
+                    'distance': minimal_cf['distance'],
+                })
+        
+        if self.verbose:
+            print(f"Total candidate pool: {len(candidates)}")
         
         final_counterfactuals = []
+        selected_arrays = []
         
-        # DistanceBasedHOF stores (distance, individual) tuples sorted by distance
-        # The individuals are already validated for target class prediction
-        for i, (distance, ind) in enumerate(hof_obj.items):
-            if len(final_counterfactuals) >= num_best_results:
-                break
-            
-            cf_dict = dict(ind)
-            
-            # Check for duplicates
-            cf_array = np.array([cf_dict[f] for f in feature_names])
-            is_duplicate = False
-            for existing in final_counterfactuals:
-                existing_array = np.array([existing[f] for f in feature_names])
-                if np.allclose(cf_array, existing_array, atol=0.01):
-                    is_duplicate = True
-                    break
-            
-            if is_duplicate:
-                continue
-            
-            final_counterfactuals.append(cf_dict)
+        # STEP 1: Always pick the closest CF first
+        if candidates:
+            # Sort by distance and pick closest
+            candidates.sort(key=lambda x: x['distance'])
+            closest = candidates[0]
+            final_counterfactuals.append(closest['cf'])
+            selected_arrays.append(closest['array'])
+            candidates.remove(closest)
             
             if self.verbose:
-                print(f"  [CF #{len(final_counterfactuals)}] Distance={distance:.4f}")
+                print(f"  [CF #1] Closest: distance={closest['distance']:.4f}")
         
-        # If DistanceBasedHOF doesn't have enough, fall back to best_minimal_cfs
-        if len(final_counterfactuals) < num_best_results:
-            if self.verbose:
-                print(f"\n  Filling remaining from best_minimal_cfs...")
+        # STEP 2: Greedy diverse selection for remaining CFs
+        while len(final_counterfactuals) < num_best_results and candidates:
+            best_candidate = None
+            best_score = float('-inf')
             
-            for minimal_cf in self.best_minimal_cfs:
-                if len(final_counterfactuals) >= num_best_results:
-                    break
-                
-                cf_dict = minimal_cf['individual']
-                cf_distance = minimal_cf['distance']
-                
-                # Check for duplicates
-                cf_array = np.array([cf_dict[f] for f in feature_names])
-                is_duplicate = False
-                for existing in final_counterfactuals:
-                    existing_array = np.array([existing[f] for f in feature_names])
-                    if np.allclose(cf_array, existing_array, atol=0.01):
-                        is_duplicate = True
+            for cand in candidates:
+                # Skip near-duplicates of already selected
+                is_dup = False
+                for sel_arr in selected_arrays:
+                    if np.allclose(cand['array'], sel_arr, atol=0.01):
+                        is_dup = True
                         break
-                
-                if is_duplicate:
+                if is_dup:
                     continue
                 
-                # Validate prediction
-                features = cf_array.reshape(1, -1)
-                try:
-                    if self.feature_names is not None:
-                        features_df = pd.DataFrame(features, columns=self.feature_names)
-                        predicted_class = self.model.predict(features_df)[0]
-                    else:
-                        predicted_class = self.model.predict(features)[0]
-                    
-                    if predicted_class != target_class:
-                        continue
-                except Exception:
-                    continue
+                # Calculate minimum distance to already selected CFs (diversity)
+                min_dist_to_selected = float('inf')
+                for sel_arr in selected_arrays:
+                    dist = np.linalg.norm(cand['array'] - sel_arr)
+                    min_dist_to_selected = min(min_dist_to_selected, dist)
                 
-                final_counterfactuals.append(cf_dict)
+                # MMR-style score: balance diversity and proximity
+                # Normalize both terms to similar scales
+                # diversity term: higher is better (more different from selected)
+                # proximity term: lower distance is better (closer to original)
+                diversity_term = min_dist_to_selected
+                proximity_term = cand['distance']
+                
+                # Score: maximize diversity, minimize distance to original
+                score = diversity_lambda * diversity_term - (1 - diversity_lambda) * proximity_term
+                
+                if score > best_score:
+                    best_score = score
+                    best_candidate = cand
+            
+            if best_candidate:
+                final_counterfactuals.append(best_candidate['cf'])
+                selected_arrays.append(best_candidate['array'])
+                candidates.remove(best_candidate)
                 
                 if self.verbose:
-                    print(f"  [FALLBACK CF #{len(final_counterfactuals)}] Distance={cf_distance:.4f}")
+                    # Calculate diversity for logging
+                    min_div = float('inf')
+                    for sel_arr in selected_arrays[:-1]:
+                        d = np.linalg.norm(best_candidate['array'] - sel_arr)
+                        min_div = min(min_div, d)
+                    print(f"  [CF #{len(final_counterfactuals)}] Distance={best_candidate['distance']:.4f}, "
+                          f"MinDivFromSelected={min_div:.4f}, Score={best_score:.4f}")
+            else:
+                # No more valid candidates
+                break
         
         # Log final summary
         if self.verbose:
@@ -1023,7 +1062,16 @@ class GeneticAlgorithmRunner:
                     cf_array = np.array([cf[f] for f in feature_names])
                     dist = np.linalg.norm(cf_array - original_features)
                     distances.append(dist)
-                print(f"Final CF distances: min={min(distances):.4f}, max={max(distances):.4f}, avg={np.mean(distances):.4f}")
+                print(f"Distance to original: min={min(distances):.4f}, max={max(distances):.4f}, avg={np.mean(distances):.4f}")
+                
+                # Calculate pairwise diversity
+                if len(final_counterfactuals) > 1:
+                    diversities = []
+                    arrays = [np.array([cf[f] for f in feature_names]) for cf in final_counterfactuals]
+                    for i in range(len(arrays)):
+                        for j in range(i + 1, len(arrays)):
+                            diversities.append(np.linalg.norm(arrays[i] - arrays[j]))
+                    print(f"Pairwise diversity: min={min(diversities):.4f}, max={max(diversities):.4f}, avg={np.mean(diversities):.4f}")
         
         # Build per-CF evolution histories (simplified)
         self.per_cf_evolution_histories = [list(self.evolution_history) for _ in final_counterfactuals]
