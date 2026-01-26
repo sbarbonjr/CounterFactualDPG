@@ -520,7 +520,7 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
                 # Determine vertical offset based on class
                 y_offset = -width/2 if class_idx == predicted_class else width/2
                 
-                for i, feature in enumerate(feature_list):
+                for i, feature in enumerate(feature_list_filtered):
                     # Try to match feature name - be more flexible with matching
                     feature_key = None
                     feature_normalized = feature.replace(' (cm)', '').replace('_', ' ').strip().lower()
