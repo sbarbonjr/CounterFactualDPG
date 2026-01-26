@@ -11,9 +11,10 @@ excluded_datasets:
  - isolet
   # - car_eval_4
   # - german_credit
-  # - abalone
+  # - abalone # hangs on dice
   # - abalone_19
   # - breast_cancer_wisconsin
+  # - quality_control_dataset # hangs on dice
 
 # Data defaults
 data:
