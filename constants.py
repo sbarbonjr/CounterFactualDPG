@@ -97,3 +97,15 @@ DEFAULT_MUTATION_RATE = 0.8
 
 # Decimal places for rounding feature values after mutation
 FEATURE_VALUE_PRECISION = 2
+
+# ============================================================================
+# Unconstrained Feature Penalty Constants
+# ============================================================================
+
+# Penalty multiplier for changing features without target class constraints
+# Higher values make unconstrained feature changes more costly (changed as last resort)
+UNCONSTRAINED_CHANGE_PENALTY_FACTOR = 2.0
+
+# Mutation rate reduction for unconstrained features
+# Lower values reduce probability of mutating unconstrained features
+UNCONSTRAINED_MUTATION_RATE_FACTOR = 0.3

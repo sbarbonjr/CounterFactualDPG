@@ -25,6 +25,7 @@ class CounterFactualModel:
         escape_pressure=0.5,
         prioritize_non_overlapping=True,
         max_bonus_cap=50.0,
+        unconstrained_penalty_factor=2.0,
         X_train=None,
         y_train=None,
         min_probability_margin=0.001,
@@ -49,6 +50,8 @@ class CounterFactualModel:
             escape_pressure (float): Balance between escaping original (1.0) vs approaching target (0.0).
             prioritize_non_overlapping (bool): Prioritize mutating features with non-overlapping boundaries.
             max_bonus_cap (float): Maximum cap for diversity/repulsion bonuses to prevent unbounded negative fitness.
+            unconstrained_penalty_factor (float): Penalty multiplier for changing features without target constraints.
+                Higher values (e.g., 2.0-3.0) make unconstrained features change as last resort.
             X_train (DataFrame): Training data features for nearest neighbor fallback.
             y_train (Series): Training data labels for nearest neighbor fallback.
             min_probability_margin (float): Minimum margin the target class probability must exceed the
@@ -100,6 +103,7 @@ class CounterFactualModel:
             constraints_factor=constraints_factor,
             original_escape_weight=original_escape_weight,
             max_bonus_cap=max_bonus_cap,
+            unconstrained_penalty_factor=unconstrained_penalty_factor,
             constraint_validator=self.constraint_validator,
             boundary_analyzer=self.boundary_analyzer,
         )

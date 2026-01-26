@@ -18,6 +18,7 @@ from constants import (
     CONSTRAINT_VIOLATION_MULTIPLIER,
     DEFAULT_BOUNDARY_DISTANCE,
     FITNESS_SHARING_BASE_SIGMA,
+    UNCONSTRAINED_CHANGE_PENALTY_FACTOR,
 )
 
 
@@ -38,6 +39,7 @@ class FitnessCalculator:
         constraints_factor=3.0,
         original_escape_weight=2.0,
         max_bonus_cap=50.0,
+        unconstrained_penalty_factor=UNCONSTRAINED_CHANGE_PENALTY_FACTOR,
         constraint_validator=None,
         boundary_analyzer=None,
     ):
@@ -55,6 +57,7 @@ class FitnessCalculator:
             constraints_factor (float): Weight for constraint violation component.
             original_escape_weight (float): Weight for penalizing staying within original class bounds.
             max_bonus_cap (float): Maximum cap for diversity/repulsion bonuses.
+            unconstrained_penalty_factor (float): Penalty multiplier for changing features without target constraints.
             constraint_validator: ConstraintValidator instance for validation.
             boundary_analyzer: BoundaryAnalyzer instance for escape penalty calculation.
         """
@@ -68,6 +71,7 @@ class FitnessCalculator:
         self.constraints_factor = constraints_factor
         self.original_escape_weight = original_escape_weight
         self.max_bonus_cap = max_bonus_cap
+        self.unconstrained_penalty_factor = unconstrained_penalty_factor
         self.constraint_validator = constraint_validator
         self.boundary_analyzer = boundary_analyzer
 
@@ -140,6 +144,89 @@ class FitnessCalculator:
 
         # Return ratio of changed features
         return changed_features / len(feature_names)
+
+    def _get_target_constrained_features(self, target_class, constraints):
+        """
+        Get set of normalized feature names that have constraints in the target class.
+
+        Args:
+            target_class (int): The target class.
+            constraints (dict): Constraints dictionary.
+
+        Returns:
+            set: Set of normalized feature names with target constraints.
+        """
+        if not constraints or target_class is None:
+            return set()
+
+        constrained_features = set()
+        target_constraints = constraints.get(f"Class {target_class}", [])
+
+        for constraint in target_constraints:
+            feature_name = constraint.get("feature", "")
+            if feature_name and self.boundary_analyzer:
+                norm_name = self.boundary_analyzer._normalize_feature_name(feature_name)
+                constrained_features.add(norm_name)
+
+        return constrained_features
+
+    def calculate_unconstrained_change_penalty(
+        self, individual, sample, target_class, constraints
+    ):
+        """
+        Calculate penalty for changing features that don't have constraints in the target class.
+        Features without target constraints should be changed as a last resort.
+
+        Args:
+            individual (dict): The counterfactual candidate.
+            sample (dict): The original sample.
+            target_class (int): The target class.
+            constraints (dict): Constraints dictionary.
+
+        Returns:
+            float: Penalty score based on unconstrained feature changes.
+        """
+        if not constraints or target_class is None:
+            return 0.0
+
+        # Get features that have constraints in target class
+        constrained_features = self._get_target_constrained_features(
+            target_class, constraints
+        )
+
+        if not constrained_features:
+            # No constraints defined - no penalty
+            return 0.0
+
+        # Calculate weighted penalty for feature changes
+        penalty = 0.0
+        total_features = 0
+
+        for feature, cf_value in individual.items():
+            orig_value = sample.get(feature, cf_value)
+            total_features += 1
+
+            # Check if feature changed
+            if cf_value != orig_value:
+                # Normalize feature name for comparison
+                norm_feature = (
+                    self.boundary_analyzer._normalize_feature_name(feature)
+                    if self.boundary_analyzer
+                    else feature.lower()
+                )
+
+                if norm_feature not in constrained_features:
+                    # Feature has no target constraint - apply higher penalty
+                    # Use magnitude of change for smoother gradient
+                    change_magnitude = abs(cf_value - orig_value)
+                    penalty += change_magnitude
+                else:
+                    # Feature has target constraint - standard penalty
+                    change_magnitude = abs(cf_value - orig_value)
+                    penalty += change_magnitude / self.unconstrained_penalty_factor
+
+        # Normalize by number of features to keep penalty scale consistent
+        return penalty / total_features if total_features > 0 else 0.0
 
     def individual_diversity(self, individual, population):
         """
@@ -314,11 +401,26 @@ class FitnessCalculator:
         )
         sparsity_score = self.calculate_sparsity(sample, individual)
 
+        # Calculate penalty for changing unconstrained features
+        unconstrained_penalty = 0.0
+        if (
+            self.unconstrained_penalty_factor > 0
+            and self.constraint_validator
+            and target_class is not None
+        ):
+            unconstrained_penalty = self.calculate_unconstrained_change_penalty(
+                individual,
+                sample,
+                target_class,
+                self.constraint_validator.constraints,
+            )
+
         # Base fitness (minimize distance and sparsity, penalize constraint violations and wrong class)
         base_fitness = (
             self.distance_factor * distance_score
             + self.sparsity_factor * sparsity_score
             + self.constraints_factor * penalty_constraints
+            + self.unconstrained_penalty_factor * unconstrained_penalty
             + class_penalty
         )
 

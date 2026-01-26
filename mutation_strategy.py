@@ -17,6 +17,7 @@ from constants import (
     MUTATION_RANGE_MIN,
     MUTATION_RATE_BOOST_NON_OVERLAPPING,
     FEATURE_VALUE_PRECISION,
+    UNCONSTRAINED_MUTATION_RATE_FACTOR,
 )
 
 
@@ -131,6 +132,14 @@ class MutationStrategy:
             )
             escape_directions = boundary_analysis.get("escape_direction", {})
 
+        # Identify features with target class constraints
+        target_constrained_features = set()
+        if target_class is not None and target_constraints:
+            for constraint in target_constraints:
+                feature_name = constraint.get("feature", "")
+                if feature_name:
+                    target_constrained_features.add(self._normalize_feature_name(feature_name))
+
         for feature in feature_names:
             norm_feature = self._normalize_feature_name(feature)
 
@@ -144,6 +153,10 @@ class MutationStrategy:
                 effective_mutation_rate = min(
                     1.0, mutation_rate * MUTATION_RATE_BOOST_NON_OVERLAPPING
                 )
+
+            # Reduce mutation rate for unconstrained features (change as last resort)
+            if norm_feature not in target_constrained_features and target_constrained_features:
+                effective_mutation_rate *= UNCONSTRAINED_MUTATION_RATE_FACTOR
 
             if np.random.rand() < effective_mutation_rate:
                 # Get target constraint boundaries for this feature
