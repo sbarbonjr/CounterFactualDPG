@@ -123,6 +123,7 @@ def run_counterfactual_generation_dpg(args):
         evolution_history = getattr(cf_model, 'evolution_history', [])
         best_fitness_list = getattr(cf_model, 'best_fitness_list', [])
         average_fitness_list = getattr(cf_model, 'average_fitness_list', [])
+        std_fitness_list = getattr(cf_model, 'std_fitness_list', [])
         generation_debug_table = getattr(cf_model, 'generation_debug_table', [])
         
         # Get per-CF evolution histories (each CF gets its own history path)
@@ -147,6 +148,7 @@ def run_counterfactual_generation_dpg(args):
             'cf_generation_found': cf_generation_found,  # Generation where each CF was found
             'best_fitness_list': best_fitness_list,
             'average_fitness_list': average_fitness_list,
+            'std_fitness_list': std_fitness_list,
             'generation_debug_table': generation_debug_table,  # Per-generation fitness component breakdown
             'dict_non_actionable': dict_non_actionable,
             'method': 'dpg',

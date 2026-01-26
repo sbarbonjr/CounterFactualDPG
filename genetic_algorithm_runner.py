@@ -330,6 +330,18 @@ class GeneticAlgorithmRunner:
             if any(not np.isinf(val[0]) and val[0] < INVALID_FITNESS for val in x)
             else np.inf,
         )
+        stats.register(
+            "std",
+            lambda x: np.nanstd(
+                [
+                    val[0]
+                    for val in x
+                    if not np.isinf(val[0]) and val[0] < INVALID_FITNESS
+                ]
+            )
+            if any(not np.isinf(val[0]) and val[0] < INVALID_FITNESS for val in x)
+            else np.nan,
+        )
 
         # Setup hall of fame - use DistanceBasedHOF for minimal distance tracking
         # Standard HOF is still used internally for evolution, but DistanceBasedHOF
@@ -348,6 +360,7 @@ class GeneticAlgorithmRunner:
         # Reset tracking
         self.best_fitness_list = []
         self.average_fitness_list = []
+        self.std_fitness_list = []
         self.evolution_history = []
         self.hof_evolution_histories = {i: [] for i in range(num_best_results)}
         self.generation_debug_table = []
@@ -599,9 +612,11 @@ class GeneticAlgorithmRunner:
 
             best_fitness = record["min"]
             average_fitness = record["avg"]
+            std_fitness = record["std"]
 
             self.best_fitness_list.append(best_fitness)
             self.average_fitness_list.append(average_fitness)
+            self.std_fitness_list.append(std_fitness)
 
             # Collect detailed fitness component breakdown for generation debugging
             if self.generation_debugging and len(hof) > 0:

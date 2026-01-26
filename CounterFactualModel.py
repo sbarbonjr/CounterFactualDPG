@@ -70,6 +70,7 @@ class CounterFactualModel:
         )
         self.average_fitness_list = []
         self.best_fitness_list = []
+        self.std_fitness_list = []
         self.evolution_history = []  # Store best individual per generation for visualization
         self.verbose = verbose
         self.diversity_weight = diversity_weight
@@ -408,6 +409,7 @@ class CounterFactualModel:
         # Copy tracking attributes back from runner
         self.best_fitness_list = self.ga_runner.best_fitness_list
         self.average_fitness_list = self.ga_runner.average_fitness_list
+        self.std_fitness_list = self.ga_runner.std_fitness_list
         self.evolution_history = self.ga_runner.evolution_history
         self.hof_evolution_histories = self.ga_runner.hof_evolution_histories
         self.per_cf_evolution_histories = self.ga_runner.per_cf_evolution_histories

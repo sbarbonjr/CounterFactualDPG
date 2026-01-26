@@ -427,6 +427,64 @@ def plot_fitness(cf_model, figsize=(10, 6), title='Fitness Over Generations'):
     return fig
 
 
+def plot_fitness_std(cf_model, figsize=(10, 6), title='Fitness Standard Deviation Over Generations'):
+    """
+    Plot fitness standard deviation curve using stored fitness history on a model instance.
+    Shows both best fitness and average fitness with error bars representing std deviation.
+
+    Args:
+        cf_model: Object with attributes `best_fitness_list`, `average_fitness_list`, 
+                  and `std_fitness_list` (e.g., CounterFactualModel instance).
+        figsize: Figure size tuple.
+        title: Plot title.
+
+    Returns:
+        matplotlib.figure.Figure: The generated figure (closed to avoid display side effects).
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+
+    best = getattr(cf_model, 'best_fitness_list', []) or []
+    avg = getattr(cf_model, 'average_fitness_list', []) or []
+    std = getattr(cf_model, 'std_fitness_list', []) or []
+    
+    if len(std) == 0:
+        # If no std data available, return empty figure with message
+        ax.text(0.5, 0.5, 'No standard deviation data available', 
+                ha='center', va='center', transform=ax.transAxes, fontsize=12)
+        ax.set_title(title)
+        plt.tight_layout()
+        plt.close(fig)
+        return fig
+    
+    generations = np.arange(len(std))
+    
+    # Convert to numpy arrays for calculations
+    avg_arr = np.array(avg) if len(avg) == len(std) else np.zeros(len(std))
+    best_arr = np.array(best) if len(best) == len(std) else np.zeros(len(std))
+    std_arr = np.array(std)
+    
+    # Plot best fitness with markers (similar to the reference image blue line)
+    ax.plot(generations, best_arr, 'b-o', label='Best Fitness', markersize=4, linewidth=1)
+    
+    # Plot average fitness with error bars (similar to the reference image red line with error bars)
+    ax.errorbar(generations, avg_arr, yerr=std_arr, fmt='r-s', 
+                label='Average Best Fitness', markersize=3, linewidth=1,
+                capsize=2, capthick=1, elinewidth=0.5, alpha=0.8)
+    
+    # Set log scale for y-axis (like the reference image)
+    ax.set_yscale('log')
+    
+    ax.set_title(title)
+    ax.set_xlabel('Generation')
+    ax.set_ylabel('Fitness')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.close(fig)
+    return fig
+
+
 def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterfactual, constraints=None, class_colors_list=None, generation=None):
     """
     Enhanced visualization combining original and counterfactual samples with:

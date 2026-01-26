@@ -110,6 +110,7 @@ from CounterFactualVisualizer import (
     plot_pca_with_counterfactuals_clean,
     plot_pca_loadings,
     plot_fitness,
+    plot_fitness_std,
 )
 
 from utils.notebooks.experiment_storage import (
@@ -362,6 +363,7 @@ def run_single_sample(
         evolution_history = result["evolution_history"]
         best_fitness_list = result["best_fitness_list"]
         average_fitness_list = result["average_fitness_list"]
+        std_fitness_list = result.get("std_fitness_list", [])
         result_method = result.get("method", "dpg")
         generation_debug_table_data = result.get("generation_debug_table", [])
         
@@ -445,6 +447,7 @@ def run_single_sample(
                     # Set empty fitness lists for DiCE (no evolution tracking)
                     cf_model.best_fitness_list = []
                     cf_model.average_fitness_list = []
+                    cf_model.std_fitness_list = []
                     cf_model.evolution_history = cf_evolution_history
                 else:
                     # Recreate cf_model with stored DPG parameters (including dual-boundary parameters)
@@ -471,6 +474,7 @@ def run_single_sample(
                     # Restore fitness history
                     cf_model.best_fitness_list = best_fitness_list
                     cf_model.average_fitness_list = average_fitness_list
+                    cf_model.std_fitness_list = std_fitness_list
                     cf_model.evolution_history = cf_evolution_history
 
                 # Get generation where this CF was found
@@ -868,11 +872,15 @@ def run_single_sample(
             average_fitness_list = getattr(
                 cf_viz["cf_model"], "average_fitness_list", []
             )
+            std_fitness_list = getattr(
+                cf_viz["cf_model"], "std_fitness_list", []
+            )
 
             cf_copy = {
                 "counterfactual": cf_viz["counterfactual"],
                 "best_fitness_list": best_fitness_list,
                 "average_fitness_list": average_fitness_list,
+                "std_fitness_list": std_fitness_list,
             }
             combo_copy["counterfactuals"].append(cf_copy)
         raw_data["visualizations_structure"].append(combo_copy)
@@ -914,10 +922,12 @@ def run_single_sample(
 
             # Generate fitness curve once per combination (shared by all CFs from same GA run)
             fitness_fig = None
+            fitness_std_fig = None
             if combination_viz["counterfactuals"]:
                 # All CFs share the same fitness history, so use the first one's cf_model
                 first_cf_model = combination_viz["counterfactuals"][0]["cf_model"]
                 fitness_fig = plot_fitness(first_cf_model) if first_cf_model else None
+                fitness_std_fig = plot_fitness_std(first_cf_model) if first_cf_model else None
 
             # Save fitness curve locally (once per combination, not per CF)
             if fitness_fig and getattr(config.output, "save_visualization_images", False):
@@ -925,12 +935,26 @@ def run_single_sample(
                 fitness_path = os.path.join(sample_dir, "fitness.png")
                 fitness_fig.savefig(fitness_path, bbox_inches="tight", dpi=150)
 
+            # Save fitness std curve locally (once per combination, not per CF)
+            if fitness_std_fig and getattr(config.output, "save_visualization_images", False):
+                os.makedirs(sample_dir, exist_ok=True)
+                fitness_std_path = os.path.join(sample_dir, "fitness_std.png")
+                fitness_std_fig.savefig(fitness_std_path, bbox_inches="tight", dpi=150)
+
             # Log fitness curve to WandB (once per combination, not per CF)
             if fitness_fig and wandb_run:
                 wandb.log({
                     "viz/sample_id": SAMPLE_ID,
                     "viz/combination": str(combination_viz["label"]),
                     "visualizations/fitness_curve": wandb.Image(fitness_fig),
+                })
+
+            # Log fitness std curve to WandB (once per combination, not per CF)
+            if fitness_std_fig and wandb_run:
+                wandb.log({
+                    "viz/sample_id": SAMPLE_ID,
+                    "viz/combination": str(combination_viz["label"]),
+                    "visualizations/standard_deviation": wandb.Image(fitness_std_fig),
                 })
 
             # Per-counterfactual visualizations
