@@ -55,6 +55,7 @@ class GeneticAlgorithmRunner:
         self.hof_evolution_histories = {}
         self.per_cf_evolution_histories = []
         self.generation_debug_table = []  # Per-generation fitness component breakdown
+        self.best_minimal_cfs = []  # Track historically closest valid CFs
 
     def run(
         self,
@@ -228,6 +229,7 @@ class GeneticAlgorithmRunner:
         self.evolution_history = []
         self.hof_evolution_histories = {i: [] for i in range(num_best_results)}
         self.generation_debug_table = []
+        self.best_minimal_cfs = []  # Track historically closest valid CFs
 
         # Run evolution
         best_individuals = self._evolve(
@@ -438,6 +440,11 @@ class GeneticAlgorithmRunner:
             for ind, fit in zip(population, fitnesses):
                 ind.fitness.values = fit
 
+            # Track best-minimal valid CFs (closest to original that predict target class)
+            self._update_best_minimal_cfs(
+                population, sample, target_class, original_features, num_best_results
+            )
+
             # Update statistics and hall of fame
             record = stats.compile(population)
             hof.update(population)
@@ -563,6 +570,90 @@ class GeneticAlgorithmRunner:
 
         return hof
 
+    def _update_best_minimal_cfs(self, population, sample, target_class, original_features, num_best_results):
+        """
+        Track the historically closest valid counterfactuals found during evolution.
+        A valid CF must predict the target class with sufficient probability margin.
+        
+        This preserves good candidates from early generations that might be lost
+        as the population spreads due to diversity pressure.
+        """
+        feature_names = list(sample.keys())
+        
+        for ind in population:
+            # Skip invalid fitness
+            if not ind.fitness.valid or ind.fitness.values[0] >= INVALID_FITNESS:
+                continue
+            
+            # Check if this individual predicts the target class
+            features = np.array([ind[f] for f in feature_names]).reshape(1, -1)
+            try:
+                if self.feature_names is not None:
+                    features_df = pd.DataFrame(features, columns=self.feature_names)
+                    predicted_class = self.model.predict(features_df)[0]
+                    proba = self.model.predict_proba(features_df)[0]
+                else:
+                    predicted_class = self.model.predict(features)[0]
+                    proba = self.model.predict_proba(features)[0]
+                
+                if predicted_class != target_class:
+                    continue
+                
+                # Check probability margin
+                if hasattr(self.model, "classes_"):
+                    class_list = list(self.model.classes_)
+                    target_idx = class_list.index(target_class) if target_class in class_list else target_class
+                else:
+                    target_idx = target_class
+                
+                target_prob = proba[target_idx]
+                sorted_probs = np.sort(proba)[::-1]
+                second_best_prob = sorted_probs[1] if len(sorted_probs) > 1 else 0.0
+                margin = target_prob - second_best_prob
+                
+                if margin < self.min_probability_margin:
+                    continue
+                
+            except Exception:
+                continue
+            
+            # Calculate Euclidean distance to original
+            ind_array = np.array([ind[f] for f in feature_names])
+            distance_to_original = np.linalg.norm(ind_array - original_features)
+            
+            # Create candidate entry
+            candidate = {
+                'individual': dict(ind),
+                'distance': distance_to_original,
+                'fitness': ind.fitness.values[0],
+            }
+            
+            # Check if this should be added to best_minimal_cfs
+            # Keep top num_best_results by distance (not fitness)
+            dominated = False
+            to_remove = []
+            
+            for i, existing in enumerate(self.best_minimal_cfs):
+                # Check if candidate is essentially the same individual
+                existing_array = np.array([existing['individual'][f] for f in feature_names])
+                if np.allclose(ind_array, existing_array, atol=0.01):
+                    # Same individual - keep the one with better distance
+                    if distance_to_original < existing['distance']:
+                        to_remove.append(i)
+                    else:
+                        dominated = True
+                    break
+            
+            # Remove dominated entries
+            for i in reversed(to_remove):
+                self.best_minimal_cfs.pop(i)
+            
+            if not dominated:
+                self.best_minimal_cfs.append(candidate)
+                # Sort by distance and keep only top num_best_results
+                self.best_minimal_cfs.sort(key=lambda x: x['distance'])
+                self.best_minimal_cfs = self.best_minimal_cfs[:num_best_results * 2]  # Keep extra for diversity
+
     def _update_evolution_history(self, hof, num_best_results, previous_hof_items):
         """
         Track evolution history for visualization.
@@ -684,11 +775,26 @@ class GeneticAlgorithmRunner:
     ):
         """
         Validate counterfactuals and build evolution histories.
+        
+        Uses hybrid approach: returns the closest valid CF (from best_minimal_cfs)
+        plus diverse alternatives from HOF, ensuring both proximity and diversity.
         """
         valid_counterfactuals = []
         valid_cf_hof_indices = []
+        feature_names = list(sample.keys())
+        
+        # First, add the best minimal CF (closest to original)
+        if self.best_minimal_cfs:
+            best_minimal = self.best_minimal_cfs[0]  # Already sorted by distance
+            valid_counterfactuals.append(best_minimal['individual'])
+            if self.verbose:
+                print(f"Added best-minimal CF with distance {best_minimal['distance']:.4f} to original")
 
         for i in range(len(hof_obj)):
+            # Stop if we have enough
+            if len(valid_counterfactuals) >= num_best_results:
+                break
+                
             best_fitness = hof_obj[i].fitness.values[0]
 
             # Check fitness validity
@@ -701,6 +807,18 @@ class GeneticAlgorithmRunner:
 
             # Validate prediction and probability margin
             best_individual = dict(hof_obj[i])
+            
+            # Skip if this is a duplicate of an already added CF
+            is_duplicate = False
+            ind_array = np.array([best_individual[f] for f in feature_names])
+            for existing in valid_counterfactuals:
+                existing_array = np.array([existing[f] for f in feature_names])
+                if np.allclose(ind_array, existing_array, atol=0.01):
+                    is_duplicate = True
+                    break
+            if is_duplicate:
+                continue
+            
             features = np.array([best_individual[f] for f in sample.keys()]).reshape(
                 1, -1
             )
