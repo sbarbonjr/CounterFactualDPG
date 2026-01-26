@@ -594,8 +594,14 @@ class GeneticAlgorithmRunner:
         
         This preserves good candidates from early generations that might be lost
         as the population spreads due to diversity pressure.
+        
+        AGGRESSIVE TRACKING: Keeps 4x the requested CFs to ensure we have enough
+        for the 80% minimal allocation in final selection.
         """
         feature_names = list(sample.keys())
+        
+        # Keep 4x candidates to ensure enough for 80% fill (some may be filtered as duplicates)
+        max_candidates = num_best_results * 4
         
         for ind in population:
             # Skip invalid fitness
@@ -634,19 +640,19 @@ class GeneticAlgorithmRunner:
             except Exception:
                 continue
             
-            # Calculate Euclidean distance to original
+            # Calculate Euclidean distance to original (this is the TRUE base fitness metric)
             ind_array = np.array([ind[f] for f in feature_names])
             distance_to_original = np.linalg.norm(ind_array - original_features)
             
-            # Create candidate entry
+            # Create candidate entry - track by DISTANCE, not GA fitness (which includes bonuses)
             candidate = {
                 'individual': dict(ind),
                 'distance': distance_to_original,
-                'fitness': ind.fitness.values[0],
+                'ga_fitness': ind.fitness.values[0],  # Keep for reference
             }
             
             # Check if this should be added to best_minimal_cfs
-            # Keep top num_best_results by distance (not fitness)
+            # Keep top candidates by distance (not GA fitness)
             dominated = False
             to_remove = []
             
@@ -667,9 +673,9 @@ class GeneticAlgorithmRunner:
             
             if not dominated:
                 self.best_minimal_cfs.append(candidate)
-                # Sort by distance and keep only top num_best_results
+                # Sort by distance and keep only top candidates
                 self.best_minimal_cfs.sort(key=lambda x: x['distance'])
-                self.best_minimal_cfs = self.best_minimal_cfs[:num_best_results * 2]  # Keep extra for diversity
+                self.best_minimal_cfs = self.best_minimal_cfs[:max_candidates]
 
     def _update_evolution_history(self, hof, num_best_results, previous_hof_items):
         """
@@ -793,53 +799,101 @@ class GeneticAlgorithmRunner:
         """
         Validate counterfactuals and build evolution histories.
         
-        Uses hybrid approach: returns the closest valid CF (from best_minimal_cfs)
-        plus diverse alternatives from HOF, ensuring both proximity and diversity.
-        """
-        valid_counterfactuals = []
-        valid_cf_hof_indices = []
-        feature_names = list(sample.keys())
+        AGGRESSIVE MINIMAL DISTANCE PRIORITY (80/20 split):
+        - Fill 80% of requested CFs from best_minimal_cfs (sorted by distance)
+        - Fill remaining 20% from HOF for diversity
         
-        # First, add the best minimal CF (closest to original)
-        if self.best_minimal_cfs:
-            best_minimal = self.best_minimal_cfs[0]  # Already sorted by distance
-            valid_counterfactuals.append(best_minimal['individual'])
-            if self.verbose:
-                print(f"Added best-minimal CF with distance {best_minimal['distance']:.4f} to original")
-
-        for i in range(len(hof_obj)):
-            # Stop if we have enough
-            if len(valid_counterfactuals) >= num_best_results:
+        This ensures most CFs are close to original, fixing the issue where
+        diversity/repulsion bonuses made far CFs appear to have better fitness.
+        """
+        feature_names = list(sample.keys())
+        original_features = self._original_features
+        
+        # Calculate how many CFs should come from minimal vs diverse sources
+        # 80% from minimal tracking, 20% from HOF for diversity
+        num_minimal = max(1, int(0.8 * num_best_results))
+        num_diverse = num_best_results - num_minimal
+        
+        if self.verbose:
+            print(f"\n=== CF Source Allocation ===")
+            print(f"Requested: {num_best_results} CFs (80/20 split: {num_minimal} minimal, {num_diverse} diverse)")
+            print(f"Available in best_minimal_cfs: {len(self.best_minimal_cfs)}")
+            print(f"Available in HOF: {len(hof_obj)}")
+        
+        final_counterfactuals = []
+        from_minimal_count = 0
+        from_hof_count = 0
+        
+        # STEP 1: Fill from best_minimal_cfs (sorted by distance to original)
+        # These are historically closest valid CFs tracked during evolution
+        for minimal_cf in self.best_minimal_cfs:
+            if from_minimal_count >= num_minimal:
                 break
                 
+            cf_dict = minimal_cf['individual']
+            cf_distance = minimal_cf['distance']
+            
+            # Check for duplicates
+            cf_array = np.array([cf_dict[f] for f in feature_names])
+            is_duplicate = False
+            for existing in final_counterfactuals:
+                existing_array = np.array([existing[f] for f in feature_names])
+                if np.allclose(cf_array, existing_array, atol=0.01):
+                    is_duplicate = True
+                    break
+            
+            if is_duplicate:
+                continue
+            
+            # Validate prediction (should already be valid, but double-check)
+            features = cf_array.reshape(1, -1)
+            try:
+                if self.feature_names is not None:
+                    features_df = pd.DataFrame(features, columns=self.feature_names)
+                    predicted_class = self.model.predict(features_df)[0]
+                else:
+                    predicted_class = self.model.predict(features)[0]
+                
+                if predicted_class != target_class:
+                    continue
+                    
+            except Exception:
+                continue
+            
+            final_counterfactuals.append(cf_dict)
+            from_minimal_count += 1
+            
+            if self.verbose:
+                print(f"  [MINIMAL #{from_minimal_count}] Added CF with distance={cf_distance:.4f}")
+        
+        # STEP 2: Fill remaining slots from HOF for diversity
+        # These may be farther but provide alternative explanations
+        for i in range(len(hof_obj)):
+            if len(final_counterfactuals) >= num_best_results:
+                break
+            
             best_fitness = hof_obj[i].fitness.values[0]
-
+            
             # Check fitness validity
             if best_fitness == np.inf or best_fitness >= INVALID_FITNESS:
-                if self.verbose:
-                    print(
-                        f"Counterfactual #{i + 1} generation failed: fitness = {best_fitness}"
-                    )
                 continue
-
-            # Validate prediction and probability margin
+            
             best_individual = dict(hof_obj[i])
             
-            # Skip if this is a duplicate of an already added CF
-            is_duplicate = False
+            # Check for duplicates
             ind_array = np.array([best_individual[f] for f in feature_names])
-            for existing in valid_counterfactuals:
+            is_duplicate = False
+            for existing in final_counterfactuals:
                 existing_array = np.array([existing[f] for f in feature_names])
                 if np.allclose(ind_array, existing_array, atol=0.01):
                     is_duplicate = True
                     break
+            
             if is_duplicate:
                 continue
             
-            features = np.array([best_individual[f] for f in sample.keys()]).reshape(
-                1, -1
-            )
-
+            # Validate prediction and probability margin
+            features = ind_array.reshape(1, -1)
             try:
                 if self.feature_names is not None:
                     features_df = pd.DataFrame(features, columns=self.feature_names)
@@ -848,117 +902,64 @@ class GeneticAlgorithmRunner:
                 else:
                     predicted_class = self.model.predict(features)[0]
                     proba = self.model.predict_proba(features)[0]
-
+                
                 if predicted_class != target_class:
                     if self.verbose:
-                        print(
-                            f"Counterfactual #{i + 1} failed: predicts class {predicted_class}, not target {target_class}"
-                        )
+                        print(f"  [HOF #{i+1}] Rejected: predicts class {predicted_class}, not target {target_class}")
                     continue
-
+                
                 # Check probability margin
                 if hasattr(self.model, "classes_"):
                     class_list = list(self.model.classes_)
-                    target_idx = (
-                        class_list.index(target_class)
-                        if target_class in class_list
-                        else target_class
-                    )
+                    target_idx = class_list.index(target_class) if target_class in class_list else target_class
                 else:
                     target_idx = target_class
-
+                
                 target_prob = proba[target_idx]
                 sorted_probs = np.sort(proba)[::-1]
                 second_best_prob = sorted_probs[1] if len(sorted_probs) > 1 else 0.0
                 margin = target_prob - second_best_prob
-
+                
                 if margin < self.min_probability_margin:
                     if self.verbose:
-                        print(
-                            f"Counterfactual #{i + 1} rejected: target class probability ({target_prob:.3f}) "
-                            f"not sufficiently higher than second-best ({second_best_prob:.3f}). "
-                            f"Margin {margin:.3f} < required {self.min_probability_margin:.3f}"
-                        )
+                        print(f"  [HOF #{i+1}] Rejected: margin {margin:.3f} < required {self.min_probability_margin:.3f}")
                     continue
-
+                    
             except Exception as e:
                 if self.verbose:
-                    print(f"Counterfactual #{i + 1} validation failed with error: {e}")
+                    print(f"  [HOF #{i+1}] Validation error: {e}")
                 continue
-
-            valid_counterfactuals.append(best_individual)
-            valid_cf_hof_indices.append(i)
-
-            if len(valid_counterfactuals) >= num_best_results:
-                break
-
-        # Build per-CF evolution histories
-        self.per_cf_evolution_histories = []
-        for hof_idx in valid_cf_hof_indices:
-            cf_history = self.hof_evolution_histories.get(hof_idx, [])
-            if not cf_history:
-                cf_history = list(self.evolution_history)
-            self.per_cf_evolution_histories.append(cf_history)
-
-        # Return None if no valid counterfactuals found
-        if not valid_counterfactuals:
-            return None
-        
-        # HYBRID FINAL SELECTION: closest first, then diverse alternatives
-        # Calculate distance to original for all valid CFs
-        original_features = self._original_features
-        cf_with_distances = []
-        for cf in valid_counterfactuals:
-            cf_array = np.array([cf[f] for f in feature_names])
-            dist = np.linalg.norm(cf_array - original_features)
-            cf_with_distances.append({'cf': cf, 'distance': dist})
-        
-        # Sort by distance (closest first)
-        cf_with_distances.sort(key=lambda x: x['distance'])
-        
-        # Build final list: closest CF + diverse alternatives
-        final_counterfactuals = []
-        
-        # Always include the closest CF first
-        if cf_with_distances:
-            closest = cf_with_distances[0]
-            final_counterfactuals.append(closest['cf'])
+            
+            # Calculate distance for logging
+            hof_distance = np.linalg.norm(ind_array - original_features)
+            
+            final_counterfactuals.append(best_individual)
+            from_hof_count += 1
+            
             if self.verbose:
-                print(f"Final selection - Closest CF: distance={closest['distance']:.4f}")
-            remaining = cf_with_distances[1:]
-        else:
-            remaining = []
+                print(f"  [DIVERSE #{from_hof_count}] Added HOF CF with distance={hof_distance:.4f}, fitness={best_fitness:.4f}")
         
-        # Select remaining CFs balancing diversity and proximity
-        # Use greedy selection: pick CF that maximizes (min_dist_to_selected - 0.3*dist_to_original)
-        while len(final_counterfactuals) < num_best_results and remaining:
-            best_candidate = None
-            best_score = float('-inf')
+        # Log final summary
+        if self.verbose:
+            print(f"\n=== CF Source Summary ===")
+            print(f"From minimal tracking: {from_minimal_count}/{num_minimal} requested")
+            print(f"From HOF (diverse): {from_hof_count}")
+            print(f"Total CFs: {len(final_counterfactuals)}/{num_best_results} requested")
             
-            for candidate in remaining:
-                # Calculate minimum distance to already selected CFs
-                cand_array = np.array([candidate['cf'][f] for f in feature_names])
-                min_dist_to_selected = float('inf')
-                for selected_cf in final_counterfactuals:
-                    sel_array = np.array([selected_cf[f] for f in feature_names])
-                    dist = np.linalg.norm(cand_array - sel_array)
-                    min_dist_to_selected = min(min_dist_to_selected, dist)
-                
-                # Score: diversity bonus minus proximity penalty
-                # Higher diversity (distance to selected) is good
-                # Lower distance to original is good (so we subtract it)
-                score = min_dist_to_selected - 0.3 * candidate['distance']
-                
-                if score > best_score:
-                    best_score = score
-                    best_candidate = candidate
-            
-            if best_candidate:
-                final_counterfactuals.append(best_candidate['cf'])
-                remaining.remove(best_candidate)
-                if self.verbose:
-                    print(f"Final selection - Alternative CF: distance={best_candidate['distance']:.4f}, diversity_score={best_score:.4f}")
-            else:
-                break
+            if final_counterfactuals:
+                # Calculate and show distances for all final CFs
+                distances = []
+                for cf in final_counterfactuals:
+                    cf_array = np.array([cf[f] for f in feature_names])
+                    dist = np.linalg.norm(cf_array - original_features)
+                    distances.append(dist)
+                print(f"Final CF distances: min={min(distances):.4f}, max={max(distances):.4f}, avg={np.mean(distances):.4f}")
+        
+        # Build per-CF evolution histories (empty for now, as tracking is complex with the new approach)
+        self.per_cf_evolution_histories = [list(self.evolution_history) for _ in final_counterfactuals]
+        
+        # Return None if no valid counterfactuals found
+        if not final_counterfactuals:
+            return None
         
         return final_counterfactuals
