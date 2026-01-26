@@ -43,8 +43,8 @@ experiment_params:
 # Output defaults
 output:
   local_dir: outputs
-  save_visualizations: false
-  save_visualization_images: false
+  save_visualizations: true
+  save_visualization_images: true
   save_visualizations_per_generation: false
 
 # Counterfactual method defaults
