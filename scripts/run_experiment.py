@@ -373,13 +373,18 @@ def run_single_sample(
         if wandb_run and generation_debug_table_data and WANDB_AVAILABLE:
             try:
                 # Convert generation_debug_table to WandB Table
-                # Columns: generation, feature_values (JSON), and all fitness components
+                # Columns: generation, individual feature columns, and all fitness components
                 debug_columns = ["generation"]
-                # Add feature_values as a single column (will be stored as JSON string)
-                debug_columns.append("feature_values")
-                # Add all fitness component columns (from first row to get keys)
+                
+                # Get feature names from first row and add as separate columns
+                feature_names_list = []
                 if len(generation_debug_table_data) > 0:
                     first_row = generation_debug_table_data[0]
+                    feature_values_dict = first_row.get("feature_values", {})
+                    feature_names_list = sorted(feature_values_dict.keys())
+                    debug_columns.extend(feature_names_list)
+                    
+                    # Add all fitness component columns
                     component_keys = [k for k in first_row.keys() if k not in ["generation", "feature_values"]]
                     debug_columns.extend(component_keys)
                 
@@ -387,10 +392,12 @@ def run_single_sample(
                 debug_table_rows = []
                 for row_data in generation_debug_table_data:
                     row = [row_data.get("generation", 0)]
-                    # Convert feature_values dict to JSON string for WandB
-                    import json
-                    feature_values_json = json.dumps(row_data.get("feature_values", {}))
-                    row.append(feature_values_json)
+                    
+                    # Add each feature value as a separate column
+                    feature_values_dict = row_data.get("feature_values", {})
+                    for feature_name in feature_names_list:
+                        row.append(float(feature_values_dict.get(feature_name, 0.0)))
+                    
                     # Add component values
                     for key in component_keys:
                         row.append(row_data.get(key, 0.0))
@@ -399,7 +406,7 @@ def run_single_sample(
                 # Create and log WandB table
                 debug_table = wandb.Table(columns=debug_columns, data=debug_table_rows)
                 wandb.log({f"sample_{SAMPLE_ID}/generation_debug": debug_table})
-                print(f"INFO: Logged generation debug table with {len(debug_table_rows)} rows to WandB")
+                print(f"INFO: Logged generation debug table with {len(debug_table_rows)} rows, {len(debug_columns)} columns ({len(feature_names_list)} features) to WandB")
             except Exception as e:
                 print(f"WARNING: Failed to log generation debug table to WandB: {e}")
 
