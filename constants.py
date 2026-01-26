@@ -104,7 +104,7 @@ FEATURE_VALUE_PRECISION = 2
 
 # Penalty multiplier for changing features without target class constraints
 # Higher values make unconstrained feature changes more costly (changed as last resort)
-UNCONSTRAINED_CHANGE_PENALTY_FACTOR = 2.0
+UNCONSTRAINED_CHANGE_PENALTY_FACTOR = 5.0
 
 # Mutation rate reduction for unconstrained features
 # Lower values reduce probability of mutating unconstrained features
