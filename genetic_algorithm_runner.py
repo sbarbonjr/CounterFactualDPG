@@ -40,12 +40,13 @@ class DistanceBasedHOF:
         self.target_class = target_class
         self.min_probability_margin = min_probability_margin
         self.model_feature_names = model_feature_names
-        self.items = []  # List of (distance, individual) tuples
+        self.items = []  # List of (distance, fitness, individual) tuples
     
     def update(self, population):
         """
         Update HOF with individuals from population, ranked by distance to original.
-        Only includes individuals that predict the target class with sufficient margin.
+        Uses fitness as secondary criteria when distances are similar.
+        Only includes individuals that predict target class with sufficient margin.
         """
         for ind in population:
             # Skip if invalid fitness
@@ -55,6 +56,9 @@ class DistanceBasedHOF:
             # Calculate distance to original
             ind_array = np.array([ind[f] for f in self.feature_names])
             distance = np.linalg.norm(ind_array - self.original_features)
+            
+            # Get fitness for secondary ranking
+            fitness = ind.fitness.values[0]
             
             # Validate prediction
             features = ind_array.reshape(1, -1)
@@ -90,12 +94,12 @@ class DistanceBasedHOF:
             
             # Check if this individual is essentially a duplicate
             is_duplicate = False
-            for existing_dist, existing_ind in self.items:
+            for existing_dist, existing_fitness, existing_ind in self.items:
                 existing_array = np.array([existing_ind[f] for f in self.feature_names])
                 if np.allclose(ind_array, existing_array, atol=0.01):
                     # Keep the closer one
                     if distance < existing_dist:
-                        self.items.remove((existing_dist, existing_ind))
+                        self.items.remove((existing_dist, existing_fitness, existing_ind))
                     else:
                         is_duplicate = True
                     break
@@ -104,19 +108,20 @@ class DistanceBasedHOF:
                 # Clone the individual to preserve it
                 ind_copy = creator.Individual(dict(ind))
                 ind_copy.fitness = ind.fitness
-                self.items.append((distance, ind_copy))
-                # Sort by distance and keep only top maxsize
-                self.items.sort(key=lambda x: x[0])
+                # Store (distance, fitness, individual) - fitness is tiebreaker
+                self.items.append((distance, fitness, ind_copy))
+                # Sort by distance first, then fitness as tiebreaker
+                self.items.sort(key=lambda x: (x[0], x[1]))
                 self.items = self.items[:self.maxsize * 2]  # Keep extra for diversity
     
     def __len__(self):
         return len(self.items)
     
     def __getitem__(self, idx):
-        return self.items[idx][1]
+        return self.items[idx][2]  # Return individual (index 2 in 3-tuple)
     
     def __iter__(self):
-        return (item[1] for item in self.items)
+        return (item[2] for item in self.items)  # Return individual (index 2 in 3-tuple)
 
 
 class GeneticAlgorithmRunner:
@@ -973,13 +978,14 @@ class GeneticAlgorithmRunner:
         
         # Build candidate pool from DistanceBasedHOF
         candidates = []
-        for distance, ind in hof_obj.items:
+        for distance, fitness, ind in hof_obj.items:
             cf_dict = dict(ind)
             cf_array = np.array([cf_dict[f] for f in feature_names])
             candidates.append({
                 'cf': cf_dict,
                 'array': cf_array,
                 'distance': distance,
+                'fitness': fitness,
             })
         
         # Also add from best_minimal_cfs as backup

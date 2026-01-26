@@ -420,12 +420,22 @@ class FitnessCalculator:
             )
 
         # Base fitness (minimize distance and sparsity, penalize constraint violations and wrong class)
+        # Distance is the PRIMARY component - scale others relative to a reference distance
+        # This ensures distance_factor actually controls the importance of distance
+        reference_distance = max(distance_score, 0.01)  # Avoid division by zero
+        
+        # Normalize penalties relative to distance scale so distance_factor is meaningful
+        # When distance_factor=500, other components should be secondary
+        normalized_sparsity = self.sparsity_factor * sparsity_score * reference_distance
+        normalized_constraint_penalty = self.constraints_factor * penalty_constraints * reference_distance
+        normalized_class_penalty = class_penalty * reference_distance / 10.0  # Scale down class penalty
+        
         base_fitness = (
-            self.distance_factor * distance_score
-            + self.sparsity_factor * sparsity_score
-            + self.constraints_factor * penalty_constraints
-            + unconstrained_penalty  # Factor already applied in penalty calculation
-            + class_penalty
+            self.distance_factor * distance_score  # Primary component
+            + normalized_sparsity
+            + normalized_constraint_penalty
+            + unconstrained_penalty * reference_distance
+            + normalized_class_penalty
         )
 
         # DUAL-BOUNDARY: Add original class escape penalty
