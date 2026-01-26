@@ -9,7 +9,7 @@
 # Excluded datasets (will be skipped by run_all_experiments.py)
 excluded_datasets:
  - isolet
-  # - car_eval_4
+ - car_eval_4 # binary
   # - german_credit
   # - abalone # hangs on dice
   # - abalone_19
