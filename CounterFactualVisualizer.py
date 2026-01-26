@@ -458,11 +458,20 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
     l1_distance = np.sum(np.abs(changes))
     
     # Filter out features with zero change for charts 1 and 2
-    non_zero_mask = np.abs(changes) > 0.001
-    feature_list_filtered = [f for f, mask in zip(feature_list, non_zero_mask) if mask]
-    original_values_filtered = original_values[non_zero_mask]
-    counterfactual_values_filtered = counterfactual_values[non_zero_mask]
-    changes_filtered = changes[non_zero_mask]
+    # Only filter if there are more than 6 features
+    if len(feature_list) <= 6:
+        # Keep all features when 6 or fewer
+        feature_list_filtered = feature_list
+        original_values_filtered = original_values
+        counterfactual_values_filtered = counterfactual_values
+        changes_filtered = changes
+    else:
+        # Filter out unchanged features when more than 6
+        non_zero_mask = np.abs(changes) > 0.001
+        feature_list_filtered = [f for f, mask in zip(feature_list, non_zero_mask) if mask]
+        original_values_filtered = original_values[non_zero_mask]
+        counterfactual_values_filtered = counterfactual_values[non_zero_mask]
+        changes_filtered = changes[non_zero_mask]
     
     # Create figure with custom layout
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
