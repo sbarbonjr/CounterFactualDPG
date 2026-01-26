@@ -283,6 +283,7 @@ class CounterFactualModel:
         metric="cosine",
         population=None,
         original_class=None,
+        return_components=False,
     ):
         """
         Delegate to FitnessCalculator for fitness calculation.
@@ -295,6 +296,7 @@ class CounterFactualModel:
             metric,
             population,
             original_class,
+            return_components=return_components,
         )
 
     def _create_deap_individual(self, sample_dict, feature_names):

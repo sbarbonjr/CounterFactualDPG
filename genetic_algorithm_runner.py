@@ -478,8 +478,10 @@ class GeneticAlgorithmRunner:
                         self.generation_debug_table.append(debug_row)
                     except Exception as e:
                         # If component extraction fails, just store basics
-                        if self.verbose:
-                            print(f"Warning: Failed to extract fitness components for generation {generation + 1}: {e}")
+                        # Always print this warning since generation_debugging is explicitly enabled
+                        import traceback
+                        print(f"Warning: Failed to extract fitness components for generation {generation + 1}: {e}")
+                        print(f"Traceback: {traceback.format_exc()}")
                         debug_row = {
                             'generation': generation + 1,
                             'total_fitness': float(best_ind.fitness.values[0]),
