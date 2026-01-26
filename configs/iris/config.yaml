@@ -29,9 +29,9 @@ methods:
   _default:
     max_generations: 50
     mutation_rate: 0.3
-    repulsion_weight: 2.0
+    repulsion_weight: 0.5  # Reduced from 2.0 to prevent pushing CFs too far apart
     boundary_weight: 12.0
-    distance_factor: 1.5
+    distance_factor: 5.0   # Increased from 1.5 to prioritize proximity to original
     max_bonus_cap: 50.0
     patience: 5
     rules:
