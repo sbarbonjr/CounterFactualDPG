@@ -1,11 +1,5 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-from scipy.spatial.distance import euclidean, cityblock, cosine
-from scipy.spatial.distance import cdist
-import ast
 
 # Import comprehensive metrics module
 try:
