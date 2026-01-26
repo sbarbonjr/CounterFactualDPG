@@ -27,13 +27,7 @@ output:
   # save_visualizations_per_generation: true
 methods:
   _default:
-    max_generations: 50
-    mutation_rate: 0.3
-    repulsion_weight: 0.5
-    boundary_weight: 12.0
-    distance_factor: 5.0
-    max_bonus_cap: 50.0
-    patience: 5
+    max_generations: 100
     rules:
     - none
   dpg:
