@@ -1081,7 +1081,7 @@ def plot_pca_with_counterfactuals_clean(model, dataset, target, sample, counterf
         # Plot X marker inside the circle
         plt.scatter(
             counterfactuals_pca[idx, 0], counterfactuals_pca[idx, 1],
-            color=cf_color, marker='x', s=100,
+            color='black', marker='x', s=100,
             linewidths=2.5, zorder=8
         )
 
