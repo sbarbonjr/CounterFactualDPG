@@ -40,6 +40,8 @@ from sklearn.metrics import (
 
 from utils.dataset_loader import load_dataset
 from utils.config_manager import load_config
+from ConstraintParser import ConstraintParser
+from constraint_scorer import compute_constraint_score
 
 # =============================================================================
 # RANDOMFOREST HYPERPARAMETER SEARCH SPACE
@@ -111,7 +113,67 @@ AVAILABLE_SCORING = [
     'roc_auc',
     'roc_auc_ovr',
     'roc_auc_ovo',
+    'dpg_constraints',
 ]
+
+
+def make_dpg_constraint_scorer(feature_names: list, dpg_config: dict = None):
+    """Create a custom scorer that optimizes for DPG constraint separation.
+    
+    This scorer extracts DPG constraints from the fitted model and computes
+    a constraint separation score. Higher scores indicate better separation
+    between classes, which is beneficial for counterfactual generation.
+    
+    Args:
+        feature_names: List of feature names for the dataset
+        dpg_config: Optional DPG configuration dictionary
+    
+    Returns:
+        A scorer function compatible with sklearn's cross-validation
+    """
+    def dpg_constraint_scorer(estimator, X, y):
+        """Score function that computes DPG constraint separation.
+        
+        Args:
+            estimator: Fitted sklearn estimator (RandomForest)
+            X: Feature array
+            y: Label array
+        
+        Returns:
+            float: Constraint separation score in [0, 1]
+        """
+        try:
+            # Extract constraints from the fitted model
+            dpg_result = ConstraintParser.extract_constraints_from_dataset(
+                model=estimator,
+                train_features=X,
+                train_labels=y,
+                feature_names=feature_names,
+                dpg_config=dpg_config
+            )
+            
+            constraints = dpg_result.get('constraints', {})
+            
+            if not constraints:
+                # No constraints extracted - return low score
+                return 0.0
+            
+            # Normalize constraints to the expected format
+            normalized_constraints = ConstraintParser.normalize_constraints(constraints)
+            
+            if not normalized_constraints:
+                return 0.0
+            
+            # Compute constraint separation score
+            score_result = compute_constraint_score(normalized_constraints, verbose=False)
+            return score_result['score']
+            
+        except Exception as e:
+            # On any error, return 0 to indicate poor constraints
+            print(f"WARNING: DPG constraint scoring failed: {e}")
+            return 0.0
+    
+    return dpg_constraint_scorer
 
 
 def parse_args():
@@ -356,12 +418,19 @@ def main():
     
     start_time = datetime.now()
     
+    # Determine scoring - use custom scorer for dpg_constraints
+    if args.scoring == 'dpg_constraints':
+        print("Using DPG constraint separation scorer (optimizing for counterfactual generation)")
+        scoring = make_dpg_constraint_scorer(feature_names, dpg_config=None)
+    else:
+        scoring = args.scoring
+    
     random_search = RandomizedSearchCV(
         estimator=base_clf,
         param_distributions=PARAM_DISTRIBUTIONS,
         n_iter=args.n_iter,
         cv=cv,
-        scoring=args.scoring,
+        scoring=scoring,
         n_jobs=args.n_jobs,
         verbose=args.verbose,
         random_state=args.random_state,
@@ -393,6 +462,21 @@ def main():
     
     for metric_name, metric_value in test_metrics.items():
         print(f"  {metric_name}: {metric_value:.4f}")
+    
+    # Compute final DPG constraint score on full training set
+    final_constraint_score = None
+    if args.scoring == 'dpg_constraints':
+        print("\n" + "=" * 70)
+        print("FINAL DPG CONSTRAINT SCORE (on full training set)")
+        print("=" * 70)
+        try:
+            dpg_scorer = make_dpg_constraint_scorer(feature_names, dpg_config=None)
+            final_constraint_score = dpg_scorer(best_model, X_train, y_train)
+            print(f"  Constraint Separation Score: {final_constraint_score:.4f}")
+            print(f"  (Score range: 0=complete overlap, 1=perfect separation)")
+            test_metrics['dpg_constraint_score'] = final_constraint_score
+        except Exception as e:
+            print(f"  WARNING: Failed to compute final constraint score: {e}")
     
     # Classification report
     y_pred = best_model.predict(X_test)
