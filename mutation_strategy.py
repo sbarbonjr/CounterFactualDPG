@@ -1,12 +1,11 @@
 """
-MutationStrategy: Handles genetic algorithm mutation and crossover operations.
+MutationStrategy: Handles perturbation operations for candidate generation.
 
-Extracted from CounterFactualModel.py to provide focused mutation strategy
-functionality for counterfactual generation.
+Provides perturbation strategies for counterfactual generation with
+respect to actionability constraints and dual-boundary awareness.
 """
 
 import numpy as np
-from deap import creator
 
 from constants import (
     MUTATION_EPSILON,
@@ -75,9 +74,9 @@ class MutationStrategy:
         )
 
     def create_deap_individual(self, sample_dict, feature_names):
-        """Create a DEAP individual from a dictionary."""
-        individual = creator.Individual(sample_dict)
-        return individual
+        """Create an individual from a dictionary (simple dict wrapper for API compatibility)."""
+        # Return a copy of the dict to avoid modifying the original
+        return dict(sample_dict)
 
     def mutate_individual(
         self,

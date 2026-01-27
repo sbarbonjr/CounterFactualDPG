@@ -356,7 +356,10 @@ def run_single_sample(
         # Get generation_found info for each CF (which generation each CF was discovered)
         cf_generation_found_list = result.get("cf_generation_found", None)
         
-        print(f"DEBUG run_experiment: Processing result, method={result_method}, best_fitness_list length={len(best_fitness_list)}, avg_fitness_list length={len(average_fitness_list)}, evolution_history length={len(evolution_history)}, generation_debug_table length={len(generation_debug_table_data)}")
+        # Get all counterfactuals from this generation
+        all_counterfactuals = result.get("all_counterfactuals", [])
+        
+        print(f"DEBUG run_experiment: Processing result, method={result_method}, candidates={len(all_counterfactuals)}, best_fitness={best_fitness_list[0] if best_fitness_list else 'N/A'}")
 
         # Log generation debug table to WandB if available and enabled
         if wandb_run and generation_debug_table_data and WANDB_AVAILABLE:
@@ -398,9 +401,6 @@ def run_single_sample(
                 print(f"INFO: Logged generation debug table with {len(debug_table_rows)} rows, {len(debug_columns)} columns ({len(feature_names_list)} features) to WandB")
             except Exception as e:
                 print(f"WARNING: Failed to log generation debug table to WandB: {e}")
-
-        # Get all counterfactuals from this generation
-        all_counterfactuals = result.get("all_counterfactuals", [])
 
         if all_counterfactuals:
             # Predict classifications for all counterfactuals at once (for reuse)

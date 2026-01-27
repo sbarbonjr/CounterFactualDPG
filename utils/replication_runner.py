@@ -138,7 +138,7 @@ def run_counterfactual_generation_dpg(args):
         if cf_generation_found is None or len(cf_generation_found) == 0:
             cf_generation_found = [None] * len(counterfactuals)
         
-        print(f"DEBUG counterfactual_runner: Generated {len(counterfactuals)} counterfactuals, best_fitness_list length = {len(best_fitness_list)}, avg_fitness_list length = {len(average_fitness_list)}, evolution_history length = {len(evolution_history)}, per_cf_histories = {len(per_cf_evolution_histories)}, debug_table = {len(generation_debug_table)}")
+        print(f"DEBUG counterfactual_runner: Generated {len(counterfactuals)} counterfactuals, best_fitness_list length = {len(best_fitness_list)}, avg_fitness_list length = {len(average_fitness_list)}, evolution_history length = {len(evolution_history)}")
         
         return {
             'counterfactual': counterfactual,

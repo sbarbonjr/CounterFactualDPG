@@ -357,24 +357,23 @@ class CounterFactualModel:
         original_class=None,
         num_best_results=1,
     ):
-        """Genetic algorithm implementation using DEAP framework
+        """Generate counterfactual candidates using heuristic approach.
 
-        Enhanced with dual-boundary support: uses both original and target class constraints
-        to guide evolution. Mutations escape original class bounds while approaching target bounds.
+        Uses escape-aware perturbations to generate candidates, evaluates fitness,
+        and returns the best candidates using greedy diverse selection.
 
         Args:
             sample (dict): Original sample features.
             target_class (int): Target class for counterfactual.
-            population_size (int): Population size for GA.
-            generations (int): Maximum generations to run.
-            mutation_rate (float): Base mutation rate.
+            population_size (int): Number of candidates to generate.
+            generations (int): Unused, kept for API compatibility.
+            mutation_rate (float): Unused, kept for API compatibility.
             metric (str): Distance metric for fitness calculation.
-            delta_threshold (float): Convergence threshold.
-            patience (int): Generations without improvement before early stopping.
-            n_jobs (int): Number of parallel jobs for fitness evaluation.
-                         -1 = use all CPUs (default), 1 = sequential.
-            original_class (int): Original class for escape-aware mutation (dual-boundary).
-            num_best_results (int): Number of top individuals to return from single GA run.
+            delta_threshold (float): Unused, kept for API compatibility.
+            patience (int): Unused, kept for API compatibility.
+            n_jobs (int): Unused, kept for API compatibility.
+            original_class (int): Original class for escape-aware generation.
+            num_best_results (int): Number of top individuals to return.
         """
         # Pre-compute boundary analysis for dual-boundary operations
         boundary_analysis = None
@@ -431,27 +430,24 @@ class CounterFactualModel:
         num_best_results=1,
     ):
         """
-        Generate a counterfactual for the given sample and target class using a genetic algorithm.
+        Generate counterfactuals for the given sample and target class.
 
-        Enhanced with dual-boundary support: the GA uses both original and target class
-        constraints to guide evolution, escaping original bounds while approaching target bounds.
-
-        If allow_relaxation=True and strict constraints fail, automatically retries with
-        progressively relaxed constraints to ensure a valid counterfactual is found.
+        Uses heuristic approach to generate candidate counterfactuals.
+        Falls back to nearest neighbor search if no valid candidates found.
 
         Args:
             sample (dict): The original sample with feature values.
             target_class (int): The desired class for the counterfactual.
-            population_size (int): Size of the population for the genetic algorithm.
-            generations (int): Number of generations to run.
-            mutation_rate (float): Per-feature mutation probability.
-            n_jobs (int): Number of parallel jobs. -1=all CPUs (default), 1=sequential.
-            allow_relaxation (bool): If True, retry with relaxed constraints on failure.
-            relaxation_factor (float): Factor to expand constraint bounds by (2.0 = double range).
-            num_best_results (int): Number of top individuals to return from single GA run.
+            population_size (int): Number of candidates to generate.
+            generations (int): Unused, kept for API compatibility.
+            mutation_rate (float): Unused, kept for API compatibility.
+            n_jobs (int): Unused, kept for API compatibility.
+            allow_relaxation (bool): Unused, kept for API compatibility.
+            relaxation_factor (float): Unused, kept for API compatibility.
+            num_best_results (int): Number of top counterfactuals to return.
 
         Returns:
-            list or None: A list of modified samples representing counterfactuals, or None if not found.
+            list or None: A list of counterfactuals, or None if not found.
         """
         sample_class = self.model.predict(pd.DataFrame([sample]))[0]
 
@@ -460,7 +456,7 @@ class CounterFactualModel:
                 "Target class need to be different from the predicted class label."
             )
 
-        # Pass original_class to enable dual-boundary GA
+        # Generate counterfactuals using heuristic approach
         counterfactuals = self.genetic_algorithm(
             sample,
             target_class,
@@ -472,71 +468,10 @@ class CounterFactualModel:
             num_best_results=num_best_results,
         )
 
-        # If strict constraints failed and relaxation is allowed, try with relaxed constraints
-        if (
-            (counterfactuals is None or len(counterfactuals) == 0)
-            and allow_relaxation
-            and self.constraints
-        ):
+        # Fallback: use nearest neighbor from training data
+        if counterfactuals is None or len(counterfactuals) == 0:
             if self.verbose:
-                print(
-                    "\nStrict constraints failed. Attempting with relaxed constraints..."
-                )
-
-            # Store original constraints
-            original_constraints = self.constraints
-
-            # Try progressively relaxed constraints
-            for relax_level in [relaxation_factor, relaxation_factor * 2, None]:
-                if relax_level is None:
-                    # Final attempt: no constraints (pure model optimization)
-                    if self.verbose:
-                        print(
-                            "  Attempting without DPG constraints (pure classification optimization)..."
-                        )
-                    self.constraints = {}
-                else:
-                    if self.verbose:
-                        print(
-                            f"  Attempting with {relax_level}x relaxed constraints..."
-                        )
-                    self.constraints = self._relax_constraints(
-                        original_constraints, relax_level
-                    )
-
-                counterfactuals = self.genetic_algorithm(
-                    sample,
-                    target_class,
-                    population_size,
-                    generations,
-                    mutation_rate=mutation_rate,
-                    n_jobs=n_jobs,
-                    original_class=sample_class,
-                    num_best_results=num_best_results,
-                )
-
-                if counterfactuals is not None and len(counterfactuals) > 0:
-                    if self.verbose:
-                        # Check constraint validity with original constraints
-                        is_valid, penalty = self.validate_constraints(
-                            counterfactuals[0],
-                            sample,
-                            target_class,
-                            original_class=sample_class,
-                            strict_mode=True,
-                        )
-                        print(
-                            f"  Found {len(counterfactuals)} counterfactual(s) (original constraint valid: {is_valid}, penalty: {penalty:.2f}"
-                        )
-                    break
-
-            # Restore original constraints
-            self.constraints = original_constraints
-
-        # Ultimate fallback: use nearest neighbor from training data
-        if (counterfactuals is None or len(counterfactuals) == 0) and allow_relaxation:
-            if self.verbose:
-                print("\nGA methods failed. Attempting nearest neighbor fallback...")
+                print("\nHeuristic generation failed. Attempting nearest neighbor fallback...")
             neighbor_cf = self.find_nearest_counterfactual(
                 sample, target_class, validate_prediction=True
             )
@@ -548,64 +483,6 @@ class CounterFactualModel:
                 counterfactuals = None
 
         return counterfactuals
-
-    def _relax_constraints(self, constraints, factor=2.0):
-        """
-        Relax constraints by expanding their bounds by a factor.
-
-        Args:
-            constraints: Original constraint dictionary in format:
-                {class_key: {feature_name: {'min': ..., 'max': ...}, ...}, ...}
-            factor: Factor to expand bounds by (e.g., 2.0 doubles the range)
-
-        Returns:
-            dict: Relaxed constraints in same format
-        """
-        relaxed = {}
-        for class_key, class_constraints in constraints.items():
-            relaxed[class_key] = {}
-
-            # Handle both dict and list formats
-            if isinstance(class_constraints, dict):
-                # Format: {feature_name: {'min': ..., 'max': ...}, ...}
-                for feature, bounds in class_constraints.items():
-                    if isinstance(bounds, dict):
-                        min_val = bounds.get("min")
-                        max_val = bounds.get("max")
-
-                        if min_val is not None and max_val is not None:
-                            # Expand the range by factor
-                            center = (min_val + max_val) / 2
-                            half_range = (max_val - min_val) / 2
-                            relaxed[class_key][feature] = {
-                                "min": center - half_range * factor,
-                                "max": center + half_range * factor,
-                            }
-                        else:
-                            relaxed[class_key][feature] = bounds.copy()
-                    else:
-                        relaxed[class_key][feature] = bounds
-            elif isinstance(class_constraints, list):
-                # Legacy format: [{'feature': ..., 'min': ..., 'max': ...}, ...]
-                relaxed[class_key] = []
-                for c in class_constraints:
-                    feature = c.get("feature", "")
-                    min_val = c.get("min")
-                    max_val = c.get("max")
-
-                    if min_val is not None and max_val is not None:
-                        center = (min_val + max_val) / 2
-                        half_range = (max_val - min_val) / 2
-                        relaxed[class_key].append(
-                            {
-                                "feature": feature,
-                                "min": center - half_range * factor,
-                                "max": center + half_range * factor,
-                            }
-                        )
-                    else:
-                        relaxed[class_key].append(c.copy())
-        return relaxed
 
     def find_nearest_counterfactual(
         self,

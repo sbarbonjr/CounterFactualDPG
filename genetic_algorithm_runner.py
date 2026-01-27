@@ -1,23 +1,95 @@
 """
-GeneticAlgorithmRunner: Orchestrates the genetic algorithm for counterfactual generation.
+HeuristicRunner: Generates counterfactual candidates using heuristic approach.
 
-Extracted from CounterFactualModel.py to handle DEAP setup, population initialization,
-evolution loop, and result validation in a focused, testable class.
+Generates a pool of candidate counterfactuals using escape-aware perturbations,
+evaluates fitness, and returns the best candidates using greedy diverse selection.
+No iterative evolution - single-pass candidate generation and evaluation.
 """
 
 import numpy as np
 import pandas as pd
-from deap import base, creator, tools
 
 from constants import INVALID_FITNESS
 
 
+class Fitness:
+    """Simple fitness container for compatibility with HOF."""
+    def __init__(self, value):
+        self.values = (value,)
+        self.valid = True
+
+
+class Individual(dict):
+    """
+    Dict subclass that can hold a fitness attribute.
+    
+    Replaces DEAP's Individual for simple dict-based individuals
+    that need fitness tracking.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fitness = Fitness(float('inf'))
+
+
+class DistanceBasedHOF:
+    """
+    Hall of Fame that ranks individuals by distance to original sample.
+    
+    Unlike GA's HOF which uses fitness (with diversity/repulsion bonuses),
+    this ranks purely by Euclidean distance to the original sample.
+    This prevents the drift-away problem where bonuses cause CFs to move far from original.
+    """
+    
+    def __init__(self, maxsize, original_features, feature_names):
+        self.maxsize = maxsize
+        self.original_features = original_features
+        self.feature_names = feature_names
+        self.items = []
+    
+    def update(self, population):
+        """Update HOF with individuals from population, ranked by distance to original."""
+        for ind in population:
+            # Skip invalid fitness individuals
+            if not hasattr(ind, 'fitness') or not ind.fitness.valid:
+                continue
+            if ind.fitness.values[0] >= INVALID_FITNESS:
+                continue
+            
+            # Calculate distance to original
+            ind_array = np.array([ind[f] for f in self.feature_names])
+            distance = np.linalg.norm(ind_array - self.original_features)
+            
+            # Check for duplicates
+            is_dup = False
+            for existing_dist, existing_ind in self.items:
+                existing_array = np.array([existing_ind[f] for f in self.feature_names])
+                if np.allclose(ind_array, existing_array, atol=0.01):
+                    is_dup = True
+                    break
+            
+            if not is_dup:
+                self.items.append((distance, dict(ind)))
+                # Sort by distance and keep top maxsize
+                self.items.sort(key=lambda x: x[0])
+                self.items = self.items[:self.maxsize]
+    
+    def __len__(self):
+        return len(self.items)
+    
+    def __getitem__(self, idx):
+        return self.items[idx][1]
+    
+    def __iter__(self):
+        return iter([item[1] for item in self.items])
+
+
 class GeneticAlgorithmRunner:
     """
-    Runs genetic algorithm using DEAP framework for counterfactual generation.
+    Generates counterfactual candidates using heuristic approach.
     
-    Enhanced with dual-boundary support: uses both original and target class constraints
-    to guide evolution. Mutations escape original class bounds while approaching target bounds.
+    Uses escape-aware perturbations to generate a pool of candidates,
+    evaluates fitness for validity checking, and returns best candidates
+    using greedy diverse selection based on distance to original.
     """
 
     def __init__(
@@ -30,7 +102,7 @@ class GeneticAlgorithmRunner:
         generation_debugging=False,
     ):
         """
-        Initialize the genetic algorithm runner.
+        Initialize the heuristic runner.
 
         Args:
             model: Trained ML model with predict() and predict_proba() methods.
@@ -39,7 +111,7 @@ class GeneticAlgorithmRunner:
             verbose (bool): Whether to print progress messages.
             min_probability_margin (float): Minimum probability difference between
                 target class and second-best class for valid counterfactuals.
-            generation_debugging (bool): Enable detailed per-generation fitness tracking.
+            generation_debugging (bool): Unused, kept for API compatibility.
         """
         self.model = model
         self.constraints = constraints
@@ -48,15 +120,16 @@ class GeneticAlgorithmRunner:
         self.min_probability_margin = min_probability_margin
         self.generation_debugging = generation_debugging
 
-        # Evolution tracking
+        # Tracking attributes (kept for API compatibility, simplified)
         self.best_fitness_list = []
         self.average_fitness_list = []
+        self.std_fitness_list = []
         self.evolution_history = []
         self.hof_evolution_histories = {}
         self.per_cf_evolution_histories = []
-        self.generation_debug_table = []  # Per-generation fitness component breakdown
-        self.best_minimal_cfs = []  # Track historically closest valid CFs
-        self._original_features = None  # Stored for proximity-weighted selection
+        self.generation_debug_table = []
+        self.cf_generation_found = []
+        self._original_features = None
 
     def run(
         self,
@@ -64,17 +137,17 @@ class GeneticAlgorithmRunner:
         target_class,
         original_class,
         population_size,
-        generations,
-        mutation_rate,
+        generations,  # Unused, kept for API compatibility
+        mutation_rate,  # Unused, kept for API compatibility
         metric,
-        delta_threshold,
-        patience,
-        n_jobs,
+        delta_threshold,  # Unused, kept for API compatibility
+        patience,  # Unused, kept for API compatibility
+        n_jobs,  # Unused, kept for API compatibility
         num_best_results,
         boundary_analysis,
         # Callbacks for CounterFactualModel methods
         create_individual_func,
-        crossover_func,
+        crossover_func,  # Unused, kept for API compatibility
         mutate_func,
         calculate_fitness_func,
         get_valid_sample_func,
@@ -82,24 +155,24 @@ class GeneticAlgorithmRunner:
         features_match_func,
     ):
         """
-        Run the genetic algorithm to find counterfactuals.
+        Generate counterfactual candidates using heuristic approach.
 
         Args:
             sample (dict): Original sample features.
             target_class (int): Target class for counterfactual.
-            original_class (int): Original class for escape-aware mutation.
-            population_size (int): Population size for GA.
-            generations (int): Maximum generations to run.
-            mutation_rate (float): Base mutation rate.
+            original_class (int): Original class for escape-aware generation.
+            population_size (int): Number of candidates to generate.
+            generations: Unused, kept for API compatibility.
+            mutation_rate: Unused, kept for API compatibility.
             metric (str): Distance metric for fitness calculation.
-            delta_threshold (float): Convergence threshold.
-            patience (int): Generations without improvement before early stopping.
-            n_jobs (int): Number of parallel jobs (-1=all CPUs, 1=sequential).
+            delta_threshold: Unused, kept for API compatibility.
+            patience: Unused, kept for API compatibility.
+            n_jobs: Unused, kept for API compatibility.
             num_best_results (int): Number of top individuals to return.
             boundary_analysis (dict): Pre-computed boundary analysis between classes.
-            create_individual_func: Function to create DEAP individual.
-            crossover_func: Function for crossover operation.
-            mutate_func: Function for mutation operation.
+            create_individual_func: Function to create individual dict.
+            crossover_func: Unused, kept for API compatibility.
+            mutate_func: Function for perturbation.
             calculate_fitness_func: Function to calculate fitness.
             get_valid_sample_func: Function to generate valid sample.
             normalize_feature_func: Function to normalize feature names.
@@ -111,7 +184,7 @@ class GeneticAlgorithmRunner:
         feature_names = list(sample.keys())
         original_features = np.array([sample[feature] for feature in feature_names])
         
-        # Store for proximity-weighted selection
+        # Store for selection
         self._original_features = original_features
 
         # Log dual-boundary info
@@ -122,52 +195,7 @@ class GeneticAlgorithmRunner:
                 f"[Dual-Boundary] Escape directions: {boundary_analysis.get('escape_direction', {})}"
             )
 
-        # Reset DEAP classes if they already exist
-        if hasattr(creator, "FitnessMin"):
-            del creator.FitnessMin
-        if hasattr(creator, "Individual"):
-            del creator.Individual
-
-        # Create DEAP types
-        creator.create("FitnessMin", base.Fitness, weights=(-1.0,))  # Minimize fitness
-        creator.create("Individual", dict, fitness=creator.FitnessMin)
-
-        # Initialize toolbox
-        toolbox = base.Toolbox()
-
-        # Enable parallel processing
-        pool = None
-        if n_jobs != 1:
-            from multiprocessing import Pool
-            import os
-
-            if n_jobs == -1:
-                n_jobs = os.cpu_count()
-            pool = Pool(processes=n_jobs)
-            toolbox.register("map", pool.map)
-
-        # Register genetic operators
-        toolbox.register(
-            "individual",
-            create_individual_func,
-            sample_dict=get_valid_sample_func(sample, target_class, original_class),
-            feature_names=feature_names,
-        )
-        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-        toolbox.register("mate", crossover_func, indpb=0.6, sample=sample)
-        toolbox.register("select", self._select_diverse)
-        toolbox.register(
-            "mutate",
-            mutate_func,
-            sample=sample,
-            feature_names=feature_names,
-            mutation_rate=mutation_rate,
-            target_class=target_class,
-            original_class=original_class,
-            boundary_analysis=boundary_analysis,
-        )
-
-        # Initialize population
+        # Initialize population of candidates
         population = self._initialize_population(
             sample,
             target_class,
@@ -181,102 +209,59 @@ class GeneticAlgorithmRunner:
             features_match_func,
         )
 
-        # Register evaluate operator (captures population in closure)
-        toolbox.register(
-            "evaluate",
-            lambda ind: (
-                calculate_fitness_func(
-                    ind,
-                    original_features,
-                    sample,
-                    target_class,
-                    metric,
-                    population,
-                    original_class,
-                ),
-            ),
-        )
-
-        # Setup statistics
-        stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register(
-            "avg",
-            lambda x: np.nanmean(
-                [
-                    val[0]
-                    for val in x
-                    if not np.isinf(val[0]) and val[0] < INVALID_FITNESS
-                ]
-            )
-            if any(not np.isinf(val[0]) and val[0] < INVALID_FITNESS for val in x)
-            else np.nan,
-        )
-        stats.register(
-            "min",
-            lambda x: np.nanmin(
-                [
-                    val[0]
-                    for val in x
-                    if not np.isinf(val[0]) and val[0] < INVALID_FITNESS
-                ]
-            )
-            if any(not np.isinf(val[0]) and val[0] < INVALID_FITNESS for val in x)
-            else np.inf,
-        )
-        stats.register(
-            "std",
-            lambda x: np.nanstd(
-                [
-                    val[0]
-                    for val in x
-                    if not np.isinf(val[0]) and val[0] < INVALID_FITNESS
-                ]
-            )
-            if any(not np.isinf(val[0]) and val[0] < INVALID_FITNESS for val in x)
-            else np.nan,
-        )
-
-        # Setup hall of fame
-        hof = tools.HallOfFame(num_best_results)
-
         # Reset tracking
         self.best_fitness_list = []
         self.average_fitness_list = []
         self.std_fitness_list = []
         self.evolution_history = []
-        self.hof_evolution_histories = {i: [] for i in range(num_best_results)}
+        self.hof_evolution_histories = {}
+        self.per_cf_evolution_histories = []
         self.generation_debug_table = []
-        self.best_minimal_cfs = []  # Track historically closest valid CFs
+        self.cf_generation_found = []
 
-        # Run evolution
-        self._evolve(
-            toolbox,
-            population,
-            stats,
-            hof,
-            generations,
-            delta_threshold,
-            patience,
-            mutation_rate,
-            mutate_func,
-            sample,
-            feature_names,
-            target_class,
-            original_class,
-            boundary_analysis,
-            population_size,
-            num_best_results,
-            normalize_feature_func,
-            features_match_func,
-            calculate_fitness_func,
-            original_features,
-            metric,
-        )
+        # Evaluate fitness for all candidates
+        fitnesses = []
+        for ind in population:
+            fitness = calculate_fitness_func(
+                ind,
+                original_features,
+                sample,
+                target_class,
+                metric,
+                population,
+                original_class,
+            )
+            ind.fitness = Fitness(fitness)
+            fitnesses.append(fitness)
 
-        # Clean up multiprocessing pool
-        if pool is not None:
-            pool.close()
-            pool.join()
+        # Compute statistics for tracking (single generation)
+        valid_fitnesses = [f for f in fitnesses if f < INVALID_FITNESS and not np.isinf(f)]
+        if valid_fitnesses:
+            best_fitness = min(valid_fitnesses)
+            avg_fitness = np.mean(valid_fitnesses)
+            std_fitness = np.std(valid_fitnesses)
+        else:
+            best_fitness = float('inf')
+            avg_fitness = float('nan')
+            std_fitness = float('nan')
+
+        self.best_fitness_list = [best_fitness]
+        self.average_fitness_list = [avg_fitness]
+        self.std_fitness_list = [std_fitness]
+
+        # Track best individual for evolution history
+        best_ind = min(population, key=lambda x: x.fitness.values[0])
+        if best_ind.fitness.values[0] < INVALID_FITNESS:
+            entry = dict(best_ind)
+            entry["_fitness"] = best_ind.fitness.values[0]
+            self.evolution_history = [entry]
+
+        if self.verbose:
+            print(f"Candidates generated: {len(population)}, Best fitness: {best_fitness:.4f}, Avg: {avg_fitness:.4f}")
+
+        # Create HOF using distance-based ranking
+        hof = DistanceBasedHOF(num_best_results * 4, original_features, feature_names)
+        hof.update(population)
 
         # Validate and return results
         return self._validate_counterfactuals(
@@ -285,78 +270,6 @@ class GeneticAlgorithmRunner:
             target_class,
             num_best_results,
         )
-
-    def _select_diverse(self, individuals, k):
-        """
-        Select k individuals balancing fitness quality, diversity, and proximity to original.
-        
-        Scoring components (lower is better):
-        - fitness_val: raw fitness from GA
-        - diversity_bonus: negative reward for being different from selected (encourages spread)
-        - proximity_penalty: positive penalty for being far from original (encourages closeness)
-        
-        This prevents population from drifting too far from the original sample.
-        """
-        selected = []
-        remaining = list(individuals)
-
-        if not remaining:
-            return selected
-
-        # Always include the best individual first
-        remaining_sorted = sorted(
-            remaining, key=lambda x: x.fitness.values[0] if x.fitness.valid else 1e9
-        )
-        best = remaining_sorted[0]
-        selected.append(best)
-        remaining.remove(best)
-
-        # Select remaining individuals balancing fitness, diversity, and proximity
-        while len(selected) < k and remaining:
-            best_candidate = None
-            best_score = float("inf")
-
-            for candidate in remaining:
-                # Get fitness (lower is better)
-                fitness_val = (
-                    candidate.fitness.values[0] if candidate.fitness.valid else 1e9
-                )
-
-                # Calculate minimum distance to already selected individuals
-                cand_array = np.array(
-                    [candidate[key] for key in sorted(candidate.keys())]
-                )
-                min_dist = float("inf")
-                for sel in selected:
-                    sel_array = np.array([sel[key] for key in sorted(sel.keys())])
-                    dist = np.linalg.norm(cand_array - sel_array)
-                    min_dist = min(min_dist, dist)
-
-                # Diversity bonus: reward being different from selected (negative = better)
-                diversity_bonus = -0.2 * min_dist  # Reduced from 0.3 to balance with proximity
-                
-                # Proximity penalty: penalize being far from original (positive = worse)
-                proximity_penalty = 0.0
-                if self._original_features is not None:
-                    dist_to_original = np.linalg.norm(cand_array - self._original_features)
-                    proximity_penalty = 0.4 * dist_to_original  # 40% weight on proximity
-                
-                # Combined score (lower is better)
-                score = fitness_val + diversity_bonus + proximity_penalty
-
-                if score < best_score:
-                    best_score = score
-                    best_candidate = candidate
-
-            if best_candidate:
-                selected.append(best_candidate)
-                remaining.remove(best_candidate)
-            else:
-                # If no candidate found, fill with random from remaining
-                if remaining:
-                    selected.append(remaining.pop(0))
-
-        return selected
 
     def _initialize_population(
         self,
@@ -373,10 +286,12 @@ class GeneticAlgorithmRunner:
     ):
         """
         Create initial population with escape-aware perturbations.
+        
+        Returns list of Individual objects that can hold fitness.
         """
         # First individual is the original sample adjusted to constraint boundaries
         base_individual = get_valid_sample_func(sample, target_class, original_class)
-        population = [create_individual_func(base_individual.copy(), feature_names)]
+        population = [Individual(create_individual_func(base_individual.copy(), feature_names))]
 
         # Get constraints and escape directions
         target_constraints = self.constraints.get(f"Class {target_class}", [])
@@ -422,231 +337,50 @@ class GeneticAlgorithmRunner:
                 # Ensure non-negative and round
                 perturbed[feature] = np.round(max(0, perturbed[feature]), 2)
 
-            population.append(create_individual_func(perturbed, feature_names))
+            population.append(Individual(create_individual_func(perturbed, feature_names)))
 
         return population
 
-    def _evolve(
-        self,
-        toolbox,
-        population,
-        stats,
-        hof,
-        generations,
-        delta_threshold,
-        patience,
-        mutation_rate,
-        mutate_func,
-        sample,
-        feature_names,
-        target_class,
-        original_class,
-        boundary_analysis,
-        population_size,
-        num_best_results,
-        normalize_feature_func,
-        features_match_func,
-        calculate_fitness_func,
-        original_features,
-        metric,
+    def _validate_counterfactuals(
+        self, hof, sample, target_class, num_best_results
     ):
         """
-        Run the evolution loop for the specified number of generations.
-        """
-        previous_hof_items = [None] * num_best_results
-        previous_best_fitness = float("inf")
-        historical_best_fitness = float("inf")  # Track best fitness ever seen (monotonically non-increasing)
-        stable_generations = 0
-        current_mutation_rate = mutation_rate
-
-        target_constraints = self.constraints.get(f"Class {target_class}", [])
-        escape_directions = (
-            boundary_analysis.get("escape_direction", {}) if boundary_analysis else {}
-        )
-
-        for generation in range(generations):
-            # Evaluate population
-            fitnesses = list(map(toolbox.evaluate, population))
-            for ind, fit in zip(population, fitnesses):
-                ind.fitness.values = fit
-
-            # Track best-minimal valid CFs (closest to original that predict target class)
-            self._update_best_minimal_cfs(
-                population, sample, target_class, original_features, num_best_results, generation=generation
-            )
-
-            # Update statistics and hall of fame
-            record = stats.compile(population)
-            hof.update(population)
-
-            # Track evolution history
-            self._update_evolution_history(hof, num_best_results, previous_hof_items)
-
-            # Track current generation's best and update historical best
-            current_best = record["min"]
-            historical_best_fitness = min(historical_best_fitness, current_best)
-            best_fitness = historical_best_fitness  # Report historical best for monotonic tracking
-            average_fitness = record["avg"]
-            std_fitness = record["std"]
-
-            self.best_fitness_list.append(best_fitness)
-            self.average_fitness_list.append(average_fitness)
-            self.std_fitness_list.append(std_fitness)
-
-            # Collect detailed fitness component breakdown for generation debugging
-            if self.generation_debugging and len(hof) > 0:
-                best_ind = hof[0]
-                if best_ind.fitness.values[0] != np.inf and best_ind.fitness.values[0] < INVALID_FITNESS:
-                    try:
-                        # Call fitness function with return_components=True to get breakdown
-                        _, components = calculate_fitness_func(
-                            best_ind,
-                            original_features,
-                            sample,
-                            target_class,
-                            metric,
-                            population,
-                            original_class,
-                            return_components=True
-                        )
-                        
-                        # Build debug row with generation, features, and all fitness components
-                        debug_row = {
-                            'generation': generation + 1,
-                            'feature_values': {k: float(v) for k, v in best_ind.items()},
-                            # Fitness components
-                            **components  # Unpack all component values
-                        }
-                        self.generation_debug_table.append(debug_row)
-                    except Exception as e:
-                        # If component extraction fails, just store basics
-                        # Always print this warning since generation_debugging is explicitly enabled
-                        import traceback
-                        print(f"Warning: Failed to extract fitness components for generation {generation + 1}: {e}")
-                        print(f"Traceback: {traceback.format_exc()}")
-                        debug_row = {
-                            'generation': generation + 1,
-                            'total_fitness': float(best_ind.fitness.values[0]),
-                            'feature_values': {k: float(v) for k, v in best_ind.items()},
-                        }
-                        self.generation_debug_table.append(debug_row)
-
-            # Check for convergence
-            fitness_improvement = previous_best_fitness - best_fitness
-            if fitness_improvement < delta_threshold:
-                stable_generations += 1
-            else:
-                stable_generations = 0
-
-            if self.verbose:
-                print(
-                    f"****** Generation {generation + 1}: Average Fitness = {average_fitness:.4f}, Best Fitness = {best_fitness:.4f}, fitness improvement = {fitness_improvement:.4f}"
-                )
-
-            previous_best_fitness = best_fitness
-
-            # Early stopping
-            if stable_generations >= patience:
-                if self.verbose:
-                    print(f"Convergence reached at generation {generation + 1}")
-                break
-
-            # Selection
-            offspring = toolbox.select(population, len(population))
-            offspring = [toolbox.clone(ind) for ind in offspring]
-
-            # Crossover
-            for child1, child2 in zip(offspring[::2], offspring[1::2]):
-                if np.random.rand() < 0.7:
-                    toolbox.mate(child1, child2)
-                    del child1.fitness.values
-                    del child2.fitness.values
-
-            # Mutation
-            for mutant in offspring:
-                toolbox.mutate(mutant)
-                del mutant.fitness.values
-
-            # Inject random immigrants (10% of population)
-            offspring = self._inject_immigrants(
-                offspring,
-                population_size,
-                sample,
-                feature_names,
-                target_constraints,
-                escape_directions,
-                normalize_feature_func,
-                features_match_func,
-            )
-
-            # Adaptive mutation rate
-            current_mutation_rate *= 0.99
-            toolbox.unregister("mutate")
-            toolbox.register(
-                "mutate",
-                mutate_func,
-                sample=sample,
-                feature_names=feature_names,
-                mutation_rate=current_mutation_rate,
-                target_class=target_class,
-                original_class=original_class,
-                boundary_analysis=boundary_analysis,
-            )
-
-            # Evaluate offspring before elitism selection
-            for ind in offspring:
-                if not ind.fitness.valid:
-                    ind.fitness.values = toolbox.evaluate(ind)
-
-            # Elitism: select best individuals from combined pool of population + offspring
-            # This ensures elites are only replaced when truly better individuals exist
-            elite_size = max(1, min(5, int(0.1 * population_size)))
-            combined = population + offspring
-            sorted_combined = sorted(
-                combined, key=lambda ind: ind.fitness.values[0]
-            )
-            elites = [toolbox.clone(ind) for ind in sorted_combined[:elite_size]]
-
-            # Replace population: offspring fills most slots, elites guarantee best are kept
-            population[:] = offspring[:-elite_size] + elites
-
-        return hof
-
-    def _update_best_minimal_cfs(self, population, sample, target_class, original_features, num_best_results, generation=0):
-        """
-        Track the historically closest valid counterfactuals found during evolution.
-        A valid CF must predict the target class with sufficient probability margin.
+        Validate counterfactuals and build evolution histories.
         
-        This preserves good candidates from early generations that might be lost
-        as the population spreads due to diversity pressure.
-        
-        AGGRESSIVE TRACKING: Keeps 4x the requested CFs to ensure we have enough
-        for the 80% minimal allocation in final selection.
-        
-        Args:
-            generation: Current generation number (0-indexed)
+        Uses GREEDY DIVERSE SELECTION to balance:
+        - Proximity: CFs should be close to original sample
+        - Diversity: CFs should be different from each other
         """
         feature_names = list(sample.keys())
+        original_features = self._original_features
         
-        # Keep 4x candidates to ensure enough for 80% fill (some may be filtered as duplicates)
-        max_candidates = num_best_results * 4
+        # Tunable parameter for diversity vs proximity
+        diversity_lambda = 0.6
         
-        for ind in population:
-            # Skip invalid fitness
-            if not ind.fitness.valid or ind.fitness.values[0] >= INVALID_FITNESS:
-                continue
+        if self.verbose:
+            print("\n=== CF Selection (Greedy Diverse) ===")
+            print(f"Requested: {num_best_results} CFs")
+            print(f"Available in HOF: {len(hof)}")
+        
+        # Build candidate pool from HOF
+        candidates = []
+        for ind in hof:
+            cf_dict = dict(ind) if not isinstance(ind, dict) else ind
+            cf_array = np.array([cf_dict[f] for f in feature_names])
+            distance = np.linalg.norm(cf_array - original_features)
             
-            # Check if this individual predicts the target class
-            features = np.array([ind[f] for f in feature_names]).reshape(1, -1)
+            # Verify prediction
             try:
                 if self.feature_names is not None:
-                    features_df = pd.DataFrame(features, columns=self.feature_names)
+                    features_df = pd.DataFrame([cf_dict])
                     predicted_class = self.model.predict(features_df)[0]
                     proba = self.model.predict_proba(features_df)[0]
                 else:
+                    features = np.array([cf_dict[f] for f in feature_names]).reshape(1, -1)
                     predicted_class = self.model.predict(features)[0]
                     proba = self.model.predict_proba(features)[0]
                 
+                # Skip if doesn't predict target class
                 if predicted_class != target_class:
                     continue
                 
@@ -664,237 +398,24 @@ class GeneticAlgorithmRunner:
                 
                 if margin < self.min_probability_margin:
                     continue
-                
+                    
             except Exception:
                 continue
             
-            # Calculate Euclidean distance to original (this is the TRUE base fitness metric)
-            ind_array = np.array([ind[f] for f in feature_names])
-            distance_to_original = np.linalg.norm(ind_array - original_features)
-            
-            # Create candidate entry - track by DISTANCE, not GA fitness (which includes bonuses)
-            candidate = {
-                'individual': dict(ind),
-                'distance': distance_to_original,
-                'ga_fitness': ind.fitness.values[0],  # Keep for reference
-                'generation_found': generation,  # Track when this CF was found
-            }
-            
-            # Check if this should be added to best_minimal_cfs
-            # Keep top candidates by distance (not GA fitness)
-            dominated = False
-            to_remove = []
-            
-            for i, existing in enumerate(self.best_minimal_cfs):
-                # Check if candidate is essentially the same individual
-                existing_array = np.array([existing['individual'][f] for f in feature_names])
-                if np.allclose(ind_array, existing_array, atol=0.01):
-                    # Same individual - keep the one with better distance
-                    if distance_to_original < existing['distance']:
-                        to_remove.append(i)
-                    else:
-                        dominated = True
-                    break
-            
-            # Remove dominated entries
-            for i in reversed(to_remove):
-                self.best_minimal_cfs.pop(i)
-            
-            if not dominated:
-                self.best_minimal_cfs.append(candidate)
-                # Sort by distance and keep only top candidates
-                self.best_minimal_cfs.sort(key=lambda x: x['distance'])
-                self.best_minimal_cfs = self.best_minimal_cfs[:max_candidates]
-
-    def _update_evolution_history(self, hof, num_best_results, previous_hof_items):
-        """
-        Track evolution history for visualization.
-        """
-        # Store best individual for this generation
-        if hof[0].fitness.values[0] != np.inf:
-            entry = dict(hof[0])
-            entry["_fitness"] = hof[0].fitness.values[0]
-            self.evolution_history.append(entry)
-
-        # Track evolution history per HOF entry
-        for hof_idx in range(min(len(hof), num_best_results)):
-            current_hof_item = hof[hof_idx]
-            current_hof_dict = dict(current_hof_item)
-            current_fitness = current_hof_item.fitness.values[0]
-
-            # Skip invalid entries
-            if current_fitness == np.inf or current_fitness >= INVALID_FITNESS:
-                continue
-
-            # Check if this HOF position has a new individual
-            prev_item = previous_hof_items[hof_idx]
-            is_new_entry = (
-                prev_item is None
-                or dict(prev_item) != current_hof_dict
-                or prev_item.fitness.values[0] != current_fitness
-            )
-
-            if is_new_entry:
-                # Copy shared evolution history as lineage
-                if len(self.evolution_history) > 1:
-                    self.hof_evolution_histories[hof_idx] = list(
-                        self.evolution_history[:-1]
-                    )
-                else:
-                    self.hof_evolution_histories[hof_idx] = []
-
-                # Store reference to track changes
-                from deap import base
-                previous_hof_items[hof_idx] = base.Toolbox().clone(current_hof_item)
-
-    def _inject_immigrants(
-        self,
-        offspring,
-        population_size,
-        sample,
-        feature_names,
-        target_constraints,
-        escape_directions,
-        normalize_feature_func,
-        features_match_func,
-    ):
-        """
-        Inject random immigrants to maintain genetic diversity.
-        """
-        num_immigrants = max(1, int(0.1 * population_size))
-
-        for i in range(num_immigrants):
-            immigrant = {}
-
-            for feature in feature_names:
-                norm_feature = normalize_feature_func(feature)
-                escape_dir = escape_directions.get(norm_feature, "both")
-
-                # Find constraint for this feature
-                matching_constraint = next(
-                    (
-                        c
-                        for c in target_constraints
-                        if features_match_func(c.get("feature", ""), feature)
-                    ),
-                    None,
-                )
-
-                if matching_constraint:
-                    feature_min = matching_constraint.get("min")
-                    feature_max = matching_constraint.get("max")
-
-                    # Generate random value biased by escape direction
-                    if feature_min is not None and feature_max is not None:
-                        if escape_dir == "increase":
-                            mid = (feature_min + feature_max) / 2
-                            immigrant[feature] = np.random.uniform(mid, feature_max)
-                        elif escape_dir == "decrease":
-                            mid = (feature_min + feature_max) / 2
-                            immigrant[feature] = np.random.uniform(feature_min, mid)
-                        else:
-                            immigrant[feature] = np.random.uniform(
-                                feature_min, feature_max
-                            )
-                    elif feature_min is not None:
-                        immigrant[feature] = np.random.uniform(
-                            feature_min, feature_min + 2.0
-                        )
-                    elif feature_max is not None:
-                        immigrant[feature] = np.random.uniform(
-                            max(0, feature_max - 2.0), feature_max
-                        )
-                    else:
-                        immigrant[feature] = sample[feature] + np.random.uniform(
-                            -1.0, 1.0
-                        )
-                else:
-                    immigrant[feature] = sample[feature] + np.random.uniform(
-                        -1.0, 1.0
-                    )
-
-                # Ensure non-negative and round
-                immigrant[feature] = np.round(max(0, immigrant[feature]), 2)
-
-            # Replace one of the worst offspring
-            immigrant_ind = creator.Individual(immigrant)
-            offspring[-(i + 1)] = immigrant_ind
-
-        return offspring
-
-    def _validate_counterfactuals(
-        self, hof, sample, target_class, num_best_results
-    ):
-        """
-        Validate counterfactuals and build evolution histories.
-        
-        Uses GREEDY DIVERSE SELECTION to balance:
-        - Proximity: CFs should be close to original sample
-        - Diversity: CFs should be different from each other
-        
-        Algorithm:
-        1. Always pick the closest valid CF first
-        2. For subsequent CFs, use MMR-style scoring:
-           score = diversity_weight * min_dist_to_selected - proximity_weight * dist_to_original
-        
-        This ensures we get the closest CF plus diverse alternatives.
-        """
-        feature_names = list(sample.keys())
-        original_features = self._original_features
-        
-        # Tunable parameter: how much to weight diversity vs proximity
-        # Higher diversity_lambda = more spread out CFs
-        # Lower diversity_lambda = CFs closer to original but more similar
-        diversity_lambda = 0.6  # 60% diversity, 40% proximity for subsequent selections
-        
-        if self.verbose:
-            print("\n=== CF Selection (Greedy Diverse) ===")
-            print(f"Requested: {num_best_results} CFs")
-            print(f"Available in HOF: {len(hof)}")
-            print(f"Diversity lambda: {diversity_lambda}")
-        
-        # Build candidate pool from HOF
-        candidates = []
-        for ind in hof:
-            cf_dict = dict(ind)
-            cf_array = np.array([cf_dict[f] for f in feature_names])
-            distance = np.linalg.norm(cf_array - original_features)
-            fitness = ind.fitness.values[0] if ind.fitness.valid else float('inf')
             candidates.append({
                 'cf': cf_dict,
                 'array': cf_array,
                 'distance': distance,
-                'fitness': fitness,
             })
         
-        # Also add from best_minimal_cfs as backup
-        for minimal_cf in self.best_minimal_cfs:
-            cf_dict = minimal_cf['individual']
-            cf_array = np.array([cf_dict[f] for f in feature_names])
-            
-            # Check if already in candidates (avoid duplicates)
-            is_dup = False
-            for cand in candidates:
-                if np.allclose(cf_array, cand['array'], atol=0.01):
-                    is_dup = True
-                    break
-            if not is_dup:
-                candidates.append({
-                    'cf': cf_dict,
-                    'array': cf_array,
-                    'distance': minimal_cf['distance'],
-                    'generation_found': minimal_cf.get('generation_found', None),
-                })
-        
         if self.verbose:
-            print(f"Total candidate pool: {len(candidates)}")
+            print(f"Valid candidates: {len(candidates)}")
         
         final_counterfactuals = []
         selected_arrays = []
         
         # STEP 1: Always pick the closest CF first
         if candidates:
-            # Sort by distance and pick closest
             candidates.sort(key=lambda x: x['distance'])
             closest = candidates[0]
             final_counterfactuals.append(closest['cf'])
@@ -910,7 +431,7 @@ class GeneticAlgorithmRunner:
             best_score = float('-inf')
             
             for cand in candidates:
-                # Skip near-duplicates of already selected
+                # Skip near-duplicates
                 is_dup = False
                 for sel_arr in selected_arrays:
                     if np.allclose(cand['array'], sel_arr, atol=0.01):
@@ -919,20 +440,15 @@ class GeneticAlgorithmRunner:
                 if is_dup:
                     continue
                 
-                # Calculate minimum distance to already selected CFs (diversity)
+                # Calculate minimum distance to already selected CFs
                 min_dist_to_selected = float('inf')
                 for sel_arr in selected_arrays:
                     dist = np.linalg.norm(cand['array'] - sel_arr)
                     min_dist_to_selected = min(min_dist_to_selected, dist)
                 
-                # MMR-style score: balance diversity and proximity
-                # Normalize both terms to similar scales
-                # diversity term: higher is better (more different from selected)
-                # proximity term: lower distance is better (closer to original)
+                # MMR-style score
                 diversity_term = min_dist_to_selected
                 proximity_term = cand['distance']
-                
-                # Score: maximize diversity, minimize distance to original
                 score = diversity_lambda * diversity_term - (1 - diversity_lambda) * proximity_term
                 
                 if score > best_score:
@@ -945,18 +461,16 @@ class GeneticAlgorithmRunner:
                 candidates.remove(best_candidate)
                 
                 if self.verbose:
-                    # Calculate diversity for logging
                     min_div = float('inf')
                     for sel_arr in selected_arrays[:-1]:
                         d = np.linalg.norm(best_candidate['array'] - sel_arr)
                         min_div = min(min_div, d)
                     print(f"  [CF #{len(final_counterfactuals)}] Distance={best_candidate['distance']:.4f}, "
-                          f"MinDivFromSelected={min_div:.4f}, Score={best_score:.4f}")
+                          f"MinDivFromSelected={min_div:.4f}")
             else:
-                # No more valid candidates
                 break
         
-        # Log final summary
+        # Log summary
         if self.verbose:
             print(f"\n=== CF Selection Summary ===")
             print(f"Total CFs: {len(final_counterfactuals)}/{num_best_results} requested")
@@ -968,37 +482,11 @@ class GeneticAlgorithmRunner:
                     dist = np.linalg.norm(cf_array - original_features)
                     distances.append(dist)
                 print(f"Distance to original: min={min(distances):.4f}, max={max(distances):.4f}, avg={np.mean(distances):.4f}")
-                
-                # Calculate pairwise diversity
-                if len(final_counterfactuals) > 1:
-                    diversities = []
-                    arrays = [np.array([cf[f] for f in feature_names]) for cf in final_counterfactuals]
-                    for i in range(len(arrays)):
-                        for j in range(i + 1, len(arrays)):
-                            diversities.append(np.linalg.norm(arrays[i] - arrays[j]))
-                    print(f"Pairwise diversity: min={min(diversities):.4f}, max={max(diversities):.4f}, avg={np.mean(diversities):.4f}")
         
-        # Build per-CF evolution histories (simplified)
+        # Build per-CF evolution histories (simplified - single entry)
         self.per_cf_evolution_histories = [list(self.evolution_history) for _ in final_counterfactuals]
+        self.cf_generation_found = [0] * len(final_counterfactuals)  # All found in "generation 0"
         
-        # Build list of generation_found values corresponding to final_counterfactuals
-        # Match generation info from original candidates (before they were removed)
-        self.cf_generation_found = []
-        for cf_dict in final_counterfactuals:
-            cf_array = np.array([cf_dict[f] for f in feature_names])
-            # Find matching candidate in original pool to get generation_found
-            gen_found = None
-            
-            # Search in best_minimal_cfs directly (most reliable source)
-            for minimal_cf in self.best_minimal_cfs:
-                minimal_array = np.array([minimal_cf['individual'][f] for f in feature_names])
-                if np.allclose(cf_array, minimal_array, atol=0.01):
-                    gen_found = minimal_cf.get('generation_found')
-                    break
-            
-            self.cf_generation_found.append(gen_found)
-        
-        # Return None if no valid counterfactuals found
         if not final_counterfactuals:
             return None
         
