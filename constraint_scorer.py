@@ -1,13 +1,27 @@
 """Constraint Score Metric for evaluating DPG constraint quality.
 
 This module provides a metric to evaluate how well DPG constraints separate
-different classes, which is crucial for counterfactual generation. Better
-separation means the genetic algorithm can more easily find samples that
-are outside the original class bounds and inside the target class bounds.
+different classes, which is crucial for counterfactual generation. The metric
+balances two components:
+
+1. **Coverage Score**: How many features and classes have constraints.
+   More constrained features = more guidance for the genetic algorithm.
+   
+2. **Separation Score**: How well intervals are separated between classes.
+   Less overlap = easier to find samples outside original class bounds.
 
 Score range: [0, 1]
-  - 0: Complete overlap (all classes have identical constraints)
-  - 1: Perfect separation (no overlap between any classes)
+  - 0: No useful constraints (no coverage or complete overlap)
+  - 1: Perfect constraints (full coverage with perfect separation)
+
+The composite score is:
+  score = COVERAGE_WEIGHT * coverage + SEPARATION_WEIGHT * separation
+
+where coverage = sqrt(feature_coverage * class_coverage) (geometric mean)
+
+Future enhancement: Add a precision component measuring tightness of bounds.
+Tighter bounds provide more guidance, but adds complexity. Could weight by
+1 / (max - min + epsilon) for bounded intervals.
 """
 
 from __future__ import annotations
@@ -16,6 +30,22 @@ import json
 import numpy as np
 from itertools import combinations
 from typing import Dict, List, Optional, Tuple, Union
+
+
+# =============================================================================
+# SCORING WEIGHTS - Adjust these to tune the metric behavior
+# =============================================================================
+
+# Weight for coverage component (how many features/classes have constraints)
+# Higher = prefer more constrained features even if they overlap
+COVERAGE_WEIGHT = 0.6
+
+# Weight for separation component (how well intervals are separated)
+# Higher = prefer better separation even if fewer features are constrained
+SEPARATION_WEIGHT = 0.4
+
+# Ensure weights sum to 1.0
+assert abs(COVERAGE_WEIGHT + SEPARATION_WEIGHT - 1.0) < 1e-9, "Weights must sum to 1.0"
 
 
 def load_constraints_from_json(path: str) -> Dict:
@@ -168,13 +198,15 @@ def _get_feature_range_across_classes(
 
 def compute_constraint_score(
     constraints: Dict[str, Dict],
+    n_total_features: Optional[int] = None,
+    n_total_classes: Optional[int] = None,
     verbose: bool = False,
 ) -> Dict[str, Union[float, Dict]]:
-    """Compute the constraint separation score.
+    """Compute the constraint quality score.
     
-    This metric measures how well the constraints separate different classes,
-    which is important for counterfactual generation. Higher scores indicate
-    better separation (less overlap between class intervals).
+    This metric balances coverage (how many features/classes are constrained)
+    with separation (how well intervals are separated between classes).
+    Higher scores indicate better constraints for counterfactual generation.
     
     Args:
         constraints: Dictionary mapping class labels to feature constraints.
@@ -185,12 +217,20 @@ def compute_constraint_score(
                 },
                 ...
             }
+        n_total_features: Total number of features in the dataset. If None,
+            inferred as max features observed across all classes in constraints.
+        n_total_classes: Total number of classes in the dataset. If None,
+            inferred from the number of classes in constraints.
         verbose: If True, return detailed breakdown by feature and class pair.
     
     Returns:
         Dictionary containing:
             - "score": Overall constraint score in [0, 1]
-            - "n_classes": Number of classes
+            - "coverage_score": Coverage component [0, 1]
+            - "separation_score": Separation component [0, 1]
+            - "feature_coverage": Ratio of constrained features
+            - "class_coverage": Ratio of constrained classes
+            - "n_classes": Number of classes with constraints
             - "n_features": Number of features with constraints
             - "per_feature_scores": (if verbose) Dict of scores per feature
             - "per_pair_scores": (if verbose) Dict of scores per class pair
@@ -198,11 +238,21 @@ def compute_constraint_score(
     class_labels = list(constraints.keys())
     n_classes = len(class_labels)
     
+    # Infer total classes if not provided
+    if n_total_classes is None:
+        n_total_classes = n_classes
+    
     if n_classes < 2:
         return {
-            "score": 1.0,  # Single class = trivially separated
+            "score": 0.0,  # Single class = not useful for counterfactuals
+            "coverage_score": 0.0,
+            "separation_score": 0.0,
+            "feature_coverage": 0.0,
+            "class_coverage": n_classes / max(n_total_classes, 1),
             "n_classes": n_classes,
+            "n_total_classes": n_total_classes,
             "n_features": 0,
+            "n_total_features": n_total_features or 0,
             "message": "Need at least 2 classes to compute separation score",
         }
     
@@ -214,13 +264,42 @@ def compute_constraint_score(
     all_features = sorted(all_features)
     n_features = len(all_features)
     
+    # Infer total features if not provided (Option B: use max observed)
+    if n_total_features is None:
+        # Use the number of unique features found in constraints as proxy
+        # This is a lower bound - actual dataset may have more features
+        n_total_features = n_features
+    
     if n_features == 0:
         return {
             "score": 0.0,
+            "coverage_score": 0.0,
+            "separation_score": 0.0,
+            "feature_coverage": 0.0,
+            "class_coverage": n_classes / max(n_total_classes, 1),
             "n_classes": n_classes,
+            "n_total_classes": n_total_classes,
             "n_features": 0,
+            "n_total_features": n_total_features,
             "message": "No features with constraints found",
         }
+    
+    # ==========================================================================
+    # COVERAGE SCORE
+    # ==========================================================================
+    
+    # Feature coverage: ratio of features that have constraints
+    feature_coverage = n_features / n_total_features if n_total_features > 0 else 0.0
+    
+    # Class coverage: ratio of classes that have constraints
+    class_coverage = n_classes / n_total_classes if n_total_classes > 0 else 0.0
+    
+    # Combined coverage using geometric mean (rewards balance between both)
+    coverage_score = np.sqrt(feature_coverage * class_coverage)
+    
+    # ==========================================================================
+    # SEPARATION SCORE
+    # ==========================================================================
     
     # Compute feature ranges
     feature_ranges = {}
@@ -260,15 +339,11 @@ def compute_constraint_score(
         if pair_scores:
             per_feature_scores[feature] = np.mean(pair_scores)
     
-    # Compute overall score
+    # Compute separation score
     if per_feature_scores:
-        # Weight by number of class pairs each feature participates in
-        all_scores = []
-        for feature, score in per_feature_scores.items():
-            all_scores.append(score)
-        overall_score = np.mean(all_scores)
+        separation_score = np.mean(list(per_feature_scores.values()))
     else:
-        overall_score = 0.0
+        separation_score = 0.0
     
     # Compute per-pair average scores
     per_pair_avg = {}
@@ -278,10 +353,25 @@ def compute_constraint_score(
         else:
             per_pair_avg[pair_key] = 0.0
     
+    # ==========================================================================
+    # COMPOSITE SCORE
+    # ==========================================================================
+    
+    overall_score = (
+        COVERAGE_WEIGHT * coverage_score +
+        SEPARATION_WEIGHT * separation_score
+    )
+    
     result = {
         "score": float(overall_score),
+        "coverage_score": float(coverage_score),
+        "separation_score": float(separation_score),
+        "feature_coverage": float(feature_coverage),
+        "class_coverage": float(class_coverage),
         "n_classes": n_classes,
+        "n_total_classes": n_total_classes,
         "n_features": n_features,
+        "n_total_features": n_total_features,
         "n_class_pairs": len(class_pairs),
     }
     
@@ -295,19 +385,28 @@ def compute_constraint_score(
 
 def compute_constraint_score_from_file(
     json_path: str,
+    n_total_features: Optional[int] = None,
+    n_total_classes: Optional[int] = None,
     verbose: bool = False,
 ) -> Dict[str, Union[float, Dict]]:
     """Compute constraint score from a JSON file.
     
     Args:
         json_path: Path to JSON file with constraints
+        n_total_features: Total features in dataset (optional)
+        n_total_classes: Total classes in dataset (optional)
         verbose: If True, return detailed breakdown
     
     Returns:
         Dictionary with score and metadata
     """
     constraints = load_constraints_from_json(json_path)
-    return compute_constraint_score(constraints, verbose=verbose)
+    return compute_constraint_score(
+        constraints,
+        n_total_features=n_total_features,
+        n_total_classes=n_total_classes,
+        verbose=verbose,
+    )
 
 
 def compare_constraints(
@@ -315,6 +414,8 @@ def compare_constraints(
     constraints2: Dict[str, Dict],
     name1: str = "Constraints 1",
     name2: str = "Constraints 2",
+    n_total_features: Optional[int] = None,
+    n_total_classes: Optional[int] = None,
 ) -> Dict:
     """Compare two constraint sets and return their scores.
     
@@ -323,12 +424,24 @@ def compare_constraints(
         constraints2: Second constraint dictionary
         name1: Name for first constraints
         name2: Name for second constraints
+        n_total_features: Total features in dataset (optional)
+        n_total_classes: Total classes in dataset (optional)
     
     Returns:
         Dictionary with comparison results
     """
-    result1 = compute_constraint_score(constraints1, verbose=True)
-    result2 = compute_constraint_score(constraints2, verbose=True)
+    result1 = compute_constraint_score(
+        constraints1,
+        n_total_features=n_total_features,
+        n_total_classes=n_total_classes,
+        verbose=True,
+    )
+    result2 = compute_constraint_score(
+        constraints2,
+        n_total_features=n_total_features,
+        n_total_classes=n_total_classes,
+        verbose=True,
+    )
     
     return {
         name1: result1,
@@ -344,7 +457,7 @@ if __name__ == "__main__":
     import sys
     
     parser = argparse.ArgumentParser(
-        description="Compute constraint separation score for DPG constraints"
+        description="Compute constraint quality score for DPG constraints"
     )
     parser.add_argument(
         "json_file",
@@ -358,6 +471,18 @@ if __name__ == "__main__":
         nargs=2,
         metavar=("FILE1", "FILE2"),
         help="Compare two constraint files",
+    )
+    parser.add_argument(
+        "--n-features",
+        type=int,
+        default=None,
+        help="Total number of features in dataset (for accurate coverage)",
+    )
+    parser.add_argument(
+        "--n-classes",
+        type=int,
+        default=None,
+        help="Total number of classes in dataset (for accurate coverage)",
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -375,38 +500,53 @@ if __name__ == "__main__":
         result = compare_constraints(
             constraints1, constraints2,
             name1=file1, name2=file2,
+            n_total_features=args.n_features,
+            n_total_classes=args.n_classes,
         )
         
-        print(f"\n{'='*60}")
+        print(f"\n{'='*70}")
         print("CONSTRAINT SCORE COMPARISON")
-        print(f"{'='*60}\n")
+        print(f"{'='*70}")
+        print(f"Weights: coverage={COVERAGE_WEIGHT:.1f}, separation={SEPARATION_WEIGHT:.1f}")
+        print(f"{'='*70}\n")
         
         for name in [file1, file2]:
             r = result[name]
             print(f"{name}:")
-            print(f"  Score: {r['score']:.4f}")
-            print(f"  Classes: {r['n_classes']}, Features: {r['n_features']}")
+            print(f"  SCORE: {r['score']:.4f}")
+            print(f"    Coverage:   {r['coverage_score']:.4f} (feature={r['feature_coverage']:.2%}, class={r['class_coverage']:.2%})")
+            print(f"    Separation: {r['separation_score']:.4f}")
+            print(f"  Features: {r['n_features']}/{r['n_total_features']}, Classes: {r['n_classes']}/{r['n_total_classes']}")
             if args.verbose and "per_feature_scores" in r:
-                print("  Per-feature scores:")
+                print("  Per-feature separation:")
                 for feat, score in sorted(r["per_feature_scores"].items()):
                     print(f"    {feat}: {score:.4f}")
             print()
         
-        print(f"{'='*60}")
+        print(f"{'='*70}")
         print(f"Score difference: {result['score_difference']:+.4f}")
         print(f"Better constraints: {result['better']}")
-        print(f"{'='*60}\n")
+        print(f"{'='*70}\n")
         
     elif args.json_file:
-        result = compute_constraint_score_from_file(args.json_file, verbose=args.verbose)
+        result = compute_constraint_score_from_file(
+            args.json_file,
+            n_total_features=args.n_features,
+            n_total_classes=args.n_classes,
+            verbose=args.verbose,
+        )
         
-        print(f"\n{'='*60}")
-        print("CONSTRAINT SEPARATION SCORE")
-        print(f"{'='*60}\n")
+        print(f"\n{'='*70}")
+        print("CONSTRAINT QUALITY SCORE")
+        print(f"{'='*70}")
+        print(f"Weights: coverage={COVERAGE_WEIGHT:.1f}, separation={SEPARATION_WEIGHT:.1f}")
+        print(f"{'='*70}\n")
         print(f"File: {args.json_file}")
-        print(f"Score: {result['score']:.4f}")
-        print(f"Classes: {result['n_classes']}")
-        print(f"Features: {result['n_features']}")
+        print(f"\nSCORE: {result['score']:.4f}")
+        print(f"  Coverage:   {result['coverage_score']:.4f} (feature={result['feature_coverage']:.2%}, class={result['class_coverage']:.2%})")
+        print(f"  Separation: {result['separation_score']:.4f}")
+        print(f"\nFeatures: {result['n_features']}/{result['n_total_features']}")
+        print(f"Classes: {result['n_classes']}/{result['n_total_classes']}")
         
         if args.verbose and "per_feature_scores" in result:
             print(f"\nPer-feature separation scores:")
@@ -417,7 +557,7 @@ if __name__ == "__main__":
             for pair, score in sorted(result["per_pair_average"].items()):
                 print(f"  {pair}: {score:.4f}")
         
-        print(f"\n{'='*60}\n")
+        print(f"\n{'='*70}\n")
     else:
         parser.print_help()
         sys.exit(1)
