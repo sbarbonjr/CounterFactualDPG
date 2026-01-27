@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 
-# Import comprehensive metrics module
 try:
     from CounterFactualMetrics import evaluate_cf_list as evaluate_cf_list_comprehensive
     COMPREHENSIVE_METRICS_AVAILABLE = True
@@ -210,14 +209,3 @@ class CounterFactualExplainer:
                 return basic_metrics
         
         return basic_metrics
-
-# Example of usage
-#model = CounterFactualModel(...)  # Assume this is your model
-#original_sample = {...}  # Original sample dictionary
-#counterfactual_sample = model.generate_counterfactual(original_sample, target_class=1)  # Generated counterfactual
-#explainer = CounterFactualExplainer(model, original_sample, counterfactual_sample, target_class=1)
-
-#print(explainer.explain_feature_modifications())
-#print(explainer.check_constraints_respect())
-#print(explainer.explain_stopping_criteria())
-#print(explainer.summarize_final_results())
