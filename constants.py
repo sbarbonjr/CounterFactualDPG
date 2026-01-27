@@ -47,7 +47,6 @@ MUTATION_RATE_BOOST_NON_OVERLAPPING = 1.5
 
 # Range adjustment for unbounded constraints
 SAMPLE_GEN_RANGE_SCALE = 0.5  # Scale for range around original value
-SAMPLE_GEN_MIN_RANGE_FACTOR = 1.0  # Minimum factor for range calculation
 
 # Escape pressure influence on sample generation
 SAMPLE_GEN_ESCAPE_BIAS = 0.3  # Bias factor for escape-aware generation
@@ -62,9 +61,6 @@ ACTIONABILITY_RANGE_ADJUST = 0.1  # Adjustment factor for ensuring valid ranges
 # Default fallback for distance to boundary when predict_proba unavailable
 DEFAULT_BOUNDARY_DISTANCE = 0.05
 
-# Minimum number of samples required in a class for nearest neighbor search
-MIN_CLASS_SAMPLES = 1
-
 # ============================================================================
 # Fitness Sharing Constants
 # ============================================================================
@@ -72,24 +68,6 @@ MIN_CLASS_SAMPLES = 1
 # Base sigma_share for fitness sharing (scaled with dimensionality)
 FITNESS_SHARING_BASE_SIGMA = 3.0
 
-# ============================================================================
-# Convergence and Evolution Constants (legacy, kept for API compatibility)
-# ============================================================================
-
-# Default convergence threshold for fitness improvement
-DEFAULT_DELTA_THRESHOLD = 0.01
-
-# Default patience for early stopping
-DEFAULT_PATIENCE = 10
-
-# Default population size (number of candidates to generate)
-DEFAULT_POPULATION_SIZE = 100
-
-# Default number of generations (unused, kept for API compatibility)
-DEFAULT_MAX_GENERATIONS = 100
-
-# Default mutation rate (unused, kept for API compatibility)
-DEFAULT_MUTATION_RATE = 0.8
 
 # ============================================================================
 # Rounding and Precision
