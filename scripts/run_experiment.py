@@ -1416,32 +1416,6 @@ Final Results
                                 for feat, change in sorted_features_nonzero:
                                     print(f"  {feat}: {change:.4f}")
 
-                                # Select top 6 most changed features for pairwise matrix
-                                max_features_for_pairwise = 6
-                                features_to_plot = [
-                                    feat
-                                    for feat, _ in sorted_features_nonzero[
-                                        :max_features_for_pairwise
-                                    ]
-                                ]
-
-                                # Create 4D visualization (pairwise scatter matrix) of feature evolution
-                                pairwise_4d_path = os.path.join(
-                                    sample_dir, "feature_evolution_4d.png"
-                                )
-                                create_pairwise_feature_evolution_plot(
-                                    features_to_plot,
-                                    combination_viz,
-                                    ORIGINAL_SAMPLE,
-                                    FEATURE_NAMES_LOCAL,
-                                    model,
-                                    constraints,
-                                    ORIGINAL_SAMPLE_PREDICTED_CLASS,
-                                    TARGET_CLASS,
-                                    class_colors_list,
-                                    pairwise_4d_path,
-                                )
-
                                 # Save loadings
                                 loadings = pca_local.components_.T * (
                                     pca_local.explained_variance_**0.5
@@ -1477,20 +1451,6 @@ Final Results
                         # Log clean PCA visualization (without generation history)
                         if combination_viz.get("pca_clean"):
                             log_dict["visualizations/pca_clean"] = wandb.Image(combination_viz["pca_clean"])
-
-                        # Note: pairwise, pairplot, and pca_pairplot are now logged per-CF
-
-                        # Log 4D feature evolution plot
-                        feature_4d_path = os.path.join(
-                            sample_dir,
-                            "feature_evolution_4d.png",
-                        )
-                        if os.path.exists(feature_4d_path):
-                            log_dict["visualizations/feature_evolution_4d"] = (
-                                wandb.Image(feature_4d_path)
-                            )
-
-                        # Note: pairplot and pca_pairplot are now logged per-CF (not combination-level)
 
                         # Log CSV files as wandb Tables
                         pca_coords_path = os.path.join(
