@@ -443,12 +443,15 @@ def create_method_metrics_table(df: pd.DataFrame, dataset: Optional[str] = None,
     # Aggregate by technique only (across all datasets if dataset is None)
     agg_data = df.groupby('technique')[metric_cols].mean()
     
-    # Collect run IDs and create wandb links for each technique
+    # Collect run IDs and create wandb links for each technique (use only the last run)
     run_links = {}
     for technique in df['technique'].unique():
         technique_runs = df[df['technique'] == technique]['run_id'].tolist()
-        links = [f"https://wandb.ai/{DEFAULT_ENTITY}/{DEFAULT_PROJECT}/runs/{run_id}" for run_id in technique_runs]
-        run_links[technique] = ', '.join(links)
+        if technique_runs:
+            last_run_id = technique_runs[-1]
+            run_links[technique] = f"https://wandb.ai/{DEFAULT_ENTITY}/{DEFAULT_PROJECT}/runs/{last_run_id}"
+        else:
+            run_links[technique] = ''
     
     # Reset index to make technique a column, then set it back as index for display
     result = agg_data.reset_index()
