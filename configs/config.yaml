@@ -54,7 +54,7 @@ methods:
     actionability: {}
     # Number of candidate counterfactuals to generate
     population_size: 100
-    max_generations: 1  # Unused, kept for API compatibility
+    max_generations: 100 
 
     # Legacy GA parameters (unused, kept for API compatibility)
     mutation_rate: 0.1
