@@ -37,18 +37,13 @@ import pickle
 import argparse
 import traceback
 import time
-from typing import Any, Dict, List, Optional
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import multiprocessing
+from typing import Any, Dict, List
 
-import yaml
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
 
 try:
     from DPG.dpg import plot_dpg_constraints_overview
@@ -103,14 +98,9 @@ except ImportError:
     )
 import CounterFactualVisualizer as CounterFactualVisualizer
 from CounterFactualVisualizer import (
-    plot_sample_and_counterfactual_heatmap,
     plot_sample_and_counterfactual_comparison,
     plot_pairwise_with_counterfactual_df,
-    plot_pca_with_counterfactuals,
     plot_pca_with_counterfactuals_clean,
-    plot_pca_loadings,
-    plot_fitness,
-    plot_fitness_std,
 )
 
 from utils.notebooks.experiment_storage import (
@@ -119,10 +109,9 @@ from utils.notebooks.experiment_storage import (
     save_visualizations_data,
     _get_sample_dir as get_sample_dir,
 )
-from utils.dataset_loader import load_dataset, determine_feature_types
+from utils.dataset_loader import load_dataset
 from utils.config_manager import (
     DictConfig,
-    deep_merge_dicts,
     load_config,
     apply_overrides,
     build_dict_non_actionable,
@@ -137,14 +126,9 @@ from utils.wandb_helper import (
 from utils.experiment_status import (
     PersistentStatus,
     write_status,
-    read_status,
-    get_log_file_path,
-    append_log,
     clear_log,
 )
 from scripts.visualization_helpers import (
-    create_feature_evolution_pairplot,
-    create_pca_pairplot,
     create_pairwise_feature_evolution_plot,
 )
 from scripts.experiment_helpers import (
@@ -941,14 +925,6 @@ def run_single_sample(
                         model.predict(pd.DataFrame([counterfactual]))[0]
                     )
 
-                    heatmap_fig = plot_sample_and_counterfactual_heatmap(
-                        ORIGINAL_SAMPLE,
-                        ORIGINAL_SAMPLE_PREDICTED_CLASS,
-                        counterfactual,
-                        cf_pred_class,
-                        dict_non_actionable,
-                    )
-
                     comparison_fig = plot_sample_and_counterfactual_comparison(
                         model,
                         ORIGINAL_SAMPLE,
@@ -958,10 +934,7 @@ def run_single_sample(
                         class_colors_list,
                     )
 
-                    # Generate per-CF evolution visualizations (pairplot, pairwise, pca_pairplot)
-                    pairplot_fig_path = None
-                    pairwise_fig_path = None
-                    pca_pairplot_fig_path = None
+
 
                     if getattr(config.output, "save_visualization_images", False):
                         try:
@@ -1012,23 +985,6 @@ def run_single_sample(
                                 cf_row.update({f: counterfactual.get(f, np.nan) for f in FEATURE_NAMES})
                                 feature_rows.append(cf_row)
 
-                                feature_df_single = pd.DataFrame(feature_rows)
-
-                                # Create pairplot for this CF
-                                pairplot_fig_path = os.path.join(
-                                    sample_dir, f"pairplot_cf_{cf_idx}.png"
-                                )
-                                create_feature_evolution_pairplot(
-                                    FEATURES,
-                                    LABELS,
-                                    FEATURE_NAMES,
-                                    feature_df_single,
-                                    str(SAMPLE_ID),  # Convert to string as expected by helper
-                                    ORIGINAL_SAMPLE_PREDICTED_CLASS,
-                                    TARGET_CLASS,
-                                    class_colors_list,
-                                    pairplot_fig_path,
-                                )
 
                                 # Create single-CF combination for pca_pairplot
                                 # Append this specific counterfactual as the final point
@@ -1036,40 +992,6 @@ def run_single_sample(
                                 cf_evolution = evolution_history.copy() if evolution_history else []
                                 cf_evolution.append(counterfactual)  # Add this CF's actual values as endpoint
                                 
-                                single_cf_combination = {
-                                    "replication": [{"evolution_history": cf_evolution}],
-                                    "label": combination_viz["label"],
-                                }
-
-                                # Create PCA pairplot for this CF
-                                pca_pairplot_fig_path = os.path.join(
-                                    sample_dir, f"pca_pairplot_cf_{cf_idx}.png"
-                                )
-                                create_pca_pairplot(
-                                    FEATURES,
-                                    FEATURE_NAMES,
-                                    ORIGINAL_SAMPLE,
-                                    single_cf_combination,
-                                    str(SAMPLE_ID),  # Convert to string as expected by helper
-                                    ORIGINAL_SAMPLE_PREDICTED_CLASS,
-                                    TARGET_CLASS,
-                                    class_colors_list,
-                                    pca_pairplot_fig_path,
-                                )
-
-                                # Create pairwise plot for this CF
-                                pairwise_fig_path = os.path.join(
-                                    sample_dir, f"pairwise_cf_{cf_idx}.png"
-                                )
-                                cf_single_df = pd.DataFrame([counterfactual])
-                                pairwise_fig_single = plot_pairwise_with_counterfactual_df(
-                                    model, FEATURES, LABELS, ORIGINAL_SAMPLE, cf_single_df
-                                )
-                                if pairwise_fig_single:
-                                    pairwise_fig_single.savefig(
-                                        pairwise_fig_path, bbox_inches="tight", dpi=150
-                                    )
-                                    plt.close(pairwise_fig_single)
 
                         except Exception as exc:
                             print(f"WARNING: Failed to create per-CF evolution plots for CF {cf_idx}: {exc}")
@@ -1078,26 +1000,15 @@ def run_single_sample(
 
                     # Store visualizations (fitness_fig is now shared across all CFs)
                     cf_viz["visualizations"] = [
-                        heatmap_fig,
-                        comparison_fig,
-                        pairplot_fig_path,  # Per-CF pairplot path
-                        pairwise_fig_path,  # Per-CF pairwise path
-                        pca_pairplot_fig_path,  # Per-CF pca_pairplot path
+
+                        comparison_fig
                     ]
 
                     # Save counterfactual-level visualizations locally
                     if getattr(config.output, "save_visualization_images", False):
                         os.makedirs(sample_dir, exist_ok=True)
 
-                        if heatmap_fig:
-                            heatmap_path = os.path.join(
-                                sample_dir,
-                                f"heatmap_cf_{cf_idx}.png",
-                            )
-                            heatmap_fig.savefig(
-                                heatmap_path, bbox_inches="tight", dpi=150
-                            )
-
+                       
                         if comparison_fig:
                             comparison_path = os.path.join(
                                 sample_dir,
@@ -1148,11 +1059,6 @@ def run_single_sample(
                             "viz/combination": str(combination_viz["label"]),
                             "viz/cf_index": cf_idx,
                         }
-
-                        if heatmap_fig:
-                            log_dict["visualizations/heatmap"] = wandb.Image(
-                                heatmap_fig
-                            )
                         if comparison_fig:
                             log_dict["visualizations/comparison"] = wandb.Image(
                                 comparison_fig
@@ -1174,18 +1080,6 @@ def run_single_sample(
                                             "viz_gen/generation": gen_idx,
                                             "visualizations/comparison_generation": wandb.Image(gen_comparison_path),
                                         })
-                        if pairplot_fig_path and os.path.exists(pairplot_fig_path):
-                            log_dict["visualizations/pairplot"] = wandb.Image(
-                                pairplot_fig_path
-                            )
-                        if pairwise_fig_path and os.path.exists(pairwise_fig_path):
-                            log_dict["visualizations/pairwise"] = wandb.Image(
-                                pairwise_fig_path
-                            )
-                        if pca_pairplot_fig_path and os.path.exists(pca_pairplot_fig_path):
-                            log_dict["visualizations/pca_pairplot"] = wandb.Image(
-                                pca_pairplot_fig_path
-                            )
 
                         wandb.log(log_dict)
 
