@@ -464,10 +464,11 @@ class GeneticAlgorithmRunner:
         )
 
         for generation in range(generations):
-            # Evaluate population
-            fitnesses = list(map(toolbox.evaluate, population))
-            for ind, fit in zip(population, fitnesses):
-                ind.fitness.values = fit
+            # Evaluate population (skip elites that already have valid fitness)
+            # Elites preserve their fitness to ensure monotonic improvement of best fitness
+            for ind in population:
+                if not ind.fitness.valid:
+                    ind.fitness.values = toolbox.evaluate(ind)
 
             # Track best-minimal valid CFs (closest to original that predict target class)
             self._update_best_minimal_cfs(
