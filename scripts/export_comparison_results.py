@@ -46,6 +46,8 @@ from scripts.compare_techniques import (
     filter_to_latest_run_per_combo,
 )
 
+from CounterFactualVisualizer import heatmap_techniques
+
 # Configuration (matches notebook hardcoded values)
 WANDB_ENTITY = 'mllab-ts-universit-di-trieste'
 WANDB_PROJECT = 'CounterFactualDPG'
