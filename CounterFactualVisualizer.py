@@ -628,14 +628,15 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
                             ax1.plot([max_val], [i + y_offset], marker='|', markersize=15, 
                                    color=constraint_color, alpha=1.0, markeredgewidth=4, zorder=11)
                             # Add numerical labels for min and max
-                            ax1.text(min_val, i + y_offset - 0.2, f'{min_val:.2f}', 
-                                   ha='center', va='top', fontsize=8, 
+                            # Position min label to the left of the boundary marker, max label to the right
+                            ax1.text(min_val, i + y_offset + 0.15, f'{min_val:.2f}', 
+                                   ha='right', va='bottom', fontsize=8, 
                                    color=constraint_color, weight='bold', style='italic',
                                    bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', 
                                            edgecolor=constraint_color, alpha=0.9, linewidth=1.5),
                                    zorder=12)
-                            ax1.text(max_val, i + y_offset - 0.2, f'{max_val:.2f}', 
-                                   ha='center', va='top', fontsize=8, 
+                            ax1.text(max_val, i + y_offset - 0.15, f'{max_val:.2f}', 
+                                   ha='left', va='top', fontsize=8, 
                                    color=constraint_color, weight='bold', style='italic',
                                    bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', 
                                            edgecolor=constraint_color, alpha=0.9, linewidth=1.5),
@@ -753,14 +754,15 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
                                 ax2.plot([max_change], [i + y_offset], marker='|', markersize=12, 
                                        color=constraint_color, alpha=1.0, markeredgewidth=3.5, zorder=11)
                                 # Add numerical labels
-                                ax2.text(min_change, i + y_offset + 0.28, f'{min_change:+.2f}', 
-                                       ha='center', va='bottom', fontsize=7, 
+                                # Position min label to the right of the boundary marker (above the change range), max label to the left (below the change range)
+                                ax2.text(min_change, i + y_offset + 0.4, f'{min_change:+.2f}', 
+                                       ha='right', va='bottom', fontsize=7, 
                                        color=constraint_color, weight='bold', style='italic',
                                        bbox=dict(boxstyle='round,pad=0.2', facecolor='yellow', 
                                                edgecolor=constraint_color, alpha=0.9, linewidth=1),
                                        zorder=12)
-                                ax2.text(max_change, i + y_offset + 0.28, f'{max_change:+.2f}', 
-                                       ha='center', va='bottom', fontsize=7, 
+                                ax2.text(max_change, i + y_offset - 0.4, f'{max_change:+.2f}', 
+                                       ha='left', va='top', fontsize=7, 
                                        color=constraint_color, weight='bold', style='italic',
                                        bbox=dict(boxstyle='round,pad=0.2', facecolor='yellow', 
                                                edgecolor=constraint_color, alpha=0.9, linewidth=1),
@@ -1366,6 +1368,91 @@ def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactual
                markeredgecolor='gray', markeredgewidth=1.5, label='Final Counterfactuals')
     ]
     plt.legend(handles=legend_elements, loc='best')
+    plt.close(fig)
+    return fig
+
+def heatmap_techniques(sample, class_sample, cf_list_1, cf_list_2, technique_names, restrictions=None):
+    """
+    Plot a heatmap comparing counterfactuals from two different techniques.
+
+    The heatmap shows the original sample in the first row, followed by counterfactuals
+    from both techniques. Differences from the original are highlighted with color shading.
+
+    Args:
+        sample (dict): Original sample values.
+        class_sample: Class of the original sample.
+        cf_list_1 (list): List of counterfactual dictionaries from technique 1.
+        cf_list_2 (list): List of counterfactual dictionaries from technique 2.
+        technique_names (tuple): Names of the two techniques (e.g., ('DPG', 'DiCE')).
+        restrictions (dict, optional): Restrictions applied to each feature.
+
+    Returns:
+        matplotlib.figure.Figure: The generated figure (closed to avoid display side effects).
+    """
+    # Create DataFrame from the original sample
+    sample_df = pd.DataFrame([sample], index=['Original'])
+
+    # Combine counterfactuals from both techniques
+    all_rows = [sample_df]
+
+    # Add counterfactuals from technique 1
+    for i, cf in enumerate(cf_list_1):
+        cf_df = pd.DataFrame([cf], index=[f'{technique_names[0]} CF {i+1}'])
+        all_rows.append(cf_df)
+
+    # Add counterfactuals from technique 2
+    for i, cf in enumerate(cf_list_2):
+        cf_df = pd.DataFrame([cf], index=[f'{technique_names[1]} CF {i+1}'])
+        all_rows.append(cf_df)
+
+    # Combine all rows
+    full_df = pd.concat(all_rows)
+
+    # Calculate differences from original for color highlighting
+    # We'll create a difference matrix for color mapping
+    diff_matrix = full_df.copy()
+    for i in range(1, len(full_df)):
+        diff_matrix.iloc[i] = full_df.iloc[i] - full_df.iloc[0]
+
+    # Calculate vmin/vmax for symmetric color scaling
+    vmax = np.max(np.abs(diff_matrix.values))
+    vmin = -vmax
+
+    if vmax == 0:
+        vmax = 1
+        vmin = -1
+
+    # Create the heatmap
+    fig = plt.figure(figsize=(12, max(6, 2 + len(cf_list_1) + len(cf_list_2))))
+    ax = sns.heatmap(
+        full_df,
+        annot=True,
+        fmt=".2f",
+        cmap='coolwarm',
+        cbar=True,
+        linewidths=1.0,
+        linecolor='k',
+        vmin=vmin,
+        vmax=vmax
+    )
+
+    # Add restriction icons below the heatmap if provided
+    if restrictions:
+        symbol_map = {
+            'no_change': '⊝',
+            'non_increasing': '⬇️',
+            'non_decreasing': '⬆️'
+        }
+        for i, (feat, restr) in enumerate(restrictions.items()):
+            if restr in symbol_map:
+                ax.text(i + 0.5, len(full_df) - 0.2, symbol_map[restr],
+                       ha='center', va='center', color='black',
+                       fontweight='bold', fontsize=14, transform=ax.transData)
+
+    plt.title(f'Technique Comparison - Original (Class {class_sample}) vs Counterfactuals', fontsize=14, fontweight='bold')
+    plt.xticks(rotation=45, ha="right")
+    plt.yticks(rotation=0, va="center")
+    plt.tight_layout()
     plt.close(fig)
     return fig
 
