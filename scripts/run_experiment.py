@@ -101,6 +101,7 @@ from CounterFactualVisualizer import (
     plot_sample_and_counterfactual_comparison,
     plot_pairwise_with_counterfactual_df,
     plot_pca_with_counterfactuals_clean,
+    plot_sample_and_counterfactual_heatmap,
 )
 
 from utils.notebooks.experiment_storage import (
@@ -933,7 +934,16 @@ def run_single_sample(
                         class_colors_list,
                     )
 
-
+                    # Generate heatmap visualization for valid counterfactuals only
+                    heatmap_fig = None
+                    if cf_pred_class == TARGET_CLASS:
+                        heatmap_fig = plot_sample_and_counterfactual_heatmap(
+                            ORIGINAL_SAMPLE,
+                            ORIGINAL_SAMPLE_PREDICTED_CLASS,
+                            counterfactual,
+                            cf_pred_class,
+                            dict_non_actionable
+                        )
 
                     if getattr(config.output, "save_visualization_images", False):
                         try:
@@ -999,8 +1009,8 @@ def run_single_sample(
 
                     # Store visualizations (fitness_fig is now shared across all CFs)
                     cf_viz["visualizations"] = [
-
-                        comparison_fig
+                        comparison_fig,
+                        heatmap_fig
                     ]
 
                     # Save counterfactual-level visualizations locally
@@ -1015,6 +1025,15 @@ def run_single_sample(
                             )
                             comparison_fig.savefig(
                                 comparison_path, bbox_inches="tight", dpi=150
+                            )
+                        
+                        if heatmap_fig:
+                            heatmap_path = os.path.join(
+                                sample_dir,
+                                f"heatmap_cf_{cf_idx}.png",
+                            )
+                            heatmap_fig.savefig(
+                                heatmap_path, bbox_inches="tight", dpi=150
                             )
                             
                     # Generate per-generation comparison images if enabled
@@ -1061,6 +1080,11 @@ def run_single_sample(
                         if comparison_fig:
                             log_dict["visualizations/comparison"] = wandb.Image(
                                 comparison_fig
+                            )
+                        
+                        if heatmap_fig:
+                            log_dict["visualizations/heatmap"] = wandb.Image(
+                                heatmap_fig
                             )
                             
                         # Log per-generation comparison images if enabled
