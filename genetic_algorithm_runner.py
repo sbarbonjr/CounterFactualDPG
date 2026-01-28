@@ -157,6 +157,7 @@ class GeneticAlgorithmRunner:
         get_valid_sample_func,
         normalize_feature_func,
         features_match_func,
+        overgeneration_factor=5,
     ):
         """
         Generate counterfactual candidates using heuristic approach.
@@ -190,6 +191,9 @@ class GeneticAlgorithmRunner:
         
         # Store for selection
         self._original_features = original_features
+        
+        # Calculate internal num_results for overgeneration (generate 5x, return top N)
+        internal_num_results = num_best_results * overgeneration_factor
 
         # Log dual-boundary info
         if boundary_analysis and self.verbose:
@@ -262,9 +266,10 @@ class GeneticAlgorithmRunner:
 
         if self.verbose:
             print(f"Candidates generated: {len(population)}, Best fitness: {best_fitness:.4f}, Avg: {avg_fitness:.4f}")
+            print(f"Overgeneration: requesting {internal_num_results} CFs to select best {num_best_results}")
 
-        # Create HOF using distance-based ranking
-        hof = DistanceBasedHOF(num_best_results * 4, original_features, feature_names)
+        # Create HOF using distance-based ranking (use internal_num_results for overgeneration)
+        hof = DistanceBasedHOF(internal_num_results * 4, original_features, feature_names)
         hof.update(population)
 
         # Validate and return results
@@ -273,6 +278,12 @@ class GeneticAlgorithmRunner:
             sample,
             target_class,
             num_best_results,
+            internal_num_results,
+            calculate_fitness_func,
+            original_features,
+            metric,
+            population,
+            original_class,
         )
 
     def _initialize_population(
@@ -362,27 +373,34 @@ class GeneticAlgorithmRunner:
         return population
 
     def _validate_counterfactuals(
-        self, hof, sample, target_class, num_best_results
+        self, hof, sample, target_class, num_best_results, internal_num_results,
+        calculate_fitness_func, original_features, metric, population, original_class
     ):
         """
         Validate counterfactuals and build evolution histories.
         
-        Uses GREEDY DIVERSE SELECTION to balance:
-        - Proximity: CFs should be close to original sample
-        - Diversity: CFs should be different from each other
+        NEW APPROACH: Fitness-first with diverse selection
+        1. Build pool of valid CFs from HOF
+        2. Calculate fitness for ALL valid CFs
+        3. Sort by fitness to get quality-ranked list
+        4. Apply greedy diverse selection on top fitness candidates to pick diverse CFs
+        
+        This ensures we pick from high-quality CFs while maintaining diversity.
         """
         feature_names = list(sample.keys())
         original_features = self._original_features
         
         # Tunable parameter for diversity vs proximity
-        diversity_lambda = 0.6
+        # Higher values (closer to 1.0) prioritize diversity over proximity
+        diversity_lambda = 0.8
         
         if self.verbose:
-            print("\n=== CF Selection (Greedy Diverse) ===")
-            print(f"Requested: {num_best_results} CFs")
+            print("\n=== CF Selection (Fitness -> Diverse Selection) ===")
+            print(f"Final requested: {num_best_results} CFs")
+            print(f"Overgeneration pool: {internal_num_results} CFs")
             print(f"Available in HOF: {len(hof)}")
         
-        # Build candidate pool from HOF
+        # STEP 1: Build candidate pool from HOF with fitness calculation
         candidates = []
         for ind in hof:
             cf_dict = dict(ind) if not isinstance(ind, dict) else ind
@@ -422,35 +440,82 @@ class GeneticAlgorithmRunner:
             except Exception:
                 continue
             
+            # Calculate fitness for this candidate
+            fitness = calculate_fitness_func(
+                cf_dict,
+                original_features,
+                sample,
+                target_class,
+                metric,
+                population,
+                original_class,
+            )
+            
             candidates.append({
                 'cf': cf_dict,
                 'array': cf_array,
                 'distance': distance,
+                'fitness': fitness,
             })
         
         if self.verbose:
             print(f"Valid candidates: {len(candidates)}")
         
+        if not candidates:
+            return None
+        
+        # STEP 2: Sort by fitness (lower is better) and take top internal_num_results
+        candidates.sort(key=lambda x: x['fitness'])
+        quality_pool = candidates[:internal_num_results]
+        
+        if self.verbose:
+            print(f"\nQuality pool (top {len(quality_pool)} by fitness)")
+            if quality_pool:
+                fitnesses = [c['fitness'] for c in quality_pool]
+                distances = [c['distance'] for c in quality_pool]
+                print(f"  Fitness range: {min(fitnesses):.4f} to {max(fitnesses):.4f}")
+                print(f"  Distance range: {min(distances):.4f} to {max(distances):.4f}")
+                print(f"  Diversity lambda: {diversity_lambda} (higher = more diversity priority)")
+        
+        # STEP 3: Apply greedy diverse selection on the quality pool
         final_counterfactuals = []
         selected_arrays = []
         
-        # STEP 1: Always pick the closest CF first
-        if candidates:
-            candidates.sort(key=lambda x: x['distance'])
-            closest = candidates[0]
-            final_counterfactuals.append(closest['cf'])
-            selected_arrays.append(closest['array'])
-            candidates.remove(closest)
+        # Calculate normalization ranges for scoring
+        if len(quality_pool) > 1:
+            all_fitnesses = [c['fitness'] for c in quality_pool]
+            fitness_range = max(all_fitnesses) - min(all_fitnesses)
+            fitness_min = min(all_fitnesses)
+            
+            # Estimate max possible diversity (diagonal of feature space)
+            all_arrays = [c['array'] for c in quality_pool]
+            max_diversity = 0
+            for i in range(len(all_arrays)):
+                for j in range(i+1, len(all_arrays)):
+                    d = np.linalg.norm(all_arrays[i] - all_arrays[j])
+                    max_diversity = max(max_diversity, d)
+            max_diversity = max(max_diversity, 0.01)  # Avoid division by zero
+        else:
+            fitness_range = 1.0
+            fitness_min = 0.0
+            max_diversity = 1.0
+        
+        # Always pick the best fitness CF first (which is also typically closest)
+        if quality_pool:
+            best = quality_pool[0]
+            final_counterfactuals.append(best['cf'])
+            selected_arrays.append(best['array'])
+            quality_pool.remove(best)
             
             if self.verbose:
-                print(f"  [CF #1] Closest: distance={closest['distance']:.4f}")
+                print(f"  [CF #1] Best fitness: {best['fitness']:.4f}, distance={best['distance']:.4f}")
         
-        # STEP 2: Greedy diverse selection for remaining CFs
-        while len(final_counterfactuals) < num_best_results and candidates:
+        # Greedy diverse selection for remaining CFs
+        while len(final_counterfactuals) < num_best_results and quality_pool:
             best_candidate = None
             best_score = float('-inf')
             
-            for cand in candidates:
+            for cand in quality_pool:
                 # Skip near-duplicates
                 is_dup = False
                 for sel_arr in selected_arrays:
@@ -466,10 +531,19 @@ class GeneticAlgorithmRunner:
                     dist = np.linalg.norm(cand['array'] - sel_arr)
                     min_dist_to_selected = min(min_dist_to_selected, dist)
                 
-                # MMR-style score
-                diversity_term = min_dist_to_selected
-                proximity_term = cand['distance']
-                score = diversity_lambda * diversity_term - (1 - diversity_lambda) * proximity_term
+                # Normalize terms to [0, 1] range for fair comparison
+                # Diversity: higher is better (normalize to 0-1)
+                normalized_diversity = min(min_dist_to_selected / max_diversity, 1.0)
+                
+                # Fitness: lower is better, so normalize and invert (0=best, 1=worst)
+                if fitness_range > 0:
+                    normalized_fitness = (cand['fitness'] - fitness_min) / fitness_range
+                else:
+                    normalized_fitness = 0.0
+                
+                # MMR-style score: high diversity (normalized), low fitness (normalized)
+                # Both terms now in [0, 1] range
+                score = diversity_lambda * normalized_diversity - (1 - diversity_lambda) * normalized_fitness
                 
                 if score > best_score:
                     best_score = score
@@ -478,16 +552,19 @@ class GeneticAlgorithmRunner:
             if best_candidate:
                 final_counterfactuals.append(best_candidate['cf'])
                 selected_arrays.append(best_candidate['array'])
-                candidates.remove(best_candidate)
+                quality_pool.remove(best_candidate)
                 
                 if self.verbose:
                     min_div = float('inf')
                     for sel_arr in selected_arrays[:-1]:
                         d = np.linalg.norm(best_candidate['array'] - sel_arr)
                         min_div = min(min_div, d)
-                    print(f"  [CF #{len(final_counterfactuals)}] Distance={best_candidate['distance']:.4f}, "
-                          f"MinDivFromSelected={min_div:.4f}")
+                    print(f"  [CF #{len(final_counterfactuals)}] Fitness={best_candidate['fitness']:.4f}, "
+                          f"Distance={best_candidate['distance']:.4f}, MinDivFromSelected={min_div:.4f}, "
+                          f"Score={best_score:.4f}")
             else:
+                if self.verbose:
+                    print(f"  No more diverse candidates available (remaining pool: {len(quality_pool)})")
                 break
         
         # Log summary
@@ -497,11 +574,35 @@ class GeneticAlgorithmRunner:
             
             if final_counterfactuals:
                 distances = []
-                for cf in final_counterfactuals:
+                fitnesses = []
+                diversities = []
+                
+                for i, cf in enumerate(final_counterfactuals):
                     cf_array = np.array([cf[f] for f in feature_names])
                     dist = np.linalg.norm(cf_array - original_features)
                     distances.append(dist)
+                    
+                    # Calculate fitness
+                    fitness = calculate_fitness_func(
+                        cf, original_features, sample, target_class, 
+                        metric, population, original_class
+                    )
+                    fitnesses.append(fitness)
+                    
+                    # Calculate min diversity from other selected CFs
+                    if i > 0:
+                        min_div = float('inf')
+                        for j, other_cf in enumerate(final_counterfactuals):
+                            if i != j:
+                                other_array = np.array([other_cf[f] for f in feature_names])
+                                div = np.linalg.norm(cf_array - other_array)
+                                min_div = min(min_div, div)
+                        diversities.append(min_div)
+                
                 print(f"Distance to original: min={min(distances):.4f}, max={max(distances):.4f}, avg={np.mean(distances):.4f}")
+                print(f"Fitness scores: min={min(fitnesses):.4f}, max={max(fitnesses):.4f}, avg={np.mean(fitnesses):.4f}")
+                if diversities:
+                    print(f"Min diversity between CFs: min={min(diversities):.4f}, max={max(diversities):.4f}, avg={np.mean(diversities):.4f}")
         
         # Build per-CF evolution histories (simplified - single entry)
         self.per_cf_evolution_histories = [list(self.evolution_history) for _ in final_counterfactuals]

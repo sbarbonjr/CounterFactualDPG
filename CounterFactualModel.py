@@ -31,6 +31,7 @@ class CounterFactualModel:
         y_train=None,
         min_probability_margin=0.001,
         generation_debugging=False,
+        overgeneration_factor=5,
     ):
         """
         Initialize the CounterFactualDPG object.
@@ -62,6 +63,10 @@ class CounterFactualModel:
             generation_debugging (bool): Enable detailed per-generation fitness component tracking.
                 When True, collects fitness breakdown (distance, sparsity, penalties, bonuses) for
                 the best individual each generation, exported as a table for WandB logging.
+            overgeneration_factor (int): Multiplier for internal CF generation. Generate this many
+                times the requested counterfactuals, then sort by fitness and return the best.
+                Default 5 means if 5 CFs are requested, 25 are generated internally and the top 5
+                by fitness are returned. Higher values increase quality at the cost of computation.
         """
         self.model = model
         self.constraints = constraints
@@ -150,6 +155,8 @@ class CounterFactualModel:
         self.y_train = y_train
         # Minimum probability margin for accepting counterfactuals
         self.min_probability_margin = min_probability_margin
+        # Overgeneration factor for improved CF quality
+        self.overgeneration_factor = overgeneration_factor
 
     def _analyze_boundary_overlap(self, original_class, target_class):
         """
@@ -357,6 +364,7 @@ class CounterFactualModel:
         n_jobs=-1,
         original_class=None,
         num_best_results=1,
+        overgeneration_factor=None,
     ):
         """Generate counterfactual candidates using heuristic approach.
 
@@ -375,6 +383,8 @@ class CounterFactualModel:
             n_jobs (int): Unused, kept for API compatibility.
             original_class (int): Original class for escape-aware generation.
             num_best_results (int): Number of top individuals to return.
+            overgeneration_factor (int): Multiplier for internal CF generation. If None,
+                uses the instance's overgeneration_factor (default 5).
         """
         # Pre-compute boundary analysis for dual-boundary operations
         boundary_analysis = None
@@ -382,6 +392,10 @@ class CounterFactualModel:
             boundary_analysis = self._analyze_boundary_overlap(
                 original_class, target_class
             )
+        
+        # Use provided overgeneration_factor or fall back to instance default
+        if overgeneration_factor is None:
+            overgeneration_factor = self.overgeneration_factor
 
         # Delegate to GeneticAlgorithmRunner
         result = self.ga_runner.run(
@@ -404,6 +418,7 @@ class CounterFactualModel:
             get_valid_sample_func=self.get_valid_sample,
             normalize_feature_func=self._normalize_feature_name,
             features_match_func=self._features_match,
+            overgeneration_factor=overgeneration_factor,
         )
 
         # Copy tracking attributes back from runner
