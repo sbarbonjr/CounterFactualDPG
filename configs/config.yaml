@@ -7,6 +7,16 @@
 #   3. CLI --set overrides
 
 # Excluded datasets (will be skipped by run_all_experiments.py)
+priority_datasets:
+  - iris
+  - abalone
+  - diabetes
+  - banknote_authentication
+  - education_dataset
+  - energy_dataset
+  - finance_dataset
+
+
 excluded_datasets:
  - isolet
  - car_eval_4 # binary
