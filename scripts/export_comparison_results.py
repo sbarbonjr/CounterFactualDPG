@@ -11,16 +11,23 @@ Outputs are saved to: outputs/comparison_results/
 - method_metrics_<dataset>.csv: Per-dataset method-metrics tables
 - winner_heatmap.png: Heatmap showing winners per dataset-metric
 - radar_charts.png: Radar charts for datasets
-- visualizations/<dataset>/heatmap_techniques.png: Heatmap comparing DPG vs DiCE counterfactuals per dataset
+- visualizations/<dataset>/: Per-dataset visualizations including:
+  - heatmap_techniques.png: Heatmap comparing DPG vs DiCE counterfactuals
+  - radar.png: Radar chart for the dataset
+  - bar_*.png: Bar charts for each metric
+  - WandB visualizations (comparison, pca_clean, heatmap, etc.)
+- metadata.pkl: Saved run metadata for local-only regeneration
 - comparison_summary.txt: Console summary output
 
 Usage:
-    python scripts/export_comparison_results.py
+    python scripts/export_comparison_results.py                    # Full export (fetches from WandB)
+    python scripts/export_comparison_results.py --local-only         # Regenerate images only from disk
 """
 
 import sys
 import os
 import yaml
+import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -28,6 +35,7 @@ import warnings
 import re
 import tempfile
 import json
+import pickle
 import wandb
 from PIL import Image
 import shutil
@@ -35,6 +43,12 @@ warnings.filterwarnings('ignore')
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description='Export DPG vs DiCE comparison results')
+parser.add_argument('--local-only', action='store_true',
+                    help='Only regenerate visualizations from existing data, do not fetch from WandB')
+args = parser.parse_args()
 
 from scripts.compare_techniques import (
     fetch_all_runs,
@@ -58,11 +72,12 @@ MIN_CREATED_AT = "2026-01-26T22:00:00"
 APPLY_EXCLUDED_DATASETS = True
 
 # Output directory
-OUTPUT_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     'outputs',
-    '_comparison_results'
-)
+    '_comparison_results')
+
+# Metadata file for storing run information
+METADATA_FILE = os.path.join(OUTPUT_DIR, 'metadata.pkl')
 
 
 def load_included_datasets():
@@ -80,8 +95,54 @@ def load_included_datasets():
     return None
 
 
+def save_metadata(raw_df):
+    """Save metadata including run information for local-only mode."""
+    metadata = {
+        'raw_df': raw_df,
+        'datasets': sorted(raw_df['dataset'].unique()),
+        'techniques': sorted(raw_df['technique'].unique()),
+        'num_runs': len(raw_df)
+    }
+    with open(METADATA_FILE, 'wb') as f:
+        pickle.dump(metadata, f)
+    print(f"✓ Saved metadata to: {METADATA_FILE}")
+
+
+def load_metadata():
+    """Load metadata from disk for local-only mode."""
+    if not os.path.exists(METADATA_FILE):
+        print(f"❌ Metadata file not found: {METADATA_FILE}")
+        print("   Run the script first without --local-only to fetch and save data.")
+        return None
+    
+    with open(METADATA_FILE, 'rb') as f:
+        metadata = pickle.load(f)
+    print(f"✓ Loaded metadata from: {METADATA_FILE}")
+    print(f"  Datasets: {metadata['datasets']}")
+    print(f"  Techniques: {metadata['techniques']}")
+    print(f"  Number of runs: {metadata['num_runs']}")
+    return metadata
+
+
+def load_comparison_from_disk():
+    """Load comparison data from disk."""
+    comparison_path = os.path.join(OUTPUT_DIR, 'comparison.csv')
+    if not os.path.exists(comparison_path):
+        print(f"❌ Comparison file not found: {comparison_path}")
+        print("   Run the script first without --local-only to generate comparison data.")
+        return None
+    
+    comparison_df = pd.read_csv(comparison_path)
+    print(f"✓ Loaded comparison data from: {comparison_path}")
+    return comparison_df
+
+
 def fetch_wandb_visualizations(raw_df, dataset, dataset_viz_dir):
     """Fetch comparison, pca_clean, and heatmap visualizations from WandB."""
+    if args.local_only:
+        print(f"  ⚠ {dataset}: Skipping WandB visualizations (local-only mode)")
+        return []
+    
     viz_types_exported = []
     try:
         dataset_runs = raw_df[raw_df['dataset'] == dataset]
@@ -409,6 +470,10 @@ def export_radar_charts(comparison_df):
 
 def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
     """Export heatmap comparing DPG vs DiCE counterfactuals."""
+    if args.local_only:
+        print(f"  ⚠ {dataset}: Skipping heatmap_techniques (local-only mode - requires WandB data)")
+        return False
+    
     try:
         dataset_runs = raw_df[raw_df['dataset'] == dataset]
         
@@ -571,39 +636,70 @@ def main():
     print("="*80)
     print("This script replicates notebooks/technique_comparison.ipynb")
     print("and exports all results to files.")
+    if args.local_only:
+        print("\n🏠 LOCAL-ONLY MODE: Regenerating visualizations from disk")
     print()
     
     # Ensure output directory exists
     ensure_output_dir()
     
-    # Fetch and filter data
-    raw_df = fetch_and_filter_data()
-    
-    if len(raw_df) == 0:
-        print("\n❌ No data found. Exiting.")
-        return
-    
-    print(f"\n✓ Successfully fetched {len(raw_df)} runs")
-    print(f"  Datasets: {sorted(raw_df['dataset'].unique())}")
-    print(f"  Techniques: {sorted(raw_df['technique'].unique())}")
-    
-    # Create comparison table (small=True)
-    comparison_df = create_comparison_table_small(raw_df)
+    if args.local_only:
+        # Load data from disk
+        metadata = load_metadata()
+        if metadata is None:
+            # If metadata doesn't exist but comparison.csv does, create minimal metadata
+            comparison_df = load_comparison_from_disk()
+            if comparison_df is None:
+                return
+            # Create minimal raw_df from comparison data
+            raw_df = pd.DataFrame()
+            # Cannot reconstruct full raw_df, but we have enough for visualizations
+            print(f"\n✓ Loaded comparison.csv (metadata.pkl not available)")
+        else:
+            comparison_df = load_comparison_from_disk()
+            if comparison_df is None:
+                return
+            
+            raw_df = metadata['raw_df']
+            print(f"\n✓ Loaded {len(raw_df)} runs from disk")
+    else:
+        # Fetch and filter data from WandB
+        raw_df = fetch_and_filter_data()
+        
+        if len(raw_df) == 0:
+            print("\n❌ No data found. Exiting.")
+            return
+        
+        print(f"\n✓ Successfully fetched {len(raw_df)} runs")
+        print(f"  Datasets: {sorted(raw_df['dataset'].unique())}")
+        print(f"  Techniques: {sorted(raw_df['technique'].unique())}")
+        
+        # Create comparison table (small=True)
+        comparison_df = create_comparison_table_small(raw_df)
     
     # Export all results
-    export_comparison_table(comparison_df)
-    export_method_metrics_tables(raw_df)
-    export_summary_statistics(comparison_df)
+    if not args.local_only:
+        export_comparison_table(comparison_df)
+        export_method_metrics_tables(raw_df)
+        export_summary_statistics(comparison_df)
+        save_metadata(raw_df)
+    
+    # Always regenerate visualizations
     export_winner_heatmap(comparison_df)
     export_radar_charts(comparison_df)
     export_dataset_visualizations(comparison_df, raw_df)
-    export_comparison_summary(comparison_df)
     
-    # Print summary to console as well
-    print("\n" + "="*80)
-    print("CONSOLE SUMMARY")
-    print("="*80)
-    print_comparison_summary(comparison_df)
+    if not args.local_only:
+        export_comparison_summary(comparison_df)
+    else:
+        # Load and print summary from file
+        summary_path = os.path.join(OUTPUT_DIR, 'comparison_summary.txt')
+        if os.path.exists(summary_path):
+            print("\n" + "="*80)
+            print("CONSOLE SUMMARY (from saved file)")
+            print("="*80)
+            with open(summary_path, 'r') as f:
+                print(f.read())
     
     print("\n" + "="*80)
     print("✓ ALL RESULTS EXPORTED SUCCESSFULLY")
