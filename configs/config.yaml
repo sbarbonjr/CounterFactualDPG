@@ -9,6 +9,7 @@
 priority_datasets:
   - iris
   - abalone
+  - abalone_19 
   - diabetes
   - banknote_authentication
   - education_dataset
@@ -24,20 +25,19 @@ priority_datasets:
   - us_crime
   - yeast_me2
   - yeast_ml8
-  
-excluded_datasets:
+  - webpage
   - isolet
+  - spectrometer
+  - protein_homo 
+  - breast_cancer_wisconsin
+
+excluded_datasets:
   - car_eval_4 # binary
   - car_eval_34 # binary
-  - webpage # large for now
   - thyroid_sick # binary/large
-  - spectrometer # large
   - solar_flare_m0 # large
-  - protein_homo # large
   - german_credit # non-numeric
   - healthcare_dataset # hangs on dice... constrainsts look good 
-  - abalone_19 # similar
-  - breast_cancer_wisconsin # errors out on dpg 
   - quality_control_dataset # hangs on dice
 
 # Data defaults
