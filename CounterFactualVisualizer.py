@@ -905,9 +905,10 @@ def plot_sample_and_counterfactual_heatmap(sample, class_sample, counterfactual,
     ax = sns.heatmap(full_df, annot=True, fmt=".2f", cmap='coolwarm', cbar=True, linewidths=1.2, linecolor='k',
                      vmin=vmin, vmax=vmax, mask=mask)
 
-    # Annotate with restrictions
+    # Annotate with restrictions (skip None and actionable values)
     for i, (feat, restr) in enumerate(restrictions_ser.items()):
-        ax.text(i + 0.5, 3.5, restr, ha='center', va='center', color='black', fontweight='bold', fontsize=14)
+        if restr is not None and isinstance(restr, str) and restr.lower() not in ['none', 'actionable']:
+            ax.text(i + 0.5, 3.5, restr, ha='center', va='center', color='black', fontweight='bold', fontsize=14)
 
     annotations = full_df.round(2).copy().astype(str)
     for col in full_df.columns:
