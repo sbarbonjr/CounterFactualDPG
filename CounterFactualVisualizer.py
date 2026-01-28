@@ -531,8 +531,17 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
         counterfactual_values_filtered = counterfactual_values[non_zero_mask]
         changes_filtered = changes[non_zero_mask]
     
+    # Calculate figure height proportionally based on number of features
+    num_features = len(feature_list_filtered)
+    base_height = 6  # Base height for 5-6 features
+    if num_features > 6:
+        # Scale height: add 0.8 inches for each feature beyond 6
+        fig_height = base_height + 0.8 * (num_features - 6)
+    else:
+        fig_height = base_height
+    
     # Create figure with custom layout
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig, axes = plt.subplots(1, 3, figsize=(18, fig_height))
     
     # 1. Combined Feature Comparison with Arrows
     ax1 = axes[0]
