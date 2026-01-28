@@ -904,23 +904,28 @@ def main():
                        help='Run N experiments in parallel with interactive CLI')
     parser.add_argument('--monitor', action='store_true',
                        help='Monitor mode: only show running experiments, do not start new ones')
+    parser.add_argument('--priority-only', action='store_true',
+                       help='Only run experiments for datasets in priority_datasets list from config.yaml')
     
     args = parser.parse_args()
     
     configs_dir = REPO_ROOT / 'configs'
     output_dir = REPO_ROOT / 'outputs'
     
-    # Load global config to get excluded datasets
+    # Load global config to get excluded datasets and priority datasets
     config_file = REPO_ROOT / 'configs' / 'config.yaml'
     excluded_datasets = []
+    priority_datasets = []
     if config_file.exists():
         try:
             with open(config_file, 'r') as f:
                 config = yaml.safe_load(f)
                 excluded_datasets = config.get('excluded_datasets', [])
+                priority_datasets = config.get('priority_datasets', [])
         except Exception:
             # If config loading fails, just use empty list
             excluded_datasets = []
+            priority_datasets = []
     
     # Get datasets
     if args.datasets:
@@ -933,6 +938,22 @@ def main():
             return 1
     else:
         datasets = get_all_datasets(configs_dir)
+    
+    # Filter for priority datasets if --priority-only flag is set
+    if args.priority_only:
+        if not priority_datasets:
+            print("ERROR: --priority-only flag used but no priority_datasets defined in config.yaml")
+            return 1
+        priority_set = set(priority_datasets)
+        original_count = len(datasets)
+        datasets = [d for d in datasets if d in priority_set]
+        filtered_count = original_count - len(datasets)
+        if filtered_count > 0:
+            print(f"Priority mode: running only {len(datasets)} priority dataset(s): {sorted(datasets)}")
+            print(f"Skipped {filtered_count} non-priority dataset(s)")
+        if not datasets:
+            print("ERROR: No valid priority datasets found")
+            return 1
     
     # Filter out excluded datasets
     if excluded_datasets:
