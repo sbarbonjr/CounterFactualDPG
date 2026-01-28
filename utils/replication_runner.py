@@ -58,12 +58,15 @@ def run_counterfactual_generation_dpg(args):
             y_train = train_df[target_col]
     
     try:
+        # Get verbose mode from config if available
+        verbose_mode = getattr(config, 'verbose', False) or getattr(config.experiment, 'verbose', False)
+        
         # Create CF model with config parameters (including dual-boundary parameters)
         cf_model = CounterFactualModel(
             model, 
             constraints,
             dict_non_actionable=dict_non_actionable,
-            verbose=False,
+            verbose=verbose_mode,
             diversity_weight=config.counterfactual.diversity_weight,
             repulsion_weight=config.counterfactual.repulsion_weight,
             boundary_weight=config.counterfactual.boundary_weight,
