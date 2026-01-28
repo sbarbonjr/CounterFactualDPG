@@ -363,12 +363,13 @@ def aggregate_by_dataset_technique(df: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
-def create_comparison_table(df: pd.DataFrame) -> pd.DataFrame:
+def create_comparison_table(df: pd.DataFrame, small: bool = False) -> pd.DataFrame:
     """Create a side-by-side comparison table for DPG vs DiCE.
     
     Args:
         df: DataFrame from fetch_all_runs()
-        
+        small: If True, filters metrics to a smaller subset of key metrics (like create_method_metrics_table)
+    
     Returns:
         Pivot table with datasets as rows, metrics as columns, techniques compared
     """
@@ -380,6 +381,19 @@ def create_comparison_table(df: pd.DataFrame) -> pd.DataFrame:
     
     # Get available metrics
     metric_cols = [col for col in COMPARISON_METRICS.keys() if f"{col}_mean" in agg_df.columns]
+    
+    # Filter to small set of metrics if requested
+    if small:
+        small_metrics = {
+            'perc_valid_cf_all',
+            'perc_actionable_cf_all',
+            'plausibility_nbr_cf',
+            'distance_mh',
+            'avg_nbr_changes',
+            'count_diversity_all',
+            'accuracy_knn_sklearn'
+        }
+        metric_cols = [col for col in metric_cols if col in small_metrics]
     
     # Create comparison data
     datasets = agg_df['dataset'].unique()
