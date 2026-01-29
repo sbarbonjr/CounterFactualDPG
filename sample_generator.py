@@ -85,7 +85,7 @@ class SampleGenerator:
             feature2
         )
 
-    def get_valid_sample(self, sample, target_class, original_class=None):
+    def get_valid_sample(self, sample, target_class, original_class):
         """
         Generate a valid sample that meets all constraints for the specified target class
         while respecting actionable changes.
@@ -110,11 +110,7 @@ class SampleGenerator:
         adjusted_sample = sample.copy()  # Start with the original values
         # Filter the constraints for the specified target class
         class_constraints = self.constraints.get(f"Class {target_class}", [])
-        original_constraints = (
-            self.constraints.get(f"Class {original_class}", [])
-            if original_class is not None
-            else []
-        )
+        original_constraints = (self.constraints.get(f"Class {original_class}", []))
 
         # Get boundary analysis for escape direction if original class provided
         boundary_analysis = None
@@ -270,12 +266,6 @@ class SampleGenerator:
                     actionable_info = f" [{self.dict_non_actionable[feature]}]"
                 print(f"[VERBOSE-DPG]   {feature}: {original_value:.4f} → {adjusted_sample[feature]:.4f} (Δ={delta:+.4f}){escape_info}{actionable_info}")
         if self.verbose:
-            valid, penalty = self.constraint_validator.validate_constraints(
-                adjusted_sample, sample, target_class
-            )
-            validity_str = "valid" if valid else "invalid"
-            validity_sign = "✓" if valid else "✗"
-            print(f"[VERBOSE-DPG] Generated sample is {validity_str} against constraints.     -  {validity_sign}")
             print(f"[VERBOSE-DPG] --------------------------------------------------------") 
         return adjusted_sample
 
