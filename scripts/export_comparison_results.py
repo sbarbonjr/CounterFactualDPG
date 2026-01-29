@@ -150,139 +150,66 @@ def fetch_wandb_visualizations(raw_df, dataset, dataset_viz_dir):
         dpg_run = dataset_runs[dataset_runs['technique'] == 'dpg'].iloc[0] if len(dataset_runs[dataset_runs['technique'] == 'dpg']) > 0 else None
         dice_run = dataset_runs[dataset_runs['technique'] == 'dice'].iloc[0] if len(dataset_runs[dataset_runs['technique'] == 'dice']) > 0 else None
         
-        # If runs not found in raw_df, fetch them directly from WandB
-        api = wandb.Api()
-        
         if dpg_run is None or dice_run is None:
-            print(f"  → {dataset}: One or both runs missing from raw_df, querying WandB directly...")
+            print(f"  ⚠ {dataset}: Missing DPG or DiCE run, skipping WandB visualizations")
+            return []
+        
+        api = wandb.Api(timeout=60)
+        dpg_run_obj = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{dpg_run['run_id']}")
+        dice_run_obj = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{dice_run['run_id']}")
+        
+        # Fetch constraints_overview from DPG run
+        constraints_overview = None
+        for f in dpg_run_obj.files():
+            if f.name.endswith('.png') and 'dpg/constraints_overview' in f.name:
+                constraints_overview = f
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    constraints_overview.download(root=tmpdir, replace=True)
+                    img_path = os.path.join(tmpdir, constraints_overview.name)
+                    dest_path = os.path.join(dataset_viz_dir, 'constraints_overview.png')
+                    shutil.copy(img_path, dest_path)
+                    viz_types_exported.append('constraints_overview.png')
+                break
+        
+        # Get visualization images from both runs
+        def get_viz_images(run):
+            images = {}
+            for f in run.files():
+                if f.name.endswith('.png') and 'visualizations/' in f.name:
+                    basename = os.path.basename(f.name)
+                    match = re.match(r'([a-z_]+)_\\d+_', basename)
+                    if match:
+                        viz_type = match.group(1)
+                        if viz_type not in images:
+                            images[viz_type] = f
+            return images
+        
+        dpg_images = get_viz_images(dpg_run_obj)
+        dice_images = get_viz_images(dice_run_obj)
+        
+        viz_types_to_fetch = ['comparison', 'pca_clean', 'heatmap', 'standard_deviation']
+        
+        for viz_type in viz_types_to_fetch:
+            if viz_type in dpg_images:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    download_path = os.path.join(tmpdir, dpg_images[viz_type].name)
+                    dpg_images[viz_type].download(root=tmpdir, replace=True)
+                    dest_path = os.path.join(dataset_viz_dir, f'{viz_type}_dpg.png')
+                    shutil.copy(download_path, dest_path)
+                    viz_types_exported.append(f'{viz_type}_dpg.png')
             
-            # Query WandB for the latest finished runs for this dataset
-            try:
-                all_runs = api.runs(
-                    f"{WANDB_ENTITY}/{WANDB_PROJECT}",
-                    order="-created_at",
-                    per_page=100,
-                    filters={"state": "finished"}
-                )
-                
-                dpg_wandb_run = None
-                dice_wandb_run = None
-                
-                for run in all_runs:
-                    if run.state != 'finished':
-                        continue
-                    
-                    config = run.config
-                    if 'data' not in config:
-                        continue
-                    
-                    data_config = config['data']
-                    run_dataset = data_config.get('dataset_name') or data_config.get('dataset')
-                    
-                    if run_dataset != dataset:
-                        continue
-                    
-                    # Get technique
-                    technique = data_config.get('method')
-                    if not technique:
-                        run_name_lower = run.name.lower()
-                        if '_dpg' in run_name_lower or run_name_lower.endswith('dpg'):
-                            technique = 'dpg'
-                        elif '_dice' in run_name_lower or run_name_lower.endswith('dice'):
-                            technique = 'dice'
-                    
-                    if technique:
-                        technique = technique.lower()
-                        if technique == 'dpg' and dpg_wandb_run is None:
-                            dpg_wandb_run = run
-                        elif technique == 'dice' and dice_wandb_run is None:
-                            dice_wandb_run = run
-                    
-                    # Stop if we found both
-                    if dpg_wandb_run and dice_wandb_run:
-                        break
-                
-                # Use the WandB runs if we found them
-                if dpg_wandb_run and dpg_run is None:
-                    dpg_run_obj = dpg_wandb_run
-                    print(f"  ✓ {dataset}: Found DPG run in WandB: {dpg_wandb_run.id}")
-                elif dpg_run is not None:
-                    dpg_run_obj = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{dpg_run['run_id']}")
-                else:
-                    dpg_run_obj = None
-                
-                if dice_wandb_run and dice_run is None:
-                    dice_run_obj = dice_wandb_run
-                    print(f"  ✓ {dataset}: Found DiCE run in WandB: {dice_wandb_run.id}")
-                elif dice_run is not None:
-                    dice_run_obj = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{dice_run['run_id']}")
-                else:
-                    dice_run_obj = None
-                
-                if dpg_run_obj is None or dice_run_obj is None:
-                    missing = []
-                    if dpg_run_obj is None:
-                        missing.append('DPG')
-                    if dice_run_obj is None:
-                        missing.append('DiCE')
-                    print(f"  ⚠ {dataset}: Could not find {' and '.join(missing)} run(s) in WandB, skipping heatmap_techniques")
-                    return False
-                    
-            except Exception as e:
-                print(f"  ⚠ {dataset}: Error querying WandB: {e}")
-                return False
-        else:
-            # Both runs found in raw_df, use them
-            dpg_run_obj = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{dpg_run['run_id']}")
-            dice_run_obj = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{dice_run['run_id']}")
+            if viz_type in dice_images:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    download_path = os.path.join(tmpdir, dice_images[viz_type].name)
+                    dice_images[viz_type].download(root=tmpdir, replace=True)
+                    dest_path = os.path.join(dataset_viz_dir, f'{viz_type}_dice.png')
+                    shutil.copy(download_path, dest_path)
+                    viz_types_exported.append(f'{viz_type}_dice.png')
         
-        # Fetch sample and counterfactuals from runs
-        dpg_sample = dpg_run_obj.config.get('sample')
-        dpg_class = dpg_run_obj.config.get('sample_class')
-        dpg_cfs = dpg_run_obj.summary.get('final_counterfactuals', [])
-        if isinstance(dpg_cfs, str):
-            try:
-                dpg_cfs = json.loads(dpg_cfs)
-            except:
-                dpg_cfs = []
-        
-        dice_cfs = dice_run_obj.summary.get('final_counterfactuals', [])
-        if isinstance(dice_cfs, str):
-            try:
-                dice_cfs = json.loads(dice_cfs)
-            except:
-                dice_cfs = []
-        
-        if not dpg_sample:
-            print(f"  ⚠ {dataset}: No sample found, skipping heatmap_techniques")
-            return False
-        
-        # Fetch restrictions if available
-        restrictions = dpg_run_obj.config.get('restrictions')
-        
-        # Create heatmap comparing techniques
-        fig = heatmap_techniques(
-            sample=dpg_sample,
-            class_sample=dpg_class,
-            cf_list_1=dpg_cfs[:5],  # Limit to first 5 CFs per technique
-            cf_list_2=dice_cfs[:5],
-            technique_names=('DPG', 'DiCE'),
-            restrictions=restrictions
-        )
-        
-        if fig:
-            output_path = os.path.join(dataset_viz_dir, 'heatmap_techniques.png')
-            fig.savefig(output_path, dpi=150, bbox_inches='tight')
-            plt.close(fig)
-            print(f"  ✓ {dataset}: Exported heatmap_techniques comparison")
-            return True
-        else:
-            print(f"  ⚠ {dataset}: Could not create heatmap_techniques")
-            return False
-            
+        return viz_types_exported
     except Exception as e:
-        print(f"  ⚠ {dataset}: Error exporting heatmap_techniques: {e}")
-        return False
+        print(f"  ⚠ {dataset}: Error fetching WandB visualizations: {e}")
+        return []
 
 
 def ensure_output_dir():
@@ -554,7 +481,7 @@ def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
         dice_run = dataset_runs[dataset_runs['technique'] == 'dice'].iloc[0] if len(dataset_runs[dataset_runs['technique'] == 'dice']) > 0 else None
         
         # If runs not found in raw_df, fetch them directly from WandB
-        api = wandb.Api()
+        api = wandb.Api(timeout=60)
         
         if dpg_run is None or dice_run is None:
             print(f"  → {dataset}: One or both runs missing from raw_df, querying WandB directly...")
@@ -640,8 +567,19 @@ def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
             dice_run_obj = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{dice_run['run_id']}")
         
         # Fetch sample and counterfactuals from runs
+        # Try multiple locations for sample data
         dpg_sample = dpg_run_obj.config.get('sample')
+        if not dpg_sample:
+            dpg_sample = dpg_run_obj.summary.get('sample')
+        if not dpg_sample:
+            dpg_sample = dpg_run_obj.summary.get('original_sample')
+        
         dpg_class = dpg_run_obj.config.get('sample_class')
+        if dpg_class is None:
+            dpg_class = dpg_run_obj.summary.get('sample_class')
+        if dpg_class is None:
+            dpg_class = dpg_run_obj.summary.get('original_class')
+        
         dpg_cfs = dpg_run_obj.summary.get('final_counterfactuals', [])
         if isinstance(dpg_cfs, str):
             try:
@@ -656,8 +594,14 @@ def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
             except:
                 dice_cfs = []
         
-        if not dpg_sample:
-            print(f"  ⚠ {dataset}: No sample found, skipping heatmap_techniques")
+        # Debug: print what we found
+        if not dpg_sample or not dpg_cfs or not dice_cfs:
+            print(f"  ⚠ {dataset}: Missing required data - sample: {bool(dpg_sample)}, dpg_cfs: {len(dpg_cfs) if dpg_cfs else 0}, dice_cfs: {len(dice_cfs) if dice_cfs else 0}")
+            # Print available keys for debugging
+            config_keys = list(dpg_run_obj.config.keys())
+            summary_keys = list(dpg_run_obj.summary.keys())
+            print(f"     Config keys ({len(config_keys)}): {config_keys[:15]}")
+            print(f"     Summary keys ({len(summary_keys)}): {summary_keys[:15]}")
             return False
         
         # Fetch restrictions if available
