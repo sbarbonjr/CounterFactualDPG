@@ -691,38 +691,17 @@ class SampleGenerator:
             # Store feature bounds info for potential retry
             # Determine search bounds based on weak_constraints mode
             if weak_constraints:
-                # WEAK CONSTRAINTS: Search from original value toward target constraint
-                # This allows finding CFs along the "path" to the target class
-                if escape_dir == "increase":
-                    # Need to increase: search from original toward target max
-                    search_min = original_value
-                    if raw_target_max is not None:
-                        search_max = raw_target_max
-                    elif raw_target_min is not None:
-                        # If only min bound (e.g., equal bounds case), use that
-                        search_max = raw_target_min
-                    else:
-                        search_max = original_value + 10.0 * (abs(original_value) + 1.0)
-                elif escape_dir == "decrease":
-                    # Need to decrease: search from target min toward original
-                    if raw_target_min is not None:
-                        search_min = raw_target_min
-                    elif raw_target_max is not None:
-                        # If only max bound (e.g., equal bounds case), use that
-                        search_min = raw_target_max
-                    else:
-                        search_min = original_value - 10.0 * (abs(original_value) + 1.0)
-                    search_max = original_value
+                # WEAK CONSTRAINTS: Extend DPG bounds to include original value
+                # This bridges the gap between original sample and DPG target bounds
+                if raw_target_min is not None:
+                    search_min = min(raw_target_min, original_value)
                 else:
-                    # "both" direction: include original value in the range
-                    if raw_target_min is not None:
-                        search_min = min(raw_target_min, original_value)
-                    else:
-                        search_min = original_value - 10.0 * (abs(original_value) + 1.0)
-                    if raw_target_max is not None:
-                        search_max = max(raw_target_max, original_value)
-                    else:
-                        search_max = original_value + 10.0 * (abs(original_value) + 1.0)
+                    search_min = original_value - 10.0 * (abs(original_value) + 1.0)
+                
+                if raw_target_max is not None:
+                    search_max = max(raw_target_max, original_value)
+                else:
+                    search_max = original_value + 10.0 * (abs(original_value) + 1.0)
             else:
                 # STRICT CONSTRAINTS: Search only within exact DPG target bounds
                 if raw_target_min is not None:
