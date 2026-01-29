@@ -149,6 +149,13 @@ class ConstraintValidator:
         class_constraints = self.constraints.get(str("Class " + str(target_class)), [])
 
         if self.verbose:
+            is_cf_valid = self.check_validity(
+                [S_prime[f] for f in self.feature_names],
+                [sample[f] for f in self.feature_names],
+                target_class,
+            )
+            validity_str = "valid" if is_cf_valid else "invalid"
+            print(f"[VERBOSE-DPG] Attempting to validate a {validity_str} counterfactual against constraints.")
             print(f"[VERBOSE-DPG] Validating constraints for target class {target_class}")
 
         for feature, new_value in S_prime.items():
