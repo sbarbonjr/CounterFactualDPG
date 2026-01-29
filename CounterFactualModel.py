@@ -30,7 +30,7 @@ class CounterFactualModel:
         X_train=None,
         y_train=None,
         min_probability_margin=0.001,
-        overgeneration_factor=5,
+        overgeneration_factor=1,
     ):
         """
         Initialize the CounterFactualDPG object.
