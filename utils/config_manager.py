@@ -16,9 +16,13 @@ class DictConfig:
         self._config = config_dict
         for key, value in config_dict.items():
             if isinstance(value, dict):
-                setattr(self, key, DictConfig(value))
+                # Convert integer/string keys to valid attribute names
+                attr_key = str(key) if not isinstance(key, str) else key
+                setattr(self, attr_key, DictConfig(value))
             else:
-                setattr(self, key, value)
+                # Convert integer/string keys to valid attribute names
+                attr_key = str(key) if not isinstance(key, str) else key
+                setattr(self, attr_key, value)
     
     def to_dict(self):
         """Convert config back to plain dict."""
