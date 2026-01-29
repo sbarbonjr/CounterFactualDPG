@@ -30,7 +30,8 @@ class CounterFactualModel:
         X_train=None,
         y_train=None,
         min_probability_margin=0.001,
-        overgeneration_factor=1,
+        overgeneration_factor=20,
+        requested_counterfactuals=5,
     ):
         """
         Initialize the CounterFactualDPG object.
@@ -59,10 +60,13 @@ class CounterFactualModel:
             min_probability_margin (float): Minimum margin the target class probability must exceed the
                 second-highest class probability by. Prevents accepting weak counterfactuals where
                 the prediction is essentially a tie. Default 0.001 (0.1% margin).
-            overgeneration_factor (int): Multiplier for internal CF generation. Generate this many
-                times the requested counterfactuals, then sort by fitness and return the best.
-                Default 5 means if 5 CFs are requested, 25 are generated internally and the top 5
-                by fitness are returned. Higher values increase quality at the cost of computation.
+            overgeneration_factor (int): Multiplier for population size calculation. The population
+                size is calculated as overgeneration_factor * requested_counterfactuals.
+                Default 20 means if 5 CFs are requested, 100 candidates are generated initially.
+                Higher values increase quality at the cost of computation.
+            requested_counterfactuals (int): Number of counterfactuals to generate. Used with
+                overgeneration_factor to calculate population_size internally.
+                Default 5.
         """
         self.model = model
         self.constraints = constraints
@@ -144,8 +148,11 @@ class CounterFactualModel:
         self.y_train = y_train
         # Minimum probability margin for accepting counterfactuals
         self.min_probability_margin = min_probability_margin
-        # Overgeneration factor for improved CF quality
+        # Overgeneration factor and requested counterfactuals for population size calculation
         self.overgeneration_factor = overgeneration_factor
+        self.requested_counterfactuals = requested_counterfactuals
+        # Calculate population_size internally: overgeneration_factor * requested_counterfactuals
+        self.population_size = overgeneration_factor * requested_counterfactuals
 
     def _analyze_boundary_overlap(self, original_class, target_class):
         """Delegate to BoundaryAnalyzer for boundary overlap analysis."""
@@ -224,26 +231,25 @@ class CounterFactualModel:
         self,
         sample,
         target_class,
-        population_size=100,
         metric="euclidean",
         original_class=None,
-        num_best_results=1,
-        overgeneration_factor=None,
+        num_best_results=None,
     ):
         """Generate counterfactual candidates using heuristic approach.
 
         Uses escape-aware perturbations to generate candidates, evaluates fitness,
         and returns the best candidates using greedy diverse selection.
 
+        Population size is calculated internally as:
+        population_size = overgeneration_factor * requested_counterfactuals
+
         Args:
             sample (dict): Original sample features.
             target_class (int): Target class for counterfactual.
-            population_size (int): Number of candidates to generate.
             metric (str): Distance metric for fitness calculation.
             original_class (int): Original class for escape-aware generation.
-            num_best_results (int): Number of top individuals to return.
-            overgeneration_factor (int): Multiplier for internal CF generation. If None,
-                uses the instance's overgeneration_factor (default 5).
+            num_best_results (int): Number of top individuals to return. If None,
+                uses the instance's requested_counterfactuals.
 
         Returns:
             list: Valid counterfactuals (or None if none found).
@@ -255,9 +261,12 @@ class CounterFactualModel:
                 original_class, target_class
             )
         
-        # Use provided overgeneration_factor or fall back to instance default
-        if overgeneration_factor is None:
-            overgeneration_factor = self.overgeneration_factor
+        # Use instance's calculated population_size
+        population_size = self.population_size
+        
+        # Use provided num_best_results or fall back to instance default
+        if num_best_results is None:
+            num_best_results = self.requested_counterfactuals
 
         # Delegate to HeuristicRunner
         result = self.heuristic_runner.run(
@@ -273,7 +282,7 @@ class CounterFactualModel:
             get_valid_sample_func=self.get_valid_sample,
             normalize_feature_func=self._normalize_feature_name,
             features_match_func=self._features_match,
-            overgeneration_factor=overgeneration_factor,
+            overgeneration_factor=self.overgeneration_factor,
         )
 
         # Copy tracking attributes back from runner
@@ -290,8 +299,7 @@ class CounterFactualModel:
         self,
         sample,
         target_class,
-        population_size=100,
-        num_best_results=1,
+        num_best_results=None,
     ):
         """
         Generate counterfactuals for the given sample and target class.
@@ -299,11 +307,14 @@ class CounterFactualModel:
         Uses heuristic approach to generate candidate counterfactuals.
         Falls back to nearest neighbor search if no valid candidates found.
 
+        Population size is calculated internally as:
+        population_size = overgeneration_factor * requested_counterfactuals
+
         Args:
             sample (dict): The original sample with feature values.
             target_class (int): The desired class for the counterfactual.
-            population_size (int): Number of candidates to generate.
-            num_best_results (int): Number of top counterfactuals to return.
+            num_best_results (int): Number of top counterfactuals to return. If None,
+                uses the instance's requested_counterfactuals.
 
         Returns:
             list or None: A list of counterfactuals, or None if not found.
@@ -315,11 +326,14 @@ class CounterFactualModel:
                 "Target class need to be different from the predicted class label."
             )
 
+        # Use provided num_best_results or fall back to instance default
+        if num_best_results is None:
+            num_best_results = self.requested_counterfactuals
+
         # Generate counterfactuals using heuristic approach
         counterfactuals = self.generate_candidates(
             sample,
             target_class,
-            population_size,
             original_class=sample_class,
             num_best_results=num_best_results,
         )

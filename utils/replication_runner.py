@@ -70,6 +70,12 @@ def run_counterfactual_generation_dpg(args):
         if verbose_mode:
             print("[VERBOSE-DPG] Verbose mode enabled for counterfactual generation")
         
+        # Get the number of counterfactuals to generate
+        requested_counterfactuals = getattr(config.experiment_params, 'requested_counterfactuals', 5)
+        
+        # Get overgeneration_factor from config (defaults to 20)
+        overgeneration_factor = getattr(config.counterfactual, 'overgeneration_factor', 20)
+        
         # Create CF model with config parameters
         cf_model = CounterFactualModel(
             model, 
@@ -91,16 +97,14 @@ def run_counterfactual_generation_dpg(args):
             # Training data for nearest neighbor fallback
             X_train=X_train,
             y_train=y_train,
+            # Population size calculation: overgeneration_factor * requested_counterfactuals
+            overgeneration_factor=overgeneration_factor,
+            requested_counterfactuals=requested_counterfactuals,
         )
-        
-        # Get the number of counterfactuals to generate
-        requested_counterfactuals = getattr(config.experiment_params, 'requested_counterfactuals', 5)
         
         counterfactuals = cf_model.generate_counterfactual(
             ORIGINAL_SAMPLE, 
-            TARGET_CLASS, 
-            config.counterfactual.population_size,
-            num_best_results=requested_counterfactuals
+            TARGET_CLASS,
         )
         
         # Handle list return from generate_counterfactual
