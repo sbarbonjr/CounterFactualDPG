@@ -295,22 +295,20 @@ class HeuristicRunner:
 
         # Create remaining individuals with escape-aware perturbations
         for individual in range(population_size - 1):
-            pertubation_rate = 0.4*(individual+1)
-            perturbed = sample.copy()
-            print(f"[HeuristicRunner] Generating individual {individual+1} with perturbation rate {pertubation_rate:.2f}")
+            pertubation_rate = 0.4 *(individual + 1) / (population_size - 1)  
+            perturbed = base_counterfactual.copy()
 
             for feature in feature_names:
                 norm_feature = normalize_feature_func(feature)
                 escape_dir = escape_directions.get(norm_feature, "both")
 
-                # Bias perturbation by escape direction
                 if escape_dir == "increase":
                     perturbation = np.random.uniform(0, pertubation_rate)
                 elif escape_dir == "decrease":
                     perturbation = np.random.uniform(-pertubation_rate, 0)
                 else:
                     perturbation = np.random.uniform(-pertubation_rate/2, pertubation_rate/2)
-                perturbed[feature] = sample[feature] + perturbation
+                perturbed[feature] = base_counterfactual[feature] + perturbation
 
                 # Clip to target constraint boundaries FIRST
                 matching_constraint = next(
