@@ -45,8 +45,6 @@ class SampleGenerator:
             dict_non_actionable (dict): Dictionary mapping features to non-actionable constraints.
             feature_names: List of feature names from the model.
             escape_pressure (float): Balance between escaping original (1.0) vs approaching target (0.0).
-            X_train (DataFrame): Training data features for nearest neighbor fallback.
-            y_train (Series): Training data labels for nearest neighbor fallback.
             min_probability_margin (float): Minimum margin for accepting counterfactuals.
             verbose (bool): If True, prints detailed information.
             boundary_analyzer: Optional BoundaryAnalyzer instance for overlap analysis.
@@ -57,8 +55,6 @@ class SampleGenerator:
         self.dict_non_actionable = dict_non_actionable
         self.feature_names = feature_names
         self.escape_pressure = escape_pressure
-        self.X_train = X_train
-        self.y_train = y_train
         self.min_probability_margin = min_probability_margin
         self.verbose = verbose
         self.boundary_analyzer = boundary_analyzer

@@ -27,8 +27,6 @@ class CounterFactualModel:
         prioritize_non_overlapping=True,
         max_bonus_cap=10.0,
         unconstrained_penalty_factor=UNCONSTRAINED_CHANGE_PENALTY_FACTOR,
-        X_train=None,
-        y_train=None,
         min_probability_margin=0.001,
         overgeneration_factor=20,
         requested_counterfactuals=5,
@@ -55,8 +53,6 @@ class CounterFactualModel:
             max_bonus_cap (float): Maximum cap for diversity/repulsion bonuses to prevent unbounded negative fitness.
             unconstrained_penalty_factor (float): Penalty multiplier for changing features without target constraints.
                 Higher values (e.g., 2.0-3.0) make unconstrained features change as last resort.
-            X_train (DataFrame): Training data features for nearest neighbor fallback.
-            y_train (Series): Training data labels for nearest neighbor fallback.
             min_probability_margin (float): Minimum margin the target class probability must exceed the
                 second-highest class probability by. Prevents accepting weak counterfactuals where
                 the prediction is essentially a tie. Default 0.001 (0.1% margin).
@@ -126,9 +122,7 @@ class CounterFactualModel:
             constraints=constraints,
             dict_non_actionable=dict_non_actionable,
             feature_names=self.feature_names,
-            escape_pressure=escape_pressure,
-            X_train=X_train,
-            y_train=y_train,
+            escape_pressure=escape_pressure,    
             min_probability_margin=min_probability_margin,
             verbose=verbose,
             boundary_analyzer=self.boundary_analyzer,
@@ -143,9 +137,6 @@ class CounterFactualModel:
             verbose=verbose,
             min_probability_margin=min_probability_margin,
         )
-        # Store training data for nearest neighbor fallback
-        self.X_train = X_train
-        self.y_train = y_train
         # Minimum probability margin for accepting counterfactuals
         self.min_probability_margin = min_probability_margin
         # Overgeneration factor and requested counterfactuals for population size calculation
@@ -305,7 +296,6 @@ class CounterFactualModel:
         Generate counterfactuals for the given sample and target class.
 
         Uses heuristic approach to generate candidate counterfactuals.
-        Falls back to nearest neighbor search if no valid candidates found.
 
         Population size is calculated internally as:
         population_size = overgeneration_factor * requested_counterfactuals
@@ -337,20 +327,6 @@ class CounterFactualModel:
             original_class=sample_class,
             num_best_results=num_best_results,
         )
-
-        # Fallback: use nearest neighbor from training data
-        if counterfactuals is None or len(counterfactuals) == 0:
-            if self.verbose:
-                print("\nHeuristic generation failed. Attempting nearest neighbor fallback...")
-            neighbor_cf = self.find_nearest_counterfactual(
-                sample, target_class, validate_prediction=True
-            )
-            if neighbor_cf is not None:
-                if self.verbose:
-                    print("  Nearest neighbor fallback succeeded!")
-                counterfactuals = [neighbor_cf]
-            else:
-                counterfactuals = None
 
         return counterfactuals
 

@@ -94,9 +94,6 @@ def run_counterfactual_generation_dpg(args):
             prioritize_non_overlapping=getattr(config.counterfactual, 'prioritize_non_overlapping', True),
             # Fitness calculation parameters
             max_bonus_cap=getattr(config.counterfactual, 'max_bonus_cap', 50.0),
-            # Training data for nearest neighbor fallback
-            X_train=X_train,
-            y_train=y_train,
             # Population size calculation: overgeneration_factor * requested_counterfactuals
             overgeneration_factor=overgeneration_factor,
             requested_counterfactuals=requested_counterfactuals,
