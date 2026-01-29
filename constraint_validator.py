@@ -155,7 +155,8 @@ class ConstraintValidator:
                 target_class,
             )
             validity_str = "valid" if is_cf_valid else "invalid"
-            print(f"[VERBOSE-DPG] Attempting to validate a {validity_str} counterfactual against constraints.")
+            validity_sign = "✓" if is_cf_valid else "✗"
+            print(f"[VERBOSE-DPG] Attempting to validate a {validity_str} counterfactual against constraints.     -  {validity_sign}")
             print(f"[VERBOSE-DPG] Validating constraints for target class {target_class}")
 
         for feature, new_value in S_prime.items():
