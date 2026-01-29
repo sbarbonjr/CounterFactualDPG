@@ -468,12 +468,120 @@ def export_radar_charts(comparison_df):
     plt.close(fig)
 
 
+def _load_local_viz_data(dataset, technique):
+    """Load visualization data from local pkl files for local-only mode."""
+    # Root outputs dir: outputs/{dataset}_{technique}/{sample_id}/after_viz_generation.pkl
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    outputs_base = os.path.join(root_dir, 'outputs')
+    
+    # Try exact folder name first
+    technique_dir = os.path.join(outputs_base, f"{dataset}_{technique}")
+    
+    if not os.path.exists(technique_dir):
+        # Try without underscores in dataset name
+        technique_dir = os.path.join(outputs_base, f"{dataset.replace('_', '')}_{technique}")
+    
+    if not os.path.exists(technique_dir):
+        return None
+    
+    # Find the most recent sample directory (highest number)
+    sample_dirs = []
+    for name in os.listdir(technique_dir):
+        sample_path = os.path.join(technique_dir, name)
+        if os.path.isdir(sample_path):
+            try:
+                sample_dirs.append((int(name), sample_path))
+            except ValueError:
+                continue
+    
+    if not sample_dirs:
+        return None
+    
+    # Get most recent (highest sample ID)
+    sample_dirs.sort(key=lambda x: x[0], reverse=True)
+    _, sample_dir = sample_dirs[0]
+    
+    pkl_path = os.path.join(sample_dir, 'after_viz_generation.pkl')
+    if not os.path.exists(pkl_path):
+        return None
+    
+    try:
+        with open(pkl_path, 'rb') as f:
+            data = pickle.load(f)
+        return data
+    except Exception as e:
+        print(f"    Warning: Failed to load {pkl_path}: {e}")
+        return None
+
+
 def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
     """Export heatmap comparing DPG vs DiCE counterfactuals."""
-    if args.local_only:
-        print(f"  ⚠ {dataset}: Skipping heatmap_techniques (local-only mode - requires WandB data)")
-        return False
     
+    # Handle local-only mode by loading from disk
+    if args.local_only:
+        try:
+            dpg_data = _load_local_viz_data(dataset, 'dpg')
+            dice_data = _load_local_viz_data(dataset, 'dice')
+            
+            if not dpg_data or not dice_data:
+                missing = []
+                if not dpg_data:
+                    missing.append('DPG')
+                if not dice_data:
+                    missing.append('DiCE')
+                print(f"  ⚠ {dataset}: Missing local {' and '.join(missing)} data, skipping heatmap_techniques")
+                return False
+            
+            # Extract sample and counterfactuals from local data
+            dpg_sample = dpg_data.get('original_sample')
+            feature_names = dpg_data.get('features_names', [])
+            
+            # Get class from sample prediction or default to 0
+            dpg_class = 0  # Default, would need model to predict
+            
+            # Extract counterfactuals from visualizations
+            dpg_cfs = []
+            for viz in dpg_data.get('visualizations', []):
+                for cf_data in viz.get('counterfactuals', []):
+                    cf = cf_data.get('counterfactual')
+                    if cf:
+                        dpg_cfs.append(cf)
+            
+            dice_cfs = []
+            for viz in dice_data.get('visualizations', []):
+                for cf_data in viz.get('counterfactuals', []):
+                    cf = cf_data.get('counterfactual')
+                    if cf:
+                        dice_cfs.append(cf)
+            
+            if not dpg_sample or not dpg_cfs or not dice_cfs:
+                print(f"  ⚠ {dataset}: Missing local data - sample: {bool(dpg_sample)}, dpg_cfs: {len(dpg_cfs)}, dice_cfs: {len(dice_cfs)}")
+                return False
+            
+            # Create heatmap
+            fig = heatmap_techniques(
+                sample=dpg_sample,
+                class_sample=dpg_class,
+                cf_list_1=dpg_cfs[:5],
+                cf_list_2=dice_cfs[:5],
+                technique_names=('DPG', 'DiCE'),
+                restrictions=None
+            )
+            
+            if fig:
+                output_path = os.path.join(dataset_viz_dir, 'heatmap_techniques.png')
+                fig.savefig(output_path, dpi=150, bbox_inches='tight')
+                plt.close(fig)
+                print(f"  ✓ {dataset}: Exported heatmap_techniques (from local data)")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"  ⚠ {dataset}: Error loading local data for heatmap_techniques: {e}")
+            return False
+    
+    # WandB mode
     try:
         dataset_runs = raw_df[raw_df['dataset'] == dataset]
         
