@@ -348,7 +348,6 @@ def run_single_sample(
         average_fitness_list = result["average_fitness_list"]
         std_fitness_list = result.get("std_fitness_list", [])
         result_method = result.get("method", "dpg")
-        generation_debug_table_data = result.get("generation_debug_table", [])
         
         # Get per-CF evolution histories (each CF has its own path from original)
         per_cf_evolution_histories = result.get("per_cf_evolution_histories", None)
@@ -360,47 +359,6 @@ def run_single_sample(
         all_counterfactuals = result.get("all_counterfactuals", [])
         
         print(f"DEBUG run_experiment: Processing result, method={result_method}, candidates={len(all_counterfactuals)}, best_fitness={best_fitness_list[0] if best_fitness_list else 'N/A'}")
-
-        # Log generation debug table to WandB if available and enabled
-        if wandb_run and generation_debug_table_data and WANDB_AVAILABLE:
-            try:
-                # Convert generation_debug_table to WandB Table
-                # Columns: generation, individual feature columns, and all fitness components
-                debug_columns = ["generation"]
-                
-                # Get feature names from first row and add as separate columns
-                feature_names_list = []
-                if len(generation_debug_table_data) > 0:
-                    first_row = generation_debug_table_data[0]
-                    feature_values_dict = first_row.get("feature_values", {})
-                    feature_names_list = sorted(feature_values_dict.keys())
-                    debug_columns.extend(feature_names_list)
-                    
-                    # Add all fitness component columns
-                    component_keys = [k for k in first_row.keys() if k not in ["generation", "feature_values"]]
-                    debug_columns.extend(component_keys)
-                
-                # Build table data
-                debug_table_rows = []
-                for row_data in generation_debug_table_data:
-                    row = [row_data.get("generation", 0)]
-                    
-                    # Add each feature value as a separate column
-                    feature_values_dict = row_data.get("feature_values", {})
-                    for feature_name in feature_names_list:
-                        row.append(float(feature_values_dict.get(feature_name, 0.0)))
-                    
-                    # Add component values
-                    for key in component_keys:
-                        row.append(row_data.get(key, 0.0))
-                    debug_table_rows.append(row)
-                
-                # Create and log WandB table
-                debug_table = wandb.Table(columns=debug_columns, data=debug_table_rows)
-                wandb.log({f"sample_{SAMPLE_ID}/generation_debug": debug_table})
-                print(f"INFO: Logged generation debug table with {len(debug_table_rows)} rows, {len(debug_columns)} columns ({len(feature_names_list)} features) to WandB")
-            except Exception as e:
-                print(f"WARNING: Failed to log generation debug table to WandB: {e}")
 
         if all_counterfactuals:
             # Predict classifications for all counterfactuals at once (for reuse)

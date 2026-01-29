@@ -5,7 +5,7 @@ Extracted from CounterFactualModel.py to provide focused boundary analysis
 functionality for counterfactual generation.
 """
 
-import re
+from utils.feature_utils import normalize_feature_name, features_match
 
 
 class BoundaryAnalyzer:
@@ -27,41 +27,12 @@ class BoundaryAnalyzer:
         self._boundary_analysis_cache = {}
 
     def _normalize_feature_name(self, feature):
-        """
-        Normalize feature name by stripping whitespace, removing units in parentheses,
-        converting to lowercase, and replacing underscores with spaces. This helps match
-        features that may have slight variations in naming (e.g., "sepal width" vs
-        "sepal_width" vs "sepal width (cm)").
-
-        Args:
-            feature (str): The feature name to normalize.
-
-        Returns:
-            str: Normalized feature name.
-        """
-        # Remove anything in parentheses (like units)
-        feature = re.sub(r"\s*\([^)]*\)", "", feature)
-        # Replace underscores with spaces
-        feature = feature.replace("_", " ")
-        # Normalize multiple spaces to single space
-        feature = re.sub(r"\s+", " ", feature)
-        # Strip whitespace and convert to lowercase
-        return feature.strip().lower()
+        """Delegate to feature_utils for feature name normalization."""
+        return normalize_feature_name(feature)
 
     def _features_match(self, feature1, feature2):
-        """
-        Check if two feature names match, using normalized comparison.
-
-        Args:
-            feature1 (str): First feature name.
-            feature2 (str): Second feature name.
-
-        Returns:
-            bool: True if features match, False otherwise.
-        """
-        return self._normalize_feature_name(feature1) == self._normalize_feature_name(
-            feature2
-        )
+        """Delegate to feature_utils for feature matching."""
+        return features_match(feature1, feature2)
 
     def analyze_boundary_overlap(self, original_class, target_class):
         """

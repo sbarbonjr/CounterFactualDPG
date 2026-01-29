@@ -88,7 +88,6 @@ methods:
     escape_pressure: 0.5
     prioritize_non_overlapping: true
   dpg:
-    generation_debugging: true
     diversity_weight: 0.5
     # DPG configuration parameters (optional, defaults provided in DPG/config.yaml)
     config:
