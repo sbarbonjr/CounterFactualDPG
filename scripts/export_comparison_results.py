@@ -799,7 +799,8 @@ def export_dataset_visualizations(comparison_df, raw_df):
             'distance_mh',
             'avg_nbr_changes',
             'count_diversity_all',
-            'accuracy_knn_sklearn'
+            'accuracy_knn_sklearn',
+            'runtime'
         }
         
         from scripts.compare_techniques import plot_grouped_bar_chart

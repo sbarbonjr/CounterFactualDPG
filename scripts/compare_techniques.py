@@ -391,7 +391,8 @@ def create_comparison_table(df: pd.DataFrame, small: bool = False) -> pd.DataFra
             'distance_mh',
             'avg_nbr_changes',
             'count_diversity_all',
-            'accuracy_knn_sklearn'
+            'accuracy_knn_sklearn',
+            'runtime'
         }
         metric_cols = [col for col in metric_cols if col in small_metrics]
     
@@ -461,7 +462,8 @@ def create_method_metrics_table(df: pd.DataFrame, dataset: Optional[str] = None,
             'distance_mh',
             'avg_nbr_changes',
             'count_diversity_all',
-            'accuracy_knn_sklearn'
+            'accuracy_knn_sklearn',
+            'runtime'
         }
         # When small=True, always include all small metrics (even if missing from df)
         metric_cols = [col for col in small_metrics if col in COMPARISON_METRICS]
