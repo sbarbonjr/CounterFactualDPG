@@ -651,9 +651,19 @@ class SampleGenerator:
             adjusted_sample[feature] = np.clip(target_value, min_value, max_value)
             
             # Store feature bounds info for potential retry
-            # Use RAW target constraints for search space (no expansion beyond DPG bounds)
-            search_min = raw_target_min if raw_target_min is not None else min_value
-            search_max = raw_target_max if raw_target_max is not None else max_value
+            # Use RAW target constraints for search space
+            # When constraints are unbounded, use a larger search range (10x the value range)
+            if raw_target_min is not None:
+                search_min = raw_target_min
+            else:
+                # No lower constraint - use large negative range for search
+                search_min = original_value - 10.0 * (abs(original_value) + 1.0)
+            
+            if raw_target_max is not None:
+                search_max = raw_target_max
+            else:
+                # No upper constraint - use large positive range for search
+                search_max = original_value + 10.0 * (abs(original_value) + 1.0)
             
             feature_bounds_info[feature] = {
                 'min': search_min,
@@ -737,12 +747,6 @@ class SampleGenerator:
                     v_min = max(v_min, original_value)
                 elif actionability == "non_increasing":
                     v_max = min(v_max, original_value)
-            
-            # Fix inverted bounds (can happen with decrease escape direction)
-            if v_min > v_max:
-                v_min, v_max = v_max, v_min
-                if self.verbose:
-                    print(f"[VERBOSE-DPG]   Swapped bounds for {feature}: [{v_min:.4f}, {v_max:.4f}]")
             
             if v_min >= v_max:
                 if self.verbose:
