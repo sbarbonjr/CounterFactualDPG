@@ -30,7 +30,7 @@ priority_datasets:
   - spectrometer
   # - protein_homo 
   - breast_cancer_wisconsin
-  - sick_euthyroid
+  # - sick_euthyroid
   - ecoli
   - heart_disease_uci
   # - letter_img
