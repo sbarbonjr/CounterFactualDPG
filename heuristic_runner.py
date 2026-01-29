@@ -393,7 +393,7 @@ class HeuristicRunner:
         
         # Tunable parameter for diversity vs proximity
         # Lower values prioritize proximity (distance minimization) over diversity
-        diversity_lambda = 0.6
+        diversity_lambda = 0.8
         
         if self.verbose:
             print("\n=== CF Selection (Fitness -> Diverse Selection) ===")

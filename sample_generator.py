@@ -636,45 +636,23 @@ class SampleGenerator:
             epsilon = MUTATION_EPSILON
 
             if escape_dir == "increase":
-                # Target requires higher values than origin allows
-                # Example: orig_max=4, target_min=5 -> value should be just above target_min
-                if orig_max is not None and max_value is not None:
-                    # Step just above origin's max (into target range)
-                    if min_value is not None and min_value > orig_max:
-                        # Target's min is above origin's max - step to just at/above target's min
-                        target_value = min_value + epsilon
-                    else:
-                        # No clear boundary gap - go to origin's max + epsilon
-                        target_value = orig_max + epsilon
-                elif min_value is not None:
-                    # Only have target min bound - go just above it
+                # Target requires higher values - start at target's min boundary
+                # (Ignore original escape logic, go directly to target bounds)
+                if min_value is not None and min_value != -np.inf:
                     target_value = min_value + epsilon
                 else:
-                    # Bias toward upper bound to escape original class
+                    # No target min bound - use midpoint biased upward
                     target_value = min_value + (max_value - min_value) * (
                         0.5 + SAMPLE_GEN_ESCAPE_BIAS * self.escape_pressure
                     )
 
             elif escape_dir == "decrease":
-                # Target requires lower values than origin allows
-                # Example: orig_min=5.45, target_max=5.45 -> value should be 5.44 (just below origin's min)
-                if orig_min is not None and max_value is not None:
-                    # Step just below origin's min (into target range)
-                    if max_value is not None and max_value < orig_min:
-                        # Target's max is below origin's min - step to just at/below target's max
-                        target_value = max_value - epsilon
-                    elif max_value is not None and max_value <= orig_min:
-                        # Target's max equals or is just at origin's min boundary
-                        # Step just below origin's min to escape
-                        target_value = orig_min - epsilon
-                    else:
-                        # No clear boundary gap - go to origin's min - epsilon
-                        target_value = orig_min - epsilon
-                elif max_value is not None:
-                    # Only have target max bound - go just below it
+                # Target requires lower values - start at target's max boundary
+                # (Ignore original escape logic, go directly to target bounds)
+                if max_value is not None and max_value != np.inf:
                     target_value = max_value - epsilon
                 else:
-                    # Bias toward lower bound to escape original class
+                    # No target max bound - use midpoint biased downward
                     target_value = min_value + (max_value - min_value) * (
                         0.5 - SAMPLE_GEN_ESCAPE_BIAS * self.escape_pressure
                     )
