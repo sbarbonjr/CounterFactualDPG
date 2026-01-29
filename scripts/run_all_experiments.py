@@ -503,6 +503,73 @@ class ExperimentRunner:
             print(f"{Colors.DIM}Experiments will continue running in the background.{Colors.RESET}")
             print(f"{Colors.DIM}Run this script again to reconnect and monitor progress.{Colors.RESET}")
     
+    def _generate_interim_report(self):
+        """Generate an interim report when detaching."""
+        # Compile current results
+        results = {
+            'success': [exp.key for exp in self.experiments.values() if exp.status == ExperimentStatus.COMPLETED],
+            'failed': [exp.key for exp in self.experiments.values() if exp.status == ExperimentStatus.FAILED],
+            'skipped': [exp.key for exp in self.experiments.values() if exp.status == ExperimentStatus.SKIPPED],
+            'cancelled': [exp.key for exp in self.experiments.values() if exp.status == ExperimentStatus.CANCELLED],
+        }
+        
+        total_elapsed = time.time() - self.start_time if self.start_time else 0
+        report_path = REPO_ROOT / 'report.md'
+        
+        # Generate report with a note that it's interim
+        report_lines = []
+        report_lines.append("# Experiment Run Report (INTERIM)")
+        report_lines.append("")
+        report_lines.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report_lines.append(f"**Status:** Detached - experiments still running in background")
+        report_lines.append(f"**Duration so far:** {total_elapsed:.1f}s ({total_elapsed/60:.1f} minutes)")
+        report_lines.append("")
+        
+        # Count running experiments
+        running = sum(1 for exp in self.experiments.values() if exp.status in (ExperimentStatus.RUNNING, ExperimentStatus.EXTERNAL_RUNNING))
+        pending = sum(1 for exp in self.experiments.values() if exp.status == ExperimentStatus.PENDING)
+        
+        report_lines.append(f"**Still running:** {running} experiments")
+        report_lines.append(f"**Pending:** {pending} experiments")
+        report_lines.append("")
+        
+        # Rest of the report
+        report_lines.append("## Summary")
+        report_lines.append("")
+        report_lines.append(f"- ✓ **Successful:** {len(results['success'])}")
+        report_lines.append(f"- ✗ **Failed:** {len(results['failed'])}")
+        report_lines.append(f"- ⊘ **Skipped:** {len(results['skipped'])}")
+        report_lines.append(f"- ⊗ **Cancelled:** {len(results['cancelled'])}")
+        report_lines.append("")
+        
+        # Include successful and failed sections (similar to main report)
+        if results['success']:
+            report_lines.append("## ✓ Successful Runs")
+            report_lines.append("")
+            for exp_key in sorted(results['success']):
+                exp = self.experiments.get(exp_key)
+                if exp and exp.end_time:
+                    completed_time = datetime.fromtimestamp(exp.end_time).strftime('%Y-%m-%d %H:%M:%S')
+                    report_lines.append(f"- `{exp_key}` - {exp.elapsed_str} - {completed_time}")
+            report_lines.append("")
+        
+        if results['failed']:
+            report_lines.append("## ✗ Failed Runs")
+            report_lines.append("")
+            for exp_key in sorted(results['failed']):
+                exp = self.experiments.get(exp_key)
+                if exp:
+                    error_msg = exp.last_log_line if exp.last_log_line else f"Exit code: {exp.return_code}"
+                    report_lines.append(f"- `{exp_key}` - {error_msg[:100]}")
+            report_lines.append("")
+        
+        try:
+            with open(report_path, 'w') as f:
+                f.write('\n'.join(report_lines))
+            print(f"{Colors.GREEN}✓ Interim report saved to {report_path}{Colors.RESET}")
+        except Exception as e:
+            print(f"{Colors.RED}✗ Failed to save interim report: {e}{Colors.RESET}")
+    
     def _format_status_line(self, exp: Experiment, width: int = 80) -> str:
         """Format a single experiment status line."""
         status_colors = {
@@ -730,6 +797,8 @@ class ExperimentRunner:
                 # Check detach flag (exit but leave experiments running)
                 if self.detach_requested:
                     self._detach_from_experiments()
+                    # Generate interim report before detaching
+                    self._generate_interim_report()
                     break
                 
                 # Check for completed experiments (local processes)
@@ -876,6 +945,100 @@ def run_experiment_simple(
         }
 
 
+def generate_report(experiments_dict: Dict[str, Experiment], results: Dict[str, List[str]], total_elapsed: float, output_path: pathlib.Path):
+    """Generate a markdown report summarizing experiment results."""
+    report_lines = []
+    
+    # Header
+    report_lines.append("# Experiment Run Report")
+    report_lines.append("")
+    report_lines.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    report_lines.append(f"**Total Duration:** {total_elapsed:.1f}s ({total_elapsed/60:.1f} minutes)")
+    report_lines.append("")
+    
+    # Summary statistics
+    report_lines.append("## Summary")
+    report_lines.append("")
+    report_lines.append(f"- ✓ **Successful:** {len(results['success'])}")
+    report_lines.append(f"- ✗ **Failed:** {len(results['failed'])}")
+    report_lines.append(f"- ⊘ **Skipped:** {len(results['skipped'])}")
+    if 'cancelled' in results:
+        report_lines.append(f"- ⊗ **Cancelled:** {len(results['cancelled'])}")
+    report_lines.append(f"- **Total:** {len(results['success']) + len(results['failed']) + len(results['skipped']) + len(results.get('cancelled', []))}")
+    report_lines.append("")
+    
+    # Successful runs
+    if results['success']:
+        report_lines.append("## ✓ Successful Runs")
+        report_lines.append("")
+        report_lines.append("| Experiment | Duration | Completed At |")
+        report_lines.append("|------------|----------|--------------|")
+        
+        for exp_key in sorted(results['success']):
+            exp = experiments_dict.get(exp_key)
+            if exp:
+                duration = exp.elapsed_str
+                if exp.end_time:
+                    completed_time = datetime.fromtimestamp(exp.end_time).strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    completed_time = "N/A"
+                report_lines.append(f"| `{exp_key}` | {duration} | {completed_time} |")
+            else:
+                report_lines.append(f"| `{exp_key}` | N/A | N/A |")
+        report_lines.append("")
+    
+    # Failed runs
+    if results['failed']:
+        report_lines.append("## ✗ Failed Runs")
+        report_lines.append("")
+        report_lines.append("| Experiment | Duration | Error/Last Log |")
+        report_lines.append("|------------|----------|----------------|")
+        
+        for exp_key in sorted(results['failed']):
+            exp = experiments_dict.get(exp_key)
+            if exp:
+                duration = exp.elapsed_str
+                error_msg = exp.last_log_line if exp.last_log_line else f"Exit code: {exp.return_code}"
+                # Truncate long error messages
+                if len(error_msg) > 100:
+                    error_msg = error_msg[:97] + "..."
+                # Escape pipe characters in error messages
+                error_msg = error_msg.replace('|', '\|')
+                report_lines.append(f"| `{exp_key}` | {duration} | {error_msg} |")
+            else:
+                report_lines.append(f"| `{exp_key}` | N/A | Unknown error |")
+        report_lines.append("")
+    
+    # Skipped runs
+    if results['skipped']:
+        report_lines.append("## ⊘ Skipped Runs")
+        report_lines.append("")
+        report_lines.append("These experiments were skipped (already completed in previous runs):")
+        report_lines.append("")
+        for exp_key in sorted(results['skipped']):
+            report_lines.append(f"- `{exp_key}`")
+        report_lines.append("")
+    
+    # Cancelled runs
+    if results.get('cancelled'):
+        report_lines.append("## ⊗ Cancelled Runs")
+        report_lines.append("")
+        report_lines.append("These experiments were cancelled during execution:")
+        report_lines.append("")
+        for exp_key in sorted(results['cancelled']):
+            report_lines.append(f"- `{exp_key}`")
+        report_lines.append("")
+    
+    # Write report
+    try:
+        with open(output_path, 'w') as f:
+            f.write('\n'.join(report_lines))
+        return True
+    except Exception as e:
+        print(f"Warning: Failed to write report to {output_path}: {e}")
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Run experiments for all datasets with all methods",
@@ -1006,6 +1169,8 @@ def main():
     total_start_time = time.time()
     
     # Run experiments
+    experiments_dict = {}  # Will store experiment objects for report generation
+    
     if args.parallel and args.parallel > 0 or args.monitor:
         # Interactive parallel mode (or monitor mode)
         runner = ExperimentRunner(
@@ -1018,6 +1183,9 @@ def main():
             skip_existing=args.skip_existing,
             monitor_only=args.monitor,
         )
+        
+        # Store experiments for report generation
+        experiments_dict = runner.experiments
         
         if args.dry_run:
             print("\n[DRY RUN MODE]")
@@ -1045,10 +1213,16 @@ def main():
         # Sequential mode (original behavior)
         results = {'success': [], 'failed': [], 'skipped': []}
         
+        # Track experiments for report generation
+        for exp_dict in experiments:
+            exp_obj = Experiment(dataset=exp_dict['dataset'], method=exp_dict['method'])
+            experiments_dict[exp_obj.key] = exp_obj
+        
         for i, exp in enumerate(experiments, 1):
             dataset = exp['dataset']
             method = exp['method']
             experiment_key = f"{dataset}/{method}"
+            exp_obj = experiments_dict[experiment_key]
             
             print(f"\n[{i}/{len(experiments)}] {experiment_key}")
             print("-" * 40)
@@ -1057,10 +1231,12 @@ def main():
             status, _ = get_experiment_status(dataset, method, output_dir)
             if args.skip_existing and status == PersistentStatus.FINISHED:
                 print(f"  Skipping (completed successfully)")
+                exp_obj.status = ExperimentStatus.SKIPPED
                 results['skipped'].append(experiment_key)
                 continue
             
             print(f"  Running...")
+            exp_obj.start_time = time.time()
             result = run_experiment_simple(
                 dataset=dataset,
                 method=method,
@@ -1069,12 +1245,16 @@ def main():
                 overrides=args.overrides,
                 dry_run=args.dry_run
             )
+            exp_obj.end_time = time.time()
             
             if result['success']:
                 print(f"  ✓ {result['message']}")
+                exp_obj.status = ExperimentStatus.COMPLETED
                 results['success'].append(experiment_key)
             else:
                 print(f"  ✗ {result['message']}")
+                exp_obj.status = ExperimentStatus.FAILED
+                exp_obj.last_log_line = result.get('message', 'Unknown error')
                 results['failed'].append(experiment_key)
                 
                 if not args.continue_on_error and not args.dry_run:
@@ -1103,6 +1283,15 @@ def main():
             print(f"  - {exp}")
     
     print("=" * 60)
+    
+    # Generate report.md
+    if not args.dry_run:
+        report_path = REPO_ROOT / 'report.md'
+        print(f"\nGenerating report: {report_path}")
+        if generate_report(experiments_dict, results, total_elapsed, report_path):
+            print(f"✓ Report saved to {report_path}")
+        else:
+            print(f"✗ Failed to save report")
     
     return 1 if results['failed'] else 0
 
