@@ -284,8 +284,8 @@ class HeuristicRunner:
         Returns list of Individual objects that can hold fitness.
         """
         # First individual is the original sample adjusted to constraint boundaries
-        base_individual = get_valid_sample_func(sample, target_class, original_class)
-        population = [Individual(create_individual_func(base_individual.copy(), feature_names))]
+        base_counterfactual = get_valid_sample_func(sample, target_class, original_class)
+        population = [Individual(create_individual_func(base_counterfactual.copy(), feature_names))]
 
         # Get constraints and escape directions
         target_constraints = self.constraints.get(f"Class {target_class}", [])
