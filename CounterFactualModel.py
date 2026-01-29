@@ -3,7 +3,6 @@ import pandas as pd
 from boundary_analyzer import BoundaryAnalyzer
 from constraint_validator import ConstraintValidator
 from fitness_calculator import FitnessCalculator
-from mutation_strategy import MutationStrategy
 from sample_generator import SampleGenerator
 from heuristic_runner import HeuristicRunner
 from constants import UNCONSTRAINED_CHANGE_PENALTY_FACTOR
@@ -116,14 +115,6 @@ class CounterFactualModel:
             boundary_analyzer=self.boundary_analyzer,
             verbose=verbose,
         )
-        # Initialize MutationStrategy for perturbation operations
-        self.mutation_strategy = MutationStrategy(
-            constraints=constraints,
-            dict_non_actionable=dict_non_actionable,
-            escape_pressure=escape_pressure,
-            prioritize_non_overlapping=prioritize_non_overlapping,
-            boundary_analyzer=self.boundary_analyzer,
-        )
         # Initialize SampleGenerator for sample generation
         self.sample_generator = SampleGenerator(
             model=model,
@@ -156,33 +147,17 @@ class CounterFactualModel:
         self.overgeneration_factor = overgeneration_factor
 
     def _analyze_boundary_overlap(self, original_class, target_class):
-        """
-        Delegate to BoundaryAnalyzer for boundary overlap analysis.
-        """
+        """Delegate to BoundaryAnalyzer for boundary overlap analysis."""
         return self.boundary_analyzer.analyze_boundary_overlap(original_class, target_class)
 
-    def _calculate_original_escape_penalty(
-        self, individual, sample, original_class, target_class=None
-    ):
-        """
-        Delegate to BoundaryAnalyzer for escape penalty calculation.
-        """
-        return self.boundary_analyzer.calculate_original_escape_penalty(
-            individual, sample, original_class, target_class
-        )
-
     def is_actionable_change(self, counterfactual_sample, original_sample):
-        """
-        Delegate to ConstraintValidator for actionability check.
-        """
+        """Delegate to ConstraintValidator for actionability check."""
         return self.constraint_validator.is_actionable_change(
             counterfactual_sample, original_sample
         )
 
     def check_validity(self, counterfactual_sample, original_sample, desired_class):
-        """
-        Delegate to ConstraintValidator for validity check.
-        """
+        """Delegate to ConstraintValidator for validity check."""
         return self.constraint_validator.check_validity(
             counterfactual_sample, original_sample, desired_class
         )
@@ -190,9 +165,7 @@ class CounterFactualModel:
     def calculate_distance(
         self, original_sample, counterfactual_sample, metric="euclidean"
     ):
-        """
-        Delegate to FitnessCalculator for distance calculation.
-        """
+        """Delegate to FitnessCalculator for distance calculation."""
         return self.fitness_calculator.calculate_distance(
             original_sample, counterfactual_sample, metric
         )
@@ -239,45 +212,19 @@ class CounterFactualModel:
     def validate_constraints(
         self, S_prime, sample, target_class, original_class=None, strict_mode=True
     ):
-        """
-        Delegate to ConstraintValidator for constraint validation.
-        """
+        """Delegate to ConstraintValidator for constraint validation."""
         return self.constraint_validator.validate_constraints(
             S_prime, sample, target_class, original_class, strict_mode
         )
 
     def get_valid_sample(self, sample, target_class, original_class=None):
-        """
-        Delegate to SampleGenerator for valid sample generation.
-        """
+        """Delegate to SampleGenerator for valid sample generation."""
         return self.sample_generator.get_valid_sample(sample, target_class, original_class)
 
     def calculate_sparsity(self, original_sample, counterfactual_sample):
-        """
-        Delegate to FitnessCalculator for sparsity calculation.
-        """
+        """Delegate to FitnessCalculator for sparsity calculation."""
         return self.fitness_calculator.calculate_sparsity(
             original_sample, counterfactual_sample
-        )
-
-    def individual_diversity(self, individual, population):
-        """
-        Delegate to FitnessCalculator for diversity calculation.
-        """
-        return self.fitness_calculator.individual_diversity(individual, population)
-
-    def min_distance_to_others(self, individual, population):
-        """
-        Delegate to FitnessCalculator for minimum distance calculation.
-        """
-        return self.fitness_calculator.min_distance_to_others(individual, population)
-
-    def distance_to_boundary_line(self, individual, target_class):
-        """
-        Delegate to FitnessCalculator for boundary distance calculation.
-        """
-        return self.fitness_calculator.distance_to_boundary_line(
-            individual, target_class
         )
 
     def calculate_fitness(
@@ -291,9 +238,7 @@ class CounterFactualModel:
         original_class=None,
         return_components=False,
     ):
-        """
-        Delegate to FitnessCalculator for fitness calculation.
-        """
+        """Delegate to FitnessCalculator for fitness calculation."""
         return self.fitness_calculator.calculate_fitness(
             individual,
             original_features,
@@ -304,10 +249,6 @@ class CounterFactualModel:
             original_class,
             return_components=return_components,
         )
-
-    def _create_individual(self, sample_dict, feature_names):
-        """Delegate to MutationStrategy for individual creation."""
-        return self.mutation_strategy.create_deap_individual(sample_dict, feature_names)
 
     def generate_candidates(
         self,
@@ -357,7 +298,7 @@ class CounterFactualModel:
             metric=metric,
             num_best_results=num_best_results,
             boundary_analysis=boundary_analysis,
-            create_individual_func=self._create_individual,
+            create_individual_func=lambda d, _: dict(d),  # Simple dict copy
             calculate_fitness_func=self.calculate_fitness,
             get_valid_sample_func=self.get_valid_sample,
             normalize_feature_func=self._normalize_feature_name,
