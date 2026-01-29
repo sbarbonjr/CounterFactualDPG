@@ -351,8 +351,7 @@ class HeuristicRunner:
                         # Feature can only decrease or stay the same
                         perturbed[feature] = min(perturbed[feature], original_value)
 
-                # Ensure non-negative and round
-                perturbed[feature] = np.round(max(0, perturbed[feature]), 2)
+                perturbed[feature] = np.round(perturbed[feature], 5)
 
             if self.verbose:
                 print(f"[HeuristicRunner] Added individual with perturbed features: {perturbed}")
