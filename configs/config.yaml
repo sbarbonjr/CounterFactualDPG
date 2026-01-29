@@ -11,7 +11,7 @@ priority_datasets:
   - abalone # similar to 19
   - abalone_19 
   - diabetes
-  - banknote_authentication
+  # - banknote_authentication
   - education_dataset
   - energy_dataset
   - finance_dataset
@@ -19,7 +19,7 @@ priority_datasets:
   - libras_move
   - mammography
   - oil
-  - optical_digits
+  # - optical_digits
   - ozone_level
   - satimage
   - us_crime
@@ -28,15 +28,15 @@ priority_datasets:
   - webpage
   - isolet
   - spectrometer
-  - protein_homo 
+  # - protein_homo 
   - breast_cancer_wisconsin
   - sick_euthyroid
   - ecoli
   - heart_disease_uci
-  - letter_img
+  # - letter_img
   - scene
   - wheat-seeds
-  - wine_quality
+  # - wine_quality
 
 excluded_datasets:
   - car_eval_4 # binary
