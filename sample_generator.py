@@ -260,7 +260,10 @@ class SampleGenerator:
         sample_keys = list(sample.keys())
         
         # Collect features that can be varied (have valid bounds and are searchable)
+        # Also track features with fixed bounds (must be set to exact value)
         searchable_features = []
+        fixed_features = {}  # feature -> fixed_value
+        
         for feature, bounds in feature_bounds_info.items():
             # Skip no_change features
             if self.dict_non_actionable and feature in self.dict_non_actionable:
@@ -283,6 +286,13 @@ class SampleGenerator:
             # Fix inverted bounds (can happen with decrease escape direction)
             if v_min > v_max:
                 v_min, v_max = v_max, v_min
+            
+            # Handle equal bounds: feature has a FIXED required value
+            if abs(v_min - v_max) < 1e-6:  # Essentially equal
+                fixed_features[feature] = v_min  # Must be this exact value
+                if self.verbose:
+                    print(f"[VERBOSE-DPG]   Fixed feature {feature} = {v_min:.4f} (equal bounds)")
+                continue
             
             # Skip invalid bounds (after potential swap)
             if v_min >= v_max:
@@ -329,6 +339,12 @@ class SampleGenerator:
             
             # Build test sample at this depth
             test_sample = sample.copy()
+            
+            # First set all fixed features to their required values
+            for feature, fixed_val in fixed_features.items():
+                test_sample[feature] = fixed_val
+            
+            # Then interpolate searchable features based on depth
             for feat_info in searchable_features:
                 feature = feat_info['feature']
                 start = feat_info['start']
@@ -367,6 +383,12 @@ class SampleGenerator:
         # Try extremes as fallback
         for depth in [0.0, 0.25, 0.5, 0.75, 1.0]:
             test_sample = sample.copy()
+            
+            # First set all fixed features to their required values
+            for feature, fixed_val in fixed_features.items():
+                test_sample[feature] = fixed_val
+            
+            # Then set searchable features based on depth
             for feat_info in searchable_features:
                 feature = feat_info['feature']
                 start = feat_info['start']
@@ -399,7 +421,10 @@ class SampleGenerator:
         sample_keys = list(sample.keys())
         
         # Collect searchable features with valid bounds
+        # Also track features with fixed bounds (must be set to exact value)
         searchable_features = []
+        fixed_features = {}  # feature -> fixed_value
+        
         for feature, bounds in feature_bounds_info.items():
             if self.dict_non_actionable and feature in self.dict_non_actionable:
                 if self.dict_non_actionable[feature] == "no_change":
@@ -421,6 +446,11 @@ class SampleGenerator:
             if v_min > v_max:
                 v_min, v_max = v_max, v_min
             
+            # Handle equal bounds: feature has a FIXED required value
+            if abs(v_min - v_max) < 1e-6:  # Essentially equal
+                fixed_features[feature] = v_min  # Must be this exact value
+                continue
+            
             if v_min < v_max:
                 searchable_features.append({
                     'feature': feature,
@@ -429,7 +459,7 @@ class SampleGenerator:
                     'original': original_value,
                 })
         
-        if not searchable_features:
+        if not searchable_features and not fixed_features:
             return None
         
         best_sample = None
@@ -437,6 +467,10 @@ class SampleGenerator:
         
         for i in range(n_samples):
             test_sample = sample.copy()
+            
+            # First set all fixed features to their required values
+            for feature, fixed_val in fixed_features.items():
+                test_sample[feature] = fixed_val
             
             for feat_info in searchable_features:
                 feature = feat_info['feature']
@@ -678,7 +712,7 @@ class SampleGenerator:
                 actionable_info = ""
                 if self.dict_non_actionable and feature in self.dict_non_actionable:
                     actionable_info = f" [{self.dict_non_actionable[feature]}]"
-                print(f"[VERBOSE-DPG]   {feature}: {original_value:.4f} → {adjusted_sample[feature]:.4f} (Δ={delta:+.4f}){escape_info}{actionable_info}")
+                print(f"[VERBOSE-DPG]   {feature}: {original_value:.4f} → {adjusted_sample[feature]:.4f} (Δ={delta:+.4f}){escape_info}{actionable_info}    --- [bounds: {min_value:.4f}, {max_value:.4f}]")
         if self.verbose:
             print(f"[VERBOSE-DPG] --------------------------------------------------------") 
 
