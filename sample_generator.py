@@ -513,6 +513,7 @@ class SampleGenerator:
             max_value = np.inf
             escape_dir = "both"
             orig_min, orig_max = None, None
+            raw_target_min, raw_target_max = None, None  # Store raw constraints
 
             # Find the constraints for this feature using direct lookup
             matching_constraint = next(
@@ -525,14 +526,16 @@ class SampleGenerator:
             )
 
             if matching_constraint:
+                raw_target_min = matching_constraint.get("min")
+                raw_target_max = matching_constraint.get("max")
                 min_value = (
-                    matching_constraint.get("min")
-                    if matching_constraint.get("min") is not None
+                    raw_target_min
+                    if raw_target_min is not None
                     else -np.inf
                 )
                 max_value = (
-                    matching_constraint.get("max")
-                    if matching_constraint.get("max") is not None
+                    raw_target_max
+                    if raw_target_max is not None
                     else np.inf
                 )
 
@@ -648,9 +651,13 @@ class SampleGenerator:
             adjusted_sample[feature] = np.clip(target_value, min_value, max_value)
             
             # Store feature bounds info for potential retry
+            # Use RAW target constraints for search space (no expansion beyond DPG bounds)
+            search_min = raw_target_min if raw_target_min is not None else min_value
+            search_max = raw_target_max if raw_target_max is not None else max_value
+            
             feature_bounds_info[feature] = {
-                'min': min_value,
-                'max': max_value,
+                'min': search_min,
+                'max': search_max,
                 'escape_dir': escape_dir,
                 'original': original_value,
             }
@@ -793,7 +800,7 @@ class SampleGenerator:
             print("[VERBOSE-DPG] Progressive depth failed, trying random sampling...")
         
         random_result = self._random_sample_search(
-            sample, feature_bounds_info, target_class, n_samples=100
+            sample, feature_bounds_info, target_class, n_samples=500
         )
         
         if random_result is not None:
