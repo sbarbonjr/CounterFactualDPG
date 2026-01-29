@@ -104,6 +104,7 @@ def save_experiment_level_metrics(
     results: List[Dict[str, Any]],
     config: Any,
     output_dir: str = "outputs",
+    total_generation_runtime: float = None,
 ) -> None:
     """Save aggregated experiment-level metrics and summary statistics.
     
@@ -111,6 +112,7 @@ def save_experiment_level_metrics(
         results: List of per-sample result dictionaries
         config: Experiment configuration object
         output_dir: Root output directory
+        total_generation_runtime: Total runtime for counterfactual generation (seconds)
     """
     try:
         experiment_name = getattr(config.experiment, "name", "experiment")
@@ -164,6 +166,21 @@ def save_experiment_level_metrics(
             summary_stats.to_csv(summary_stats_csv)
             print(f"INFO: Saved summary statistics to {summary_stats_csv}")
 
+        # Save experiment-level summary with runtime
+        summary_data = {
+            "total_samples": len(results),
+            "total_valid_counterfactuals": sum(r["valid_counterfactuals"] for r in results),
+            "total_requested_counterfactuals": sum(r["requested_counterfactuals"] for r in results),
+            "overall_success_rate": np.mean([r["success_rate"] for r in results]),
+        }
+        if total_generation_runtime is not None:
+            summary_data["total_generation_runtime"] = total_generation_runtime
+        
+        summary_df = pd.DataFrame([summary_data])
+        summary_csv = os.path.join(experiment_dir, "experiment_summary.csv")
+        summary_df.to_csv(summary_csv, index=False)
+        print(f"INFO: Saved experiment summary to {summary_csv}")
+        
         # Save experiment configuration
         config_copy_path = os.path.join(experiment_dir, "experiment_config.yaml")
         with open(config_copy_path, "w") as f:
@@ -182,6 +199,7 @@ def log_experiment_summary_to_wandb(
     total_valid: int,
     total_requested: int,
     total_success_rate: float,
+    total_generation_runtime: float = None,
 ) -> None:
     """Log experiment summary statistics and table to WandB.
     
@@ -191,6 +209,7 @@ def log_experiment_summary_to_wandb(
         total_valid: Total number of valid counterfactuals
         total_requested: Total number of requested counterfactuals
         total_success_rate: Overall success rate (0-1)
+        total_generation_runtime: Total runtime for counterfactual generation (seconds)
     """
     if wandb_run:
         try:
@@ -201,6 +220,11 @@ def log_experiment_summary_to_wandb(
             wandb.run.summary["experiment/total_valid_counterfactuals"] = total_valid
             wandb.run.summary["experiment/total_requested_counterfactuals"] = total_requested
             wandb.run.summary["experiment/overall_success_rate"] = total_success_rate
+            
+            # Log runtime metric (used by compare_techniques.py)
+            if total_generation_runtime is not None:
+                wandb.run.summary["metrics/combination/runtime"] = total_generation_runtime
+                wandb.run.summary["runtime"] = total_generation_runtime
             
             summary_data = [
                 [

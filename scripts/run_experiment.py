@@ -336,7 +336,10 @@ def run_single_sample(
     )
 
     print(f"INFO: Generating {requested_counterfactuals} counterfactuals...")
+    generation_start_time = time.time()
     result = run_counterfactual_generation(generation_args)
+    generation_runtime = time.time() - generation_start_time
+    print(f"INFO: Counterfactual generation completed in {generation_runtime:.2f}s")
 
     # Process results from counterfactual generation
     if result is not None:
@@ -1568,6 +1571,7 @@ Final Results
         "requested_counterfactuals": requested_counterfactuals,
         "original_class": ORIGINAL_SAMPLE_PREDICTED_CLASS,
         "target_class": TARGET_CLASS,
+        "generation_runtime": generation_runtime,
     }
 
 
@@ -1663,11 +1667,15 @@ def run_experiment(config: DictConfig, wandb_run=None):
             }
         }
 
+    # Time boundary extraction (required for DPG, but only used for viz constraints in DICE)
+    boundary_extraction_start = time.perf_counter()
     dpg_result = ConstraintParser.extract_constraints_from_dataset(
         model, TRAIN_FEATURES.values, TRAIN_LABELS, FEATURE_NAMES, dpg_config=dpg_config
     )
+    boundary_extraction_time = time.perf_counter() - boundary_extraction_start
     constraints = dpg_result["constraints"]
     communities = dpg_result.get("communities", [])
+    print(f"INFO: Boundary extraction completed in {boundary_extraction_time:.3f}s")
 
     # --- DPG: send extracted boundaries to WandB under a new 'dpg' section ---
     normalized_constraints = (
@@ -1841,6 +1849,14 @@ def run_experiment(config: DictConfig, wandb_run=None):
         )
         results.append(result)
 
+    # Compute aggregate runtime metrics
+    # For DPG: includes boundary extraction + all sample generation times
+    # For DICE: only sample generation times (boundary extraction excluded as it's only for viz)
+    total_generation_runtime = sum(r["generation_runtime"] for r in results)
+    method_name = config.counterfactual.method if hasattr(config.counterfactual, "method") else "unknown"
+    if method_name.lower() == "dpg":
+        total_generation_runtime += boundary_extraction_time
+    
     # Log experiment-level summary
     total_success_rate = np.mean([r["success_rate"] for r in results])
     total_valid = sum(r["valid_counterfactuals"] for r in results)
@@ -1852,6 +1868,7 @@ def run_experiment(config: DictConfig, wandb_run=None):
     print(f"Samples processed: {len(results)}")
     print(f"Total valid counterfactuals: {total_valid}/{total_requested}")
     print(f"Overall success rate: {total_success_rate:.2%}")
+    print(f"Total generation runtime: {total_generation_runtime:.3f}s")
     print(f"\nSample Details:")
     for r in results:
         print(f"  - {r['sample_id']}: Original Class={r['original_class']}, Target Class={r['target_class']}")
@@ -1864,12 +1881,13 @@ def run_experiment(config: DictConfig, wandb_run=None):
             results=results,
             total_valid=total_valid,
             total_requested=total_requested,
-            total_success_rate=total_success_rate
+            total_success_rate=total_success_rate,
+            total_generation_runtime=total_generation_runtime
         )
 
     # Save experiment-level summary metrics to CSV
     output_dir = getattr(config.output, "local_dir", "outputs")
-    save_experiment_level_metrics(results, config, output_dir)
+    save_experiment_level_metrics(results, config, output_dir, total_generation_runtime)
 
     return results
 
