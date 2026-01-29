@@ -1557,6 +1557,39 @@ Final Results
     # Log artifacts to WandB
     log_sample_artifacts_to_wandb(wandb_run, SAMPLE_ID, raw_filepath, viz_filepath)
 
+    # Log sample and final counterfactuals to WandB for export_comparison_results.py
+    # These are stored in config/summary for easy retrieval by other scripts
+    if wandb_run:
+        try:
+            import json
+            
+            # Store sample as a list of floats (for JSON compatibility)
+            sample_values = [float(ORIGINAL_SAMPLE[f]) for f in FEATURES_NAMES]
+            wandb.run.config["sample"] = sample_values
+            wandb.run.config["sample_class"] = int(ORIGINAL_SAMPLE_PREDICTED_CLASS)
+            wandb.run.config["target_class"] = int(TARGET_CLASS)
+            wandb.run.config["feature_names"] = FEATURES_NAMES
+            wandb.run.config["restrictions"] = dict_non_actionable
+            
+            # Collect all final counterfactuals as list of lists (for JSON compatibility)
+            final_cfs = []
+            for combination_viz in visualizations:
+                for cf_data in combination_viz.get("counterfactuals", []):
+                    cf = cf_data.get("counterfactual", {})
+                    if cf:
+                        cf_values = [float(cf.get(f, 0.0)) for f in FEATURES_NAMES]
+                        final_cfs.append(cf_values)
+            
+            # Store in summary for easy retrieval
+            wandb.run.summary["sample"] = sample_values
+            wandb.run.summary["original_class"] = int(ORIGINAL_SAMPLE_PREDICTED_CLASS)
+            wandb.run.summary["final_counterfactuals"] = final_cfs
+            
+            print(f"INFO: Logged sample and {len(final_cfs)} counterfactuals to WandB config/summary")
+            
+        except Exception as exc:
+            print(f"WARNING: Failed to log sample/counterfactuals to WandB: {exc}")
+
     print(
         f"INFO: Completed sample {SAMPLE_ID}: {valid_counterfactuals}/{requested_counterfactuals} successful counterfactuals"
     )
