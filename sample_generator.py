@@ -240,6 +240,145 @@ class SampleGenerator:
 
         return None
 
+    def _progressive_depth_search(self, sample, feature_bounds_info, target_class, 
+                                   eps=0.01, max_iter=30):
+        """
+        Progressive depth search: scale ALL features together from minimal to maximal
+        values within their target bounds, binary searching for the minimum depth
+        that achieves the target class.
+
+        Args:
+            sample (dict): Original sample values.
+            feature_bounds_info (dict): Feature bounds info from initial pass.
+            target_class (int): Target class for validation.
+            eps (float): Minimum depth interval to stop search.
+            max_iter (int): Maximum iterations.
+
+        Returns:
+            dict or None: Valid sample at minimal depth, or None if not found.
+        """
+        sample_keys = list(sample.keys())
+        
+        # Collect features that can be varied (have valid bounds and are searchable)
+        searchable_features = []
+        for feature, bounds in feature_bounds_info.items():
+            # Skip no_change features
+            if self.dict_non_actionable and feature in self.dict_non_actionable:
+                if self.dict_non_actionable[feature] == "no_change":
+                    continue
+            
+            v_min = bounds['min']
+            v_max = bounds['max']
+            escape_dir = bounds['escape_dir']
+            original_value = bounds['original']
+            
+            # Apply actionability constraints
+            if self.dict_non_actionable and feature in self.dict_non_actionable:
+                actionability = self.dict_non_actionable[feature]
+                if actionability == "non_decreasing":
+                    v_min = max(v_min, original_value)
+                elif actionability == "non_increasing":
+                    v_max = min(v_max, original_value)
+            
+            # Skip invalid bounds
+            if v_min >= v_max:
+                continue
+            
+            # Calculate start (minimal change) and end (maximal change) values
+            # based on escape direction
+            if escape_dir == "increase":
+                start_val = v_min + eps  # Just inside target bounds
+                end_val = v_max - eps    # Deep inside target bounds
+            elif escape_dir == "decrease":
+                start_val = v_max - eps  # Just inside target bounds  
+                end_val = v_min + eps    # Deep inside target bounds
+            else:
+                # For 'both' direction, move toward midpoint
+                start_val = original_value if v_min <= original_value <= v_max else (v_min + v_max) / 2
+                end_val = (v_min + v_max) / 2
+            
+            searchable_features.append({
+                'feature': feature,
+                'start': start_val,
+                'end': end_val,
+                'original': original_value,
+            })
+        
+        if not searchable_features:
+            if self.verbose:
+                print("[VERBOSE-DPG]   No searchable features for progressive depth search")
+            return None
+        
+        if self.verbose:
+            print(f"[VERBOSE-DPG]   Progressive depth search on {len(searchable_features)} features")
+        
+        # Binary search on depth (0 = minimal change, 1 = maximal change)
+        low_depth, high_depth = 0.0, 1.0
+        best_valid_sample = None
+        best_depth = float('inf')
+        
+        for iteration in range(max_iter):
+            if abs(high_depth - low_depth) < eps:
+                break
+            
+            mid_depth = (low_depth + high_depth) / 2
+            
+            # Build test sample at this depth
+            test_sample = sample.copy()
+            for feat_info in searchable_features:
+                feature = feat_info['feature']
+                start = feat_info['start']
+                end = feat_info['end']
+                # Interpolate between start and end based on depth
+                test_sample[feature] = start + mid_depth * (end - start)
+            
+            is_valid, margin, pred = self._validate_sample_prediction(
+                test_sample, target_class, sample_keys
+            )
+            
+            if is_valid:
+                # Found valid - record and search for lower depth (minimal change)
+                if mid_depth < best_depth:
+                    best_valid_sample = test_sample.copy()
+                    best_depth = mid_depth
+                high_depth = mid_depth  # Try to find even lower depth that works
+            else:
+                low_depth = mid_depth  # Need deeper into target bounds
+            
+            if self.verbose and iteration % 5 == 0:
+                status = "valid" if is_valid else "invalid"
+                print(f"[VERBOSE-DPG]     Depth search iter {iteration}: depth={mid_depth:.3f} ({status})")
+        
+        if best_valid_sample is not None:
+            if self.verbose:
+                print(f"[VERBOSE-DPG]   Progressive depth search found valid at depth {best_depth:.3f}")
+                for feat_info in searchable_features:
+                    feature = feat_info['feature']
+                    orig = feat_info['original']
+                    new_val = best_valid_sample[feature]
+                    delta = new_val - orig
+                    print(f"[VERBOSE-DPG]     {feature}: {orig:.4f} → {new_val:.4f} (Δ={delta:+.4f})")
+            return best_valid_sample
+        
+        # Try extremes as fallback
+        for depth in [0.0, 0.25, 0.5, 0.75, 1.0]:
+            test_sample = sample.copy()
+            for feat_info in searchable_features:
+                feature = feat_info['feature']
+                start = feat_info['start']
+                end = feat_info['end']
+                test_sample[feature] = start + depth * (end - start)
+            
+            is_valid, margin, pred = self._validate_sample_prediction(
+                test_sample, target_class, sample_keys
+            )
+            if is_valid:
+                if self.verbose:
+                    print(f"[VERBOSE-DPG]   Fallback depth {depth} found valid")
+                return test_sample
+        
+        return None
+
     def get_valid_sample(self, sample, target_class, original_class):
         """
         Generate a valid sample that meets all constraints for the specified target class
@@ -531,9 +670,26 @@ class SampleGenerator:
                 if self.verbose:
                     print(f"[VERBOSE-DPG]   No valid value found for {feature}")
 
+        # Single-feature search failed - try progressive depth search (all features together)
+        if self.verbose:
+            print("[VERBOSE-DPG] Single-feature search exhausted, trying progressive depth search...")
+        
+        progressive_result = self._progressive_depth_search(
+            sample, feature_bounds_info, target_class, eps=0.01, max_iter=30
+        )
+        
+        if progressive_result is not None:
+            is_valid, margin, pred = self._validate_sample_prediction(
+                progressive_result, target_class, sample_keys
+            )
+            if is_valid:
+                if self.verbose:
+                    print(f"[VERBOSE-DPG] ✓ Progressive depth search success! (margin: {margin:.3f})")
+                return progressive_result
+
         # All retries exhausted
         if self.verbose:
-            print(f"[VERBOSE-DPG] WARNING: Binary search exhausted, returning best attempt (predicted as {pred})")
+            print(f"[VERBOSE-DPG] WARNING: All search methods exhausted, returning best attempt (predicted as {pred})")
             
         return adjusted_sample
 
