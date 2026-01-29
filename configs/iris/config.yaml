@@ -18,3 +18,6 @@ experiment:
 experiment_params:
   sample_indices:
   - 2
+methods:
+  dpg:
+    verbose: true
