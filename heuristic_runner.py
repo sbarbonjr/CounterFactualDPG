@@ -285,6 +285,11 @@ class HeuristicRunner:
         """
         # First individual is the original sample adjusted to constraint boundaries
         base_counterfactual = get_valid_sample_func(sample, target_class, original_class)
+        if self.verbose:
+            print("[HeuristicRunner] Base counterfactual (constraint-adjusted):", base_counterfactual)
+        
+        
+        
         population = [Individual(create_individual_func(base_counterfactual.copy(), feature_names))]
 
         # Get constraints and escape directions
@@ -348,6 +353,9 @@ class HeuristicRunner:
 
                 # Ensure non-negative and round
                 perturbed[feature] = np.round(max(0, perturbed[feature]), 2)
+
+            if self.verbose:
+                print(f"[HeuristicRunner] Added individual with perturbed features: {perturbed}")
 
             population.append(Individual(create_individual_func(perturbed, feature_names)))
 
