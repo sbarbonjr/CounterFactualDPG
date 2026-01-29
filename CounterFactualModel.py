@@ -185,9 +185,9 @@ class CounterFactualModel:
             S_prime, sample, target_class, original_class, strict_mode
         )
 
-    def get_valid_sample(self, sample, target_class, original_class=None):
+    def get_valid_sample(self, sample, target_class, original_class=None, weak_constraints=True):
         """Delegate to SampleGenerator for valid sample generation."""
-        return self.sample_generator.get_valid_sample(sample, target_class, original_class)
+        return self.sample_generator.get_valid_sample(sample, target_class, original_class,weak_constraints)
 
     def calculate_sparsity(self, original_sample, counterfactual_sample):
         """Delegate to FitnessCalculator for sparsity calculation."""

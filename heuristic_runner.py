@@ -145,6 +145,7 @@ class HeuristicRunner:
         normalize_feature_func,
         features_match_func,
         overgeneration_factor=5,
+        weak_constraints=True,
     ):
         """
         Generate counterfactual candidates using heuristic approach.
@@ -163,6 +164,7 @@ class HeuristicRunner:
             normalize_feature_func: Function to normalize feature names.
             features_match_func: Function to check if features match.
             overgeneration_factor (int): Generate this many times the requested CFs.
+            weak_constraints (bool): Extend DPG bounds to include original value.
 
         Returns:
             list: Valid counterfactuals (or None if none found).
@@ -196,6 +198,7 @@ class HeuristicRunner:
             get_valid_sample_func,
             normalize_feature_func,
             features_match_func,
+            weak_constraints,
         )
 
         # Reset tracking
@@ -277,6 +280,7 @@ class HeuristicRunner:
         get_valid_sample_func,
         normalize_feature_func,
         features_match_func,
+        weak_constraints,
     ):
         """
         Create initial population with escape-aware perturbations.
@@ -284,7 +288,7 @@ class HeuristicRunner:
         Returns list of Individual objects that can hold fitness.
         """
         # First individual is the original sample adjusted to constraint boundaries
-        base_counterfactual = get_valid_sample_func(sample, target_class, original_class)
+        base_counterfactual = get_valid_sample_func(sample, target_class, original_class, weak_constraints)
         if self.verbose:
             print("[HeuristicRunner] Base counterfactual (constraint-adjusted):", base_counterfactual)
         

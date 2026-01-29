@@ -508,7 +508,7 @@ class SampleGenerator:
         
         return best_sample
 
-    def get_valid_sample(self, sample, target_class, original_class, weak_constraints=True):
+    def get_valid_sample(self, sample, target_class, original_class, weak_constraints):
         """
         Generate a valid sample that meets all constraints for the specified target class
         while respecting actionable changes.
