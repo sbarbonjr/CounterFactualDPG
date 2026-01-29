@@ -405,17 +405,10 @@ class CounterFactualModel:
             target_class=target_class,
             original_class=original_class,
             population_size=population_size,
-            generations=generations,
-            mutation_rate=mutation_rate,
             metric=metric,
-            delta_threshold=delta_threshold,
-            patience=patience,
-            n_jobs=n_jobs,
             num_best_results=num_best_results,
             boundary_analysis=boundary_analysis,
             create_individual_func=self._create_deap_individual,
-            crossover_func=self._crossover_dict,
-            mutate_func=self._mutate_individual,
             calculate_fitness_func=self.calculate_fitness,
             get_valid_sample_func=self.get_valid_sample,
             normalize_feature_func=self._normalize_feature_name,
@@ -443,8 +436,6 @@ class CounterFactualModel:
         generations=100,
         mutation_rate=0.8,
         n_jobs=-1,
-        allow_relaxation=True,
-        relaxation_factor=2.0,
         num_best_results=1,
     ):
         """
@@ -460,7 +451,6 @@ class CounterFactualModel:
             generations (int): Unused, kept for API compatibility.
             mutation_rate (float): Unused, kept for API compatibility.
             n_jobs (int): Unused, kept for API compatibility.
-            allow_relaxation (bool): Unused, kept for API compatibility.
             relaxation_factor (float): Unused, kept for API compatibility.
             num_best_results (int): Number of top counterfactuals to return.
 

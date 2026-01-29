@@ -95,10 +95,6 @@ def run_counterfactual_generation_dpg(args):
             generation_debugging=getattr(config.counterfactual, 'generation_debugging', False),
         )
         
-        # Enable relaxation fallback for difficult samples
-        allow_relaxation = getattr(config.counterfactual, 'allow_relaxation', True)
-        relaxation_factor = getattr(config.counterfactual, 'relaxation_factor', 2.0)
-        
         # Get the number of counterfactuals to generate
         requested_counterfactuals = getattr(config.experiment_params, 'requested_counterfactuals', 5)
         
@@ -108,8 +104,6 @@ def run_counterfactual_generation_dpg(args):
             config.counterfactual.population_size,
             config.counterfactual.max_generations,
             mutation_rate=config.counterfactual.mutation_rate,
-            allow_relaxation=allow_relaxation,
-            relaxation_factor=relaxation_factor,
             num_best_results=requested_counterfactuals
         )
         

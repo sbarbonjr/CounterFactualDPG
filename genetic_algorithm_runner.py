@@ -141,18 +141,11 @@ class GeneticAlgorithmRunner:
         target_class,
         original_class,
         population_size,
-        generations,  # Unused, kept for API compatibility
-        mutation_rate,  # Unused, kept for API compatibility
         metric,
-        delta_threshold,  # Unused, kept for API compatibility
-        patience,  # Unused, kept for API compatibility
-        n_jobs,  # Unused, kept for API compatibility
         num_best_results,
         boundary_analysis,
         # Callbacks for CounterFactualModel methods
         create_individual_func,
-        crossover_func,  # Unused, kept for API compatibility
-        mutate_func,
         calculate_fitness_func,
         get_valid_sample_func,
         normalize_feature_func,
