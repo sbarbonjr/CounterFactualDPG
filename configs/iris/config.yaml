@@ -19,9 +19,9 @@ experiment_params:
   sample_indices:
   - 2
 methods:
+  dpg:
+    verbose: false
   # _default:
   #   actionability:
       # "petal length (cm)": non_increasing
       # "petal width (cm)": non_decreasing
-  dpg:
-    verbose: true
