@@ -1409,24 +1409,28 @@ def heatmap_techniques(sample, class_sample, cf_list_1, cf_list_2, technique_nam
     full_df = pd.concat(all_rows)
 
     # Calculate differences from original for color highlighting
-    # We'll create a difference matrix for color mapping
+    # First row (original) = 0 for neutral color, other rows = delta from original
     diff_matrix = full_df.copy()
+    diff_matrix.iloc[0] = 0  # Original row: no color (neutral)
     for i in range(1, len(full_df)):
         diff_matrix.iloc[i] = full_df.iloc[i] - full_df.iloc[0]
 
-    # Calculate vmin/vmax for symmetric color scaling
-    vmax = np.max(np.abs(diff_matrix.values))
+    # Calculate vmin/vmax for symmetric color scaling (exclude first row which is zeros)
+    if len(diff_matrix) > 1:
+        vmax = np.max(np.abs(diff_matrix.iloc[1:].values))
+    else:
+        vmax = 0
     vmin = -vmax
 
     if vmax == 0:
         vmax = 1
         vmin = -1
 
-    # Create the heatmap
+    # Create the heatmap using diff_matrix for colors, full_df values for annotations
     fig = plt.figure(figsize=(12, max(6, 2 + len(cf_list_1) + len(cf_list_2))))
     ax = sns.heatmap(
-        full_df,
-        annot=True,
+        diff_matrix,  # Use diff_matrix for coloring (first row = 0 = neutral)
+        annot=full_df.values,  # Show actual values as annotations
         fmt=".2f",
         cmap='coolwarm',
         cbar=True,
