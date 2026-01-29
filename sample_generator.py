@@ -95,7 +95,7 @@ class SampleGenerator:
         Args:
             sample (dict): The sample with feature values.
             target_class (int): The target class for filtering constraints.
-            original_class (int, optional): The original class for escape-aware generation.
+            original_class (int): The original class for escape-aware generation.
 
         Returns:
             dict: A valid sample that meets all constraints for the target class
