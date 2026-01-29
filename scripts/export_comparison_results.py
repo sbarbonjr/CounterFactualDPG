@@ -913,6 +913,16 @@ def main():
             
             raw_df = metadata['raw_df']
             print(f"\n✓ Loaded {len(raw_df)} runs from disk")
+        
+        # Apply priority_datasets filter in local-only mode
+        included_datasets = load_included_datasets()
+        if included_datasets is not None:
+            pre_filter_count = len(comparison_df)
+            comparison_df = comparison_df[comparison_df['dataset'].isin(included_datasets)]
+            if len(raw_df) > 0:
+                raw_df = raw_df[raw_df['dataset'].isin(included_datasets)]
+            print(f"✓ Applied priority_datasets filter: {pre_filter_count} -> {len(comparison_df)} datasets")
+            print(f"  Processing datasets: {sorted(comparison_df['dataset'].unique())}")
     else:
         # Fetch and filter data from WandB
         raw_df = fetch_and_filter_data()
