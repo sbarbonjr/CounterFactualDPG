@@ -563,6 +563,13 @@ class SampleGenerator:
                 None,
             )
 
+            # If no constraint exists for this feature, keep original value unchanged
+            if matching_constraint is None:
+                adjusted_sample[feature] = original_value
+                if self.verbose:
+                    print(f"[VERBOSE-DPG]   {feature}: {original_value:.4f} → {original_value:.4f} (Δ=+0.0000) [no constraint]")
+                continue
+
             if matching_constraint:
                 raw_target_min = matching_constraint.get("min")
                 raw_target_max = matching_constraint.get("max")
