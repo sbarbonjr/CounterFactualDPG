@@ -280,6 +280,20 @@ class SampleGenerator:
             v_max = bounds['max']
             escape_dir = bounds['escape_dir']
             original_value = bounds['original']
+            raw_target_min = bounds.get('raw_target_min')
+            raw_target_max = bounds.get('raw_target_max')
+            
+            # OVERRIDE escape direction based on actual sample position
+            # (same logic as in get_valid_sample)
+            if raw_target_min is not None and raw_target_max is not None:
+                if original_value < raw_target_min and escape_dir == "decrease":
+                    escape_dir = "increase"
+                elif original_value > raw_target_max and escape_dir == "increase":
+                    escape_dir = "decrease"
+            elif raw_target_min is not None and original_value < raw_target_min and escape_dir == "decrease":
+                escape_dir = "increase"
+            elif raw_target_max is not None and original_value > raw_target_max and escape_dir == "increase":
+                escape_dir = "decrease"
             
             # Apply actionability constraints
             if self.dict_non_actionable and feature in self.dict_non_actionable:
@@ -762,6 +776,36 @@ class SampleGenerator:
                 escape_dir = boundary_analysis.get("escape_direction", {}).get(
                     norm_feature, "both"
                 )
+            
+            # CRITICAL FIX: Override escape direction based on actual sample value position
+            # The boundary-based escape_dir only considers class constraints, not where
+            # the actual sample value is. If the sample is outside target bounds,
+            # the direction must be toward those bounds regardless of class-based escape_dir.
+            if raw_target_min is not None and raw_target_max is not None:
+                if original_value < raw_target_min:
+                    # Sample is BELOW target bounds - must INCREASE to reach target
+                    if escape_dir == "decrease":
+                        if self.verbose:
+                            print(f"[VERBOSE-DPG]     OVERRIDE {feature}: escape=decrease→increase (value {original_value:.2f} < target_min {raw_target_min:.2f})")
+                        escape_dir = "increase"
+                elif original_value > raw_target_max:
+                    # Sample is ABOVE target bounds - must DECREASE to reach target
+                    if escape_dir == "increase":
+                        if self.verbose:
+                            print(f"[VERBOSE-DPG]     OVERRIDE {feature}: escape=increase→decrease (value {original_value:.2f} > target_max {raw_target_max:.2f})")
+                        escape_dir = "decrease"
+            elif raw_target_min is not None and original_value < raw_target_min:
+                # Only min bound exists and sample is below it
+                if escape_dir == "decrease":
+                    if self.verbose:
+                        print(f"[VERBOSE-DPG]     OVERRIDE {feature}: escape=decrease→increase (value {original_value:.2f} < target_min {raw_target_min:.2f})")
+                    escape_dir = "increase"
+            elif raw_target_max is not None and original_value > raw_target_max:
+                # Only max bound exists and sample is above it
+                if escape_dir == "increase":
+                    if self.verbose:
+                        print(f"[VERBOSE-DPG]     OVERRIDE {feature}: escape=increase→decrease (value {original_value:.2f} > target_max {raw_target_max:.2f})")
+                    escape_dir = "decrease"
 
             # Incorporate non-actionable constraints
             if self.dict_non_actionable and feature in self.dict_non_actionable:
@@ -862,6 +906,8 @@ class SampleGenerator:
                 'max': search_max,
                 'escape_dir': escape_dir,
                 'original': original_value,
+                'raw_target_min': raw_target_min,
+                'raw_target_max': raw_target_max,
             }
             
             if self.verbose:
@@ -909,12 +955,36 @@ class SampleGenerator:
                 if norm_feature in non_overlapping or escape_dir in ["increase", "decrease"]:
                     bounds = feature_bounds_info.get(feature, {})
                     if bounds:
+                        original_value = bounds['original']
+                        raw_target_min = bounds.get('raw_target_min')
+                        raw_target_max = bounds.get('raw_target_max')
+                        
+                        # OVERRIDE escape direction based on actual sample position
+                        # (same logic as in main loop)
+                        if raw_target_min is not None and raw_target_max is not None:
+                            if original_value < raw_target_min and escape_dir == "decrease":
+                                if self.verbose:
+                                    print(f"[VERBOSE-DPG]     OVERRIDE {feature}: escape=decrease→increase (value {original_value:.2f} < target_min {raw_target_min:.2f})")
+                                escape_dir = "increase"
+                            elif original_value > raw_target_max and escape_dir == "increase":
+                                if self.verbose:
+                                    print(f"[VERBOSE-DPG]     OVERRIDE {feature}: escape=increase→decrease (value {original_value:.2f} > target_max {raw_target_max:.2f})")
+                                escape_dir = "decrease"
+                        elif raw_target_min is not None and original_value < raw_target_min and escape_dir == "decrease":
+                            if self.verbose:
+                                print(f"[VERBOSE-DPG]     OVERRIDE {feature}: escape=decrease→increase (value {original_value:.2f} < target_min {raw_target_min:.2f})")
+                            escape_dir = "increase"
+                        elif raw_target_max is not None and original_value > raw_target_max and escape_dir == "increase":
+                            if self.verbose:
+                                print(f"[VERBOSE-DPG]     OVERRIDE {feature}: escape=increase→decrease (value {original_value:.2f} > target_max {raw_target_max:.2f})")
+                            escape_dir = "decrease"
+                        
                         retry_features.append({
                             'feature': feature,
                             'escape_dir': escape_dir,
                             'min': bounds['min'],
                             'max': bounds['max'],
-                            'original': bounds['original'],
+                            'original': original_value,
                             'priority': 0 if norm_feature in non_overlapping else 1
                         })
         
