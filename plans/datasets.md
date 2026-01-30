@@ -18,6 +18,7 @@ This document provides a summary of all datasets available in the configs folder
 | education_dataset | 4 | 1,000 | 2 | None |
 | energy_dataset | 4 | 1,000 | 2 | None |
 | fraud_detection_dataset | 5 | 1,000 | 2 | None |
+| iris | 5 | 150 | 3 | None |
 | isolet | 618 | 7,797 | 2 | None |
 | libras_move | 91 | 360 | 2 | None |
 | mammography | 7 | 11,183 | 2 | None |
@@ -37,8 +38,6 @@ This document provides a summary of all datasets available in the configs folder
 - **BloodPressure**: actionable
 
 ---
-
-**Note**: iris dataset has a config.yaml file but no dataset.csv file, so it's not included in the table. If a dataset.csv is available for iris, it would also be part of this analysis.
 
 ## Constraint Types Explanation
 
@@ -62,4 +61,4 @@ Actionability constraints define how features can be modified when generating co
 
 - All feature counts include the target column
 - Actionability constraints are defined in the `methods._default.actionability` section of each config.yaml file
-- The **iris** dataset was requested but does not have a dataset.csv file (only a config.yaml file exists), so it's not included in the summary table
+- The **iris** dataset information (150 samples, 4 features, 3 classes) is from scikit-learn's built-in iris dataset
