@@ -7,35 +7,35 @@
 #   3. CLI --set overrides
 
 priority_datasets:
-  - iris
-  - abalone # similar to 19
-  - abalone_19 
+  - abalone 
   - diabetes
-  # - banknote_authentication
+  - ecoli
   - education_dataset
   - energy_dataset
-  - finance_dataset
-  - fraud_detection_dataset
+  - iris
+  - isolet
   - libras_move
   - mammography
-  - oil
-  # - optical_digits
-  - ozone_level
   - satimage
-  - us_crime
-  - yeast_me2
-  - yeast_ml8
-  - webpage
-  - isolet
-  - spectrometer
-  # - protein_homo 
-  - breast_cancer_wisconsin
-  # - sick_euthyroid
-  - ecoli
-  - heart_disease_uci
-  # - letter_img
   - scene
-  - wheat-seeds
+  - us_crime
+  - fraud_detection_dataset
+  - yeast_ml8
+  # - abalone_19 
+  # - banknote_authentication
+  # - oil
+  # - optical_digits
+  # - ozone_level
+  # - finance_dataset
+  # - yeast_me2
+  # - webpage
+  # - spectrometer
+  # - protein_homo 
+  # - breast_cancer_wisconsin
+  # - sick_euthyroid
+  # - heart_disease_uci
+  # - letter_img
+  # - wheat-seeds
   # - wine_quality
 
 excluded_datasets:
