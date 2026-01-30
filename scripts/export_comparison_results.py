@@ -10,6 +10,11 @@ Outputs are saved to: outputs/comparison_results/
 - summary.csv: Cross-dataset summary with win rates
 - method_metrics_<dataset>.csv: Per-dataset method-metrics tables
 - winner_heatmap.png: Heatmap showing winners per dataset-metric
+- winner_heatmap.csv: Winner data as CSV (DPG/DiCE/Tie per dataset-metric)
+- comparison_numeric.csv: Numeric values for both DPG and DiCE per dataset-metric
+- visualizations/winner_heatmap_small.png: Small heatmap with 8 key metrics only
+- visualizations/winner_heatmap_small.csv: Small winner data as CSV
+- visualizations/comparison_numeric_small.csv: Small numeric values CSV
 - radar_charts.png: Radar charts for datasets
 - visualizations/<dataset>/: Per-dataset visualizations including:
   - heatmap_techniques.png: Heatmap comparing DPG vs DiCE counterfactuals
@@ -846,6 +851,57 @@ def export_winner_heatmap_csv(comparison_df, metrics_to_include=None, filename_s
     return winners_df
 
 
+def export_comparison_numeric_csv(comparison_df, metrics_to_include=None, filename_suffix=''):
+    """Export numeric comparison data to CSV.
+    
+    Creates a CSV where rows are datasets and columns are metrics.
+    Each metric column has two sub-columns: DPG and DiCE with actual numeric values.
+    """
+    # Filter metrics if specified
+    if metrics_to_include:
+        metrics_to_use = {k: v for k, v in COMPARISON_METRICS.items() 
+                         if k in metrics_to_include}
+    else:
+        metrics_to_use = COMPARISON_METRICS
+    
+    # Create numeric data matrix
+    numeric_data = []
+    
+    for _, row in comparison_df.iterrows():
+        dataset = row['dataset']
+        numeric_row = {'Dataset': dataset}
+        
+        for metric_key, metric_info in metrics_to_use.items():
+            dpg_col = f'{metric_key}_dpg'
+            dice_col = f'{metric_key}_dice'
+            
+            if dpg_col in row.index and dice_col in row.index:
+                dpg_val = row[dpg_col]
+                dice_val = row[dice_col]
+                
+                # Store numeric values, handling NaN
+                numeric_row[f"{metric_info['name']}_DPG"] = \
+                    f"{dpg_val:.4f}" if pd.notna(dpg_val) else 'N/A'
+                numeric_row[f"{metric_info['name']}_DiCE"] = \
+                    f"{dice_val:.4f}" if pd.notna(dice_val) else 'N/A'
+            else:
+                numeric_row[f"{metric_info['name']}_DPG"] = 'N/A'
+                numeric_row[f"{metric_info['name']}_DiCE"] = 'N/A'
+        
+        numeric_data.append(numeric_row)
+    
+    # Create DataFrame
+    numeric_df = pd.DataFrame(numeric_data)
+    numeric_df = numeric_df.set_index('Dataset')
+    
+    # Export to CSV
+    output_path = os.path.join(OUTPUT_DIR, f'comparison_numeric{filename_suffix}.csv')
+    numeric_df.to_csv(output_path)
+    print(f"✓ Exported numeric comparison data to: {output_path}")
+    
+    return numeric_df
+
+
 def export_dataset_visualizations(comparison_df, raw_df):
     """Export dataset-specific visualizations organized by dataset."""
     print("\n" + "="*80)
@@ -1006,7 +1062,18 @@ def main():
     
     # Always regenerate visualizations
     export_winner_heatmap(comparison_df)
+    export_comparison_numeric_csv(comparison_df)
     export_winner_heatmap_small(comparison_df)
+    export_comparison_numeric_csv(comparison_df, metrics_to_include=[
+        'perc_valid_cf_all',
+        'perc_actionable_cf_all',
+        'plausibility_nbr_cf',
+        'distance_mh',
+        'avg_nbr_changes',
+        'count_diversity_all',
+        'accuracy_knn_sklearn',
+        'runtime'
+    ], filename_suffix='_small')
     export_radar_charts(comparison_df)
     export_dataset_visualizations(comparison_df, raw_df)
     
