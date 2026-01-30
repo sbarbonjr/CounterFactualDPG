@@ -24,7 +24,7 @@ This document provides a summary of all datasets available in the configs folder
 | satimage | 37 | None |
 | scene | 295 | None |
 | us_crime | 101 | None |
-| yeast_ml8 | 104 | None |
+| yeast_ml8 | 103 | None |
 
 ## Datasets with Actionability Constraints
 
