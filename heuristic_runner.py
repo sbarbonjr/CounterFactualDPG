@@ -304,22 +304,15 @@ class HeuristicRunner:
 
         # Create remaining individuals with escape-aware perturbations
         for individual in range(population_size - 1):
-            pertubation_rate = 0.4 *(individual + 1) / (population_size - 1)  
+            # Perturbation rate scales from 0.1 to 0.5 (10% to 50% of feature range)
+            pertubation_rate = 0.1 + 0.4 * (individual + 1) / (population_size - 1)  
             perturbed = base_counterfactual.copy()
 
             for feature in feature_names:
                 norm_feature = normalize_feature_func(feature)
                 escape_dir = escape_directions.get(norm_feature, "both")
-
-                if escape_dir == "increase":
-                    perturbation = np.random.uniform(0, pertubation_rate)
-                elif escape_dir == "decrease":
-                    perturbation = np.random.uniform(-pertubation_rate, 0)
-                else:
-                    perturbation = np.random.uniform(-pertubation_rate/2, pertubation_rate/2)
-                perturbed[feature] = base_counterfactual[feature] + perturbation
-
-                # Clip to target constraint boundaries FIRST
+                
+                # Get constraint bounds for this feature to compute range-based perturbation
                 matching_constraint = next(
                     (
                         c
@@ -328,6 +321,7 @@ class HeuristicRunner:
                     ),
                     None,
                 )
+                
                 if matching_constraint:
                     feature_min = matching_constraint.get("min")
                     feature_max = matching_constraint.get("max")
@@ -340,6 +334,25 @@ class HeuristicRunner:
                         if feature_max is not None:
                             feature_max = max(feature_max, original_value)
                     
+                    # Compute feature range for proportional perturbation
+                    if feature_min is not None and feature_max is not None:
+                        feature_range = feature_max - feature_min
+                    else:
+                        # Fallback: use 10% of base value or 1.0, whichever is larger
+                        feature_range = max(abs(base_counterfactual[feature]) * 0.1, 1.0)
+                    
+                    # Apply range-based perturbation
+                    if escape_dir == "increase":
+                        perturbation = np.random.uniform(0, pertubation_rate * feature_range)
+                    elif escape_dir == "decrease":
+                        perturbation = np.random.uniform(-pertubation_rate * feature_range, 0)
+                    else:
+                        perturbation = np.random.uniform(-pertubation_rate * feature_range / 2, 
+                                                          pertubation_rate * feature_range / 2)
+                    
+                    perturbed[feature] = base_counterfactual[feature] + perturbation
+                    
+                    # Clip to bounds
                     if feature_min is not None:
                         perturbed[feature] = max(feature_min, perturbed[feature])
                     if feature_max is not None:
