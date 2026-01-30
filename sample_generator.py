@@ -110,10 +110,7 @@ class SampleGenerator:
                 pred = self.model.predict(adjusted_array)[0]
                 proba = self.model.predict_proba(adjusted_array)[0]
 
-            if pred != target_class:
-                return False, 0.0, pred
-
-            # Calculate probability margin
+            # Calculate probability margin (even if prediction is wrong, for debugging)
             if hasattr(self.model, "classes_"):
                 class_list = list(self.model.classes_)
                 if target_class in class_list:
@@ -126,6 +123,15 @@ class SampleGenerator:
             target_prob = proba[target_idx]
             sorted_probs = np.sort(proba)[::-1]
             second_best_prob = sorted_probs[1] if len(sorted_probs) > 1 else 0.0
+            
+            if pred != target_class:
+                # Return negative margin to show how far we are from flipping
+                # (target_prob - max_other_prob will be negative)
+                max_other_prob = max(p for i, p in enumerate(proba) if i != target_idx)
+                margin = target_prob - max_other_prob
+                return False, margin, pred
+
+            # Calculate positive positive probability margin
             margin = target_prob - second_best_prob
 
             is_valid = margin >= self.min_probability_margin
@@ -300,21 +306,70 @@ class SampleGenerator:
             
             # Calculate start (minimal change) and end (maximal change) values
             # based on escape direction
+            # start = value at depth=0 (minimal change from original)
+            # end = value at depth=1 (maximal exploration of bounds)
+            #
+            # KEY INSIGHT: If the escape direction can't be followed within bounds
+            # (e.g., escape=decrease but original is already at v_min), we should
+            # explore the OPPOSITE direction instead - any movement is better than none!
+            
             if escape_dir == "increase":
-                start_val = v_min + eps  # Just inside target bounds
-                end_val = v_max - eps    # Deep inside target bounds
+                # Need to increase: start near original, end at v_max
+                start_val = max(original_value, v_min + eps)
+                end_val = v_max - eps
+                
+                # If no room to increase (original already at or near v_max), try decreasing instead
+                # Use a generous threshold - if range is less than 1% of total bounds, reverse
+                range_threshold = max(eps * 2, (v_max - v_min) * 0.01)
+                if abs(end_val - start_val) <= range_threshold:
+                    start_val = min(original_value, v_max - eps)
+                    end_val = v_min + eps
+                    if self.verbose:
+                        print(f"[VERBOSE-DPG]       {feature}: Can't increase (orig={original_value:.2f} near v_max={v_max:.2f}), reversing to decrease")
+                        
             elif escape_dir == "decrease":
-                start_val = v_max - eps  # Just inside target bounds  
-                end_val = v_min + eps    # Deep inside target bounds
+                # Need to decrease: start near original, end at v_min
+                start_val = min(original_value, v_max - eps)
+                end_val = v_min + eps
+                
+                # If no room to decrease (original already at or near v_min), try increasing instead
+                # Use a generous threshold - if range is less than 1% of total bounds, reverse
+                range_threshold = max(eps * 2, (v_max - v_min) * 0.01)
+                if abs(end_val - start_val) <= range_threshold:
+                    start_val = max(original_value, v_min + eps)
+                    end_val = v_max - eps
+                    if self.verbose:
+                        print(f"[VERBOSE-DPG]       {feature}: Can't decrease (orig={original_value:.2f} near v_min={v_min:.2f}), reversing to increase")
             else:
-                # For 'both' direction, move toward midpoint
+                # 'both' direction: we don't know which way improves classification
+                # Test BOTH directions with a quick probe to see which improves margin
                 start_val = original_value if v_min <= original_value <= v_max else (v_min + v_max) / 2
-                end_val = (v_min + v_max) / 2
+                
+                # Default: try toward max first
+                end_val = v_max - eps
+                
+                # We'll determine the best direction during the search phase
+                # For now, mark this feature for bidirectional testing
+            
+            # Ensure we have a meaningful search range
+            range_threshold = max(eps * 2, (v_max - v_min) * 0.01)
+            if abs(start_val - end_val) <= range_threshold:
+                # If start and end are too close, try the opposite direction
+                if end_val > start_val:
+                    end_val = v_min + eps
+                else:
+                    end_val = v_max - eps
+            
+            if self.verbose:
+                direction = "→ increase" if end_val > start_val else "→ decrease"
+                print(f"[VERBOSE-DPG]     Searchable: {feature} start={start_val:.4f} end={end_val:.4f} {direction} (escape={escape_dir}, bounds=[{v_min:.4f}, {v_max:.4f}])")
             
             searchable_features.append({
                 'feature': feature,
                 'start': start_val,
                 'end': end_val,
+                'v_min': v_min,
+                'v_max': v_max,
                 'original': original_value,
             })
         
@@ -366,8 +421,111 @@ class SampleGenerator:
                 low_depth = mid_depth  # Need deeper into target bounds
             
             if self.verbose and iteration % 5 == 0:
-                status = "valid" if is_valid else "invalid"
-                print(f"[VERBOSE-DPG]     Depth search iter {iteration}: depth={mid_depth:.3f} ({status})")
+                status = "valid" if is_valid else f"invalid (pred={pred}, margin={margin:+.4f})"
+                print(f"[VERBOSE-DPG]     Depth search iter {iteration}: depth={mid_depth:.3f} {status}")
+        
+        # If binary search failed, try extremes including depth=1.0
+        if best_valid_sample is None and self.verbose:
+            print(f"[VERBOSE-DPG]   Binary search completed without finding valid sample. Trying depth=1.0...")
+            test_sample = sample.copy()
+            for feature, fixed_val in fixed_features.items():
+                test_sample[feature] = fixed_val
+            for feat_info in searchable_features:
+                feature = feat_info['feature']
+                test_sample[feature] = feat_info['end']  # Maximum depth
+            is_valid, margin, pred = self._validate_sample_prediction(
+                test_sample, target_class, sample_keys
+            )
+            print(f"[VERBOSE-DPG]     Depth=1.0: pred={pred}, margin={margin:+.4f}, target={target_class}")
+            if is_valid:
+                best_valid_sample = test_sample.copy()
+                best_depth = 1.0
+        
+        # If initial direction failed, try REVERSING all search directions
+        if best_valid_sample is None:
+            if self.verbose:
+                print(f"[VERBOSE-DPG]   Initial direction failed, trying REVERSED directions...")
+            
+            # Reverse all searchable features to try opposite direction
+            reversed_features = []
+            for feat_info in searchable_features:
+                v_min = feat_info.get('v_min', feat_info['start'])
+                v_max = feat_info.get('v_max', feat_info['end'])
+                original = feat_info['original']
+                start = feat_info['start']
+                end = feat_info['end']
+                
+                # Reverse: if was going up, go down; if was going down, go up
+                if end > start:
+                    # Was going up, now go down
+                    new_end = v_min + eps
+                else:
+                    # Was going down, now go up
+                    new_end = v_max - eps
+                
+                new_start = original if v_min <= original <= v_max else start
+                
+                if self.verbose:
+                    direction = "→ increase" if new_end > new_start else "→ decrease"
+                    print(f"[VERBOSE-DPG]     REVERSED {feat_info['feature']}: {new_start:.4f} to {new_end:.4f} {direction}")
+                
+                reversed_features.append({
+                    'feature': feat_info['feature'],
+                    'start': new_start,
+                    'end': new_end,
+                    'original': original,
+                })
+            
+            # Run binary search again with reversed directions
+            low_depth, high_depth = 0.0, 1.0
+            for iteration in range(max_iter):
+                if abs(high_depth - low_depth) < eps:
+                    break
+                
+                mid_depth = (low_depth + high_depth) / 2
+                test_sample = sample.copy()
+                
+                for feature, fixed_val in fixed_features.items():
+                    test_sample[feature] = fixed_val
+                
+                for feat_info in reversed_features:
+                    feature = feat_info['feature']
+                    start = feat_info['start']
+                    end = feat_info['end']
+                    test_sample[feature] = start + mid_depth * (end - start)
+                
+                is_valid, margin, pred = self._validate_sample_prediction(
+                    test_sample, target_class, sample_keys
+                )
+                
+                if is_valid:
+                    if mid_depth < best_depth:
+                        best_valid_sample = test_sample.copy()
+                        best_depth = mid_depth
+                    high_depth = mid_depth
+                else:
+                    low_depth = mid_depth
+                
+                if self.verbose and iteration % 5 == 0:
+                    status = "valid" if is_valid else f"invalid (pred={pred}, margin={margin:+.4f})"
+                    print(f"[VERBOSE-DPG]     Reversed depth iter {iteration}: depth={mid_depth:.3f} {status}")
+            
+            # Try depth=1.0 with reversed directions
+            if best_valid_sample is None:
+                test_sample = sample.copy()
+                for feature, fixed_val in fixed_features.items():
+                    test_sample[feature] = fixed_val
+                for feat_info in reversed_features:
+                    feature = feat_info['feature']
+                    test_sample[feature] = feat_info['end']
+                is_valid, margin, pred = self._validate_sample_prediction(
+                    test_sample, target_class, sample_keys
+                )
+                if self.verbose:
+                    print(f"[VERBOSE-DPG]     Reversed depth=1.0: pred={pred}, margin={margin:+.4f}")
+                if is_valid:
+                    best_valid_sample = test_sample.copy()
+                    best_depth = 1.0
         
         if best_valid_sample is not None:
             if self.verbose:
