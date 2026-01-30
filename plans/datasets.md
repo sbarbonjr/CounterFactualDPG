@@ -10,21 +10,21 @@ This document provides a summary of all datasets available in the configs folder
 
 ## Dataset Details
 
-| Dataset Name | Number of Features | Number of Samples | Actionability Constraints |
-|--------------|-------------------|------------------|--------------------------|
-| abalone | 11 | 4,177 | None |
-| diabetes | 9 | 767 | Age: non_decreasing; Pregnancies: non_decreasing; DiabetesPedigreeFunction: no_change; BMI: actionable; Glucose: actionable; BloodPressure: actionable |
-| ecoli | 8 | 336 | None |
-| education_dataset | 4 | 1,000 | None |
-| energy_dataset | 4 | 1,000 | None |
-| fraud_detection_dataset | 5 | 1,000 | None |
-| isolet | 618 | 7,797 | None |
-| libras_move | 91 | 360 | None |
-| mammography | 7 | 11,183 | None |
-| satimage | 37 | 6,435 | None |
-| scene | 295 | 2,407 | None |
-| us_crime | 101 | 1,994 | None |
-| yeast_ml8 | 103 | 2,417 | None |
+| Dataset Name | Number of Features | Number of Samples | Number of Classes | Actionability Constraints |
+|--------------|-------------------|------------------|------------------|--------------------------|
+| abalone | 11 | 4,177 | 2 | None |
+| diabetes | 9 | 767 | 3 | Age: non_decreasing; Pregnancies: non_decreasing; DiabetesPedigreeFunction: no_change; BMI: actionable; Glucose: actionable; BloodPressure: actionable |
+| ecoli | 8 | 336 | 2 | None |
+| education_dataset | 4 | 1,000 | 2 | None |
+| energy_dataset | 4 | 1,000 | 2 | None |
+| fraud_detection_dataset | 5 | 1,000 | 2 | None |
+| isolet | 618 | 7,797 | 2 | None |
+| libras_move | 91 | 360 | 2 | None |
+| mammography | 7 | 11,183 | 2 | None |
+| satimage | 37 | 6,435 | 2 | None |
+| scene | 295 | 2,407 | 2 | None |
+| us_crime | 101 | 1,994 | 2 | None |
+| yeast_ml8 | 103 | 2,417 | 2 | None |
 
 ## Datasets with Actionability Constraints
 
