@@ -38,3 +38,6 @@ datasets:
   yeast_ml8:
     dice: aers3zg7
     dpg: xmr7fj8q
+obesity_levels:
+    dice: 38ajzw5s
+    dpg: 486q0lwp
