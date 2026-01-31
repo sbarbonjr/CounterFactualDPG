@@ -1129,7 +1129,7 @@ def plot_pca_with_counterfactuals_comparison(
     counterfactuals_df_1, cf_predicted_classes_1,
     counterfactuals_df_2, cf_predicted_classes_2,
     method_1_name='Method 1', method_2_name='Method 2',
-    method_1_color='#E69F00', method_2_color='#56B4E9'
+    method_1_color="#FC8600", method_2_color="#006DAC"
 ):
     """
     Plot a PCA visualization comparing counterfactuals from two different methods.
@@ -1194,32 +1194,45 @@ def plot_pca_with_counterfactuals_comparison(
             iris_pca[target == class_value, 1],
             label=f"Class {class_value}",
             color=colors[class_value % len(colors)],
-            alpha=0.5
+            alpha=0.3
         )
-
+    linewidth=5
+    size=80
     # Plot original sample
     plt.scatter(
         original_sample_pca[:, 0], original_sample_pca[:, 1],
-        color=colors[original_class % len(colors)], label='Original Sample',
-        edgecolor='black', linewidths=2.5, s=150, zorder=10
+        label='Original Sample',
+        marker='x',
+        color='black', 
+        linewidths=linewidth,
+        s=size, 
+        zorder=10,
+
     )
     
     # Plot counterfactuals from method 1 with colored X
     for idx, cf_class in enumerate(cf_predicted_classes_1):
-        # Plot colored X marker inside the circle
+        # Plot colored X marker on top
         plt.scatter(
             counterfactuals_pca_1[idx, 0], counterfactuals_pca_1[idx, 1],
-            color=method_1_color, marker='x', s=100,
-            linewidths=2.5, zorder=8
+            color=method_1_color, 
+            marker='x', 
+            s=size,
+            linewidths=linewidth, 
+            zorder=8,
         )
     
     # Plot counterfactuals from method 2 with colored X
     for idx, cf_class in enumerate(cf_predicted_classes_2):
-        # Plot colored X marker inside the circle
+
+        # Plot colored X marker on top
         plt.scatter(
             counterfactuals_pca_2[idx, 0], counterfactuals_pca_2[idx, 1],
-            color=method_2_color, marker='x', s=100,
-            linewidths=2.5, zorder=8
+            color=method_2_color, 
+            marker='x', 
+            s=size,
+            linewidths=linewidth, 
+            zorder=8,
         )
 
     plt.xlabel(f'PCA Component 1 ({pca.explained_variance_ratio_[0]:.1%} explained variance)')
@@ -1229,12 +1242,30 @@ def plot_pca_with_counterfactuals_comparison(
     # Create custom legend
     from matplotlib.lines import Line2D
     legend_elements = [
-        Line2D([0], [0], marker='o', color='w', markerfacecolor=colors[original_class % len(colors)], markersize=10, 
-               markeredgecolor='black', markeredgewidth=1.5, label='Original Sample'),
-        Line2D([0], [0], marker='X', color='w', markerfacecolor=method_1_color, markersize=10,
-               markeredgecolor=method_1_color, markeredgewidth=1.5, label=f'{method_1_name} CFs'),
-        Line2D([0], [0], marker='X', color='w', markerfacecolor=method_2_color, markersize=10,
-               markeredgecolor=method_2_color, markeredgewidth=1.5, label=f'{method_2_name} CFs')
+        Line2D([0], [0], 
+               marker='X', 
+               color='w', 
+               markerfacecolor='black', 
+               markersize=10, 
+               markeredgecolor='black', 
+               markeredgewidth=1.5, 
+               label='Original Sample'),
+        Line2D([0], [0], 
+               marker='X', 
+               color='w', 
+               markerfacecolor=method_1_color, 
+               markersize=10,
+               markeredgecolor=method_1_color, 
+               markeredgewidth=1.5, 
+               label=f'{method_1_name} CFs'),
+        Line2D([0], [0], 
+               marker='X', 
+               color='w', 
+               markerfacecolor=method_2_color, 
+               markersize=10,
+               markeredgecolor=method_2_color, 
+               markeredgewidth=1.5, 
+               label=f'{method_2_name} CFs')
     ]
     plt.legend(handles=legend_elements, loc='best')
     plt.close(fig)
