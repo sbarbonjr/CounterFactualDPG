@@ -4,3 +4,6 @@
 [submodule "ECE"]
 	path = ECE
 	url = https://github.com/Meta-Group/ECE.git
+[submodule "DiCE"]
+	path = external/DiCE
+	url = https://github.com/interpretml/DiCE
