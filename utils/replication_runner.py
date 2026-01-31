@@ -18,6 +18,55 @@ from CounterFactualModel import CounterFactualModel
 from utils.config_manager import DictConfig
 
 
+def build_permitted_range_from_actionability(
+    dict_non_actionable: Dict,
+    original_sample: Dict,
+    train_df: pd.DataFrame,
+    feature_names: list
+) -> Dict:
+    """Build permitted_range dict from directional actionability constraints.
+    
+    Converts actionability rules into DICE-compatible permitted_range constraints:
+    - non_increasing: [data_min, original_value]
+    - non_decreasing: [original_value, data_max]
+    - no_change/none: not added (handled by features_to_vary or unconstrained)
+    
+    Args:
+        dict_non_actionable: Feature actionability rules dict
+        original_sample: Original sample dict with feature values
+        train_df: Training dataframe (with or without target column)
+        feature_names: List of feature names
+    
+    Returns:
+        Dict mapping feature names to [min, max] ranges
+    """
+    permitted_range = {}
+    
+    for feat in feature_names:
+        rule = dict_non_actionable.get(feat, "none")
+        
+        # Skip features without directional constraints
+        if rule not in ["non_increasing", "non_decreasing"]:
+            continue
+        
+        # Get original value for this feature
+        original_value = original_sample[feat]
+        
+        # Get data min/max from training data (remove target column if present)
+        if feat in train_df.columns:
+            data_min = float(train_df[feat].min())
+            data_max = float(train_df[feat].max())
+            
+            if rule == "non_increasing":
+                # Feature can only decrease from original value
+                permitted_range[feat] = [data_min, original_value]
+            elif rule == "non_decreasing":
+                # Feature can only increase from original value
+                permitted_range[feat] = [original_value, data_max]
+    
+    return permitted_range
+
+
 def run_counterfactual_generation_dpg(args):
     """Run DPG counterfactual generation to produce requested counterfactuals.
     
@@ -222,16 +271,33 @@ def run_counterfactual_generation_dice(args):
             print(f"WARNING: DiCE generation: No actionable features!")
             return None
         
-        # Build permitted_range from config if specified
-        permitted_range = {}
+        # Build permitted_range from directional actionability constraints
+        permitted_range = build_permitted_range_from_actionability(
+            dict_non_actionable,
+            ORIGINAL_SAMPLE,
+            train_df,
+            FEATURES_NAMES
+        )
+        
+        # Log applied directional constraints
+        if permitted_range:
+            print(f"INFO: Applying directional actionability constraints as permitted_range: {permitted_range}")
+        
+        # Merge with config-specified permitted_range (config takes precedence)
+        config_permitted_range = {}
         if hasattr(config.counterfactual, 'permitted_range') and config.counterfactual.permitted_range:
             permitted_range_config = config.counterfactual.permitted_range
             if hasattr(permitted_range_config, '_config'):
-                permitted_range = permitted_range_config._config
+                config_permitted_range = permitted_range_config._config
             elif hasattr(permitted_range_config, 'to_dict'):
-                permitted_range = permitted_range_config.to_dict()
+                config_permitted_range = permitted_range_config.to_dict()
             else:
-                permitted_range = dict(permitted_range_config) if permitted_range_config else {}
+                config_permitted_range = dict(permitted_range_config) if permitted_range_config else {}
+            
+            # Merge: config overrides actionability-derived ranges
+            permitted_range.update(config_permitted_range)
+            if config_permitted_range:
+                print(f"INFO: Config permitted_range overrides applied: {config_permitted_range}")
         
         # Build feature_weights from config if specified, otherwise use equal weights
         # This prevents DICE's "invalid value encountered in divide" warning when sum(feature_weights) is 0
