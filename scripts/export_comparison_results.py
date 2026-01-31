@@ -72,6 +72,10 @@ from scripts.compare_techniques import (
 )
 
 from CounterFactualVisualizer import heatmap_techniques, plot_pca_with_counterfactuals_comparison
+from utils.dataset_loader import load_dataset
+from utils.config_manager import DictConfig
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
 
 # Configuration (matches notebook hardcoded values)
 WANDB_ENTITY = 'mllab-ts-universit-di-trieste'
@@ -87,6 +91,92 @@ OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 
 # Metadata file for storing run information
 METADATA_FILE = os.path.join(OUTPUT_DIR, 'metadata.pkl')
+
+# Repository root for loading datasets
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Cache for loaded datasets and models
+_DATASET_CACHE = {}
+
+
+def load_dataset_and_model(dataset_name):
+    """Load dataset and train model for a given dataset.
+    
+    Args:
+        dataset_name: Name of the dataset to load
+    
+    Returns:
+        dict with keys:
+            - model: Trained RandomForestClassifier
+            - dataset: Full features DataFrame
+            - target: Target labels array
+            - feature_names: List of feature names
+    """
+    # Check cache first
+    if dataset_name in _DATASET_CACHE:
+        return _DATASET_CACHE[dataset_name]
+    
+    try:
+        # Load dataset config
+        config_path = os.path.join(REPO_ROOT, 'configs', dataset_name, 'config.yaml')
+        if not os.path.exists(config_path):
+            print(f"  ⚠ Config not found for {dataset_name}: {config_path}")
+            return None
+        
+        with open(config_path, 'r') as f:
+            config_dict = yaml.safe_load(f)
+        
+        # Convert to DictConfig object for easier access
+        config = DictConfig(config_dict)
+        
+        # Load dataset
+        dataset_info = load_dataset(config, repo_root=REPO_ROOT)
+        
+        features_df = dataset_info["features_df"]
+        labels = dataset_info["labels"]
+        feature_names = dataset_info["feature_names"]
+        
+        # Split data (same as in run_experiment)
+        test_size = getattr(config.data, 'test_size', 0.3)
+        random_state = getattr(config.data, 'random_state', 42)
+        
+        train_features, test_features, train_labels, test_labels = train_test_split(
+            features_df,
+            labels,
+            test_size=test_size,
+            random_state=random_state,
+        )
+        
+        # Train model (same configuration as in run_experiment)
+        model_type = getattr(config.model, 'type', 'RandomForestClassifier')
+        if model_type == "RandomForestClassifier":
+            model_config = config.model.to_dict() if hasattr(config.model, 'to_dict') else dict(config.model)
+            model_params = {k: v for k, v in model_config.items() if k != 'type' and v is not None}
+            model = RandomForestClassifier(**model_params)
+        else:
+            print(f"  ⚠ Unknown model type for {dataset_name}: {model_type}")
+            return None
+        
+        # Train model
+        model.fit(train_features, train_labels)
+        
+        result = {
+            'model': model,
+            'dataset': features_df,
+            'target': labels,
+            'feature_names': feature_names,
+        }
+        
+        # Cache the result
+        _DATASET_CACHE[dataset_name] = result
+        
+        return result
+        
+    except Exception as e:
+        print(f"  ⚠ Error loading dataset/model for {dataset_name}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def load_included_datasets():
@@ -931,8 +1021,18 @@ def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
         return False
 
 
-def export_pca_comparison(raw_df, dataset, dataset_viz_dir, model=None, full_dataset=None, target=None):
+def export_pca_comparison(raw_df, dataset, dataset_viz_dir):
     """Export PCA comparison plot with counterfactuals from both DPG and DiCE."""
+    
+    # Load dataset and model
+    dataset_model_info = load_dataset_and_model(dataset)
+    if dataset_model_info is None:
+        print(f"  ⚠ {dataset}: Could not load dataset/model, skipping PCA comparison")
+        return False
+    
+    model = dataset_model_info['model']
+    full_dataset = dataset_model_info['dataset']
+    target = dataset_model_info['target']
     
     # Handle local-only mode by loading from disk
     if args.local_only:
@@ -971,9 +1071,37 @@ def export_pca_comparison(raw_df, dataset, dataset_viz_dir, model=None, full_dat
                 print(f"  ⚠ {dataset}: Missing local data - sample: {bool(dpg_sample)}, dpg_cfs: {len(dpg_cfs)}, dice_cfs: {len(dice_cfs)}")
                 return False
             
-            # Need model, dataset, and target for PCA
-            # These would need to be loaded from local files
-            print(f"  ⚠ {dataset}: PCA comparison requires model and dataset (not available in local-only mode)")
+            # Convert counterfactuals to DataFrames
+            dpg_cfs_df = pd.DataFrame(dpg_cfs[:5])  # Limit to first 5
+            dice_cfs_df = pd.DataFrame(dice_cfs[:5])
+            
+            # Predict classes for counterfactuals
+            dpg_cf_classes = model.predict(dpg_cfs_df)
+            dice_cf_classes = model.predict(dice_cfs_df)
+            
+            # Create PCA comparison plot
+            fig = plot_pca_with_counterfactuals_comparison(
+                model=model,
+                dataset=full_dataset,
+                target=target,
+                sample=dpg_sample,
+                counterfactuals_df_1=dpg_cfs_df,
+                cf_predicted_classes_1=dpg_cf_classes,
+                counterfactuals_df_2=dice_cfs_df,
+                cf_predicted_classes_2=dice_cf_classes,
+                method_1_name='DPG',
+                method_2_name='DiCE',
+                method_1_color='#1f77b4',  # Blue for DPG
+                method_2_color='#ff7f0e'   # Orange for DiCE
+            )
+            
+            if fig:
+                output_path = os.path.join(dataset_viz_dir, 'pca_comparison.png')
+                fig.savefig(output_path, dpi=150, bbox_inches='tight')
+                plt.close(fig)
+                print(f"  ✓ {dataset}: Exported PCA comparison (from local data)")
+                return True
+            
             return False
             
         except Exception as e:
@@ -1034,14 +1162,6 @@ def export_pca_comparison(raw_df, dataset, dataset_viz_dir, model=None, full_dat
         
         if not dpg_sample or not dpg_cfs or not dice_cfs:
             print(f"  ⚠ {dataset}: Missing required data - sample: {bool(dpg_sample)}, dpg_cfs: {len(dpg_cfs) if dpg_cfs else 0}, dice_cfs: {len(dice_cfs) if dice_cfs else 0}")
-            return False
-        
-        # For PCA we need the full dataset, target, and model
-        # These need to be loaded from the dataset files
-        # Since we don't have easy access to these in the export script,
-        # we'll skip PCA comparison for now unless model/dataset are provided
-        if model is None or full_dataset is None or target is None:
-            print(f"  ⚠ {dataset}: PCA comparison requires model, dataset, and target (not provided)")
             return False
         
         # Convert counterfactuals to DataFrames
@@ -1209,9 +1329,8 @@ def export_dataset_visualizations(comparison_df, raw_df):
         # Export heatmap comparing DPG vs DiCE counterfactuals
         export_heatmap_techniques(raw_df, dataset, dataset_viz_dir)
         
-        # Export PCA comparison (requires model/dataset - currently skipped)
-        # To enable, would need to load dataset and model first
-        # export_pca_comparison(raw_df, dataset, dataset_viz_dir)
+        # Export PCA comparison (loads dataset and model automatically)
+        export_pca_comparison(raw_df, dataset, dataset_viz_dir)
         
         # Fetch WandB visualizations (comparison, pca_clean, heatmap)
         wandb_viz = fetch_wandb_visualizations(raw_df, dataset, dataset_viz_dir)
