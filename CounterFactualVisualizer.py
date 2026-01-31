@@ -371,15 +371,16 @@ def plot_pca_with_counterfactual(model, dataset, target, sample, counterfactual)
             alpha=0.6
         )
 
-    # Plot original sample filled with its class color and a thick black outline
+    # Plot original sample filled with its class color and a thick outline matching its class
     plt.scatter(
         original_sample_pca[:, 0], original_sample_pca[:, 1],
         color=colors[original_class % len(colors)], label='Original Sample',
-        edgecolor='black', linewidths=2.5, s=150, zorder=10
+        marker='o', edgecolor=colors[original_class % len(colors)], linewidths=2.5, s=150, zorder=10
     )
     plt.scatter(
         counterfactual_pca[:, 0], counterfactual_pca[:, 1],
-        color=colors[counterfactual_class], marker='x', s=100, label='Counterfactual', linewidths=1.5
+        color=colors[counterfactual_class], marker='o', s=150, label='Counterfactual',
+        edgecolor=colors[counterfactual_class], linewidths=2.5, zorder=10
     )
 
     plt.xlabel('PCA Component 1')
@@ -1089,23 +1090,17 @@ def plot_pca_with_counterfactuals_clean(model, dataset, target, sample, counterf
     plt.scatter(
         original_sample_pca[:, 0], original_sample_pca[:, 1],
         color=colors[original_class % len(colors)], label='Original Sample',
-        edgecolor='black', linewidths=2.5, s=150, zorder=10
+        marker='o', edgecolor=colors[original_class % len(colors)], linewidths=2.5, s=150, zorder=10
     )
     
-    # Plot final counterfactuals with X inside circle marker
+    # Plot final counterfactuals as circles (same style as class samples)
     for idx, cf_class in enumerate(counterfactual_classes):
         cf_color = colors[cf_class % len(colors)]
-        # Plot circle outline
+        # Plot circle marker with edge matching class color
         plt.scatter(
             counterfactuals_pca[idx, 0], counterfactuals_pca[idx, 1],
-            facecolors='none', edgecolors=cf_color, marker='o', s=200,
-            linewidths=2.5, alpha=1.0, zorder=7
-        )
-        # Plot X marker inside the circle
-        plt.scatter(
-            counterfactuals_pca[idx, 0], counterfactuals_pca[idx, 1],
-            color='black', marker='x', s=100,
-            linewidths=2.5, zorder=8
+            color=cf_color, marker='o', s=150,
+            edgecolor=cf_color, linewidths=2.5, alpha=1.0, zorder=10
         )
 
     plt.xlabel('PCA Component 1')
@@ -1115,8 +1110,8 @@ def plot_pca_with_counterfactuals_clean(model, dataset, target, sample, counterf
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], marker='o', color='w', markerfacecolor=colors[original_class % len(colors)], markersize=10, 
-               markeredgecolor='black', markeredgewidth=1.5, label='Original Sample'),
-        Line2D([0], [0], marker='X', color='w', markerfacecolor='gray', markersize=10,
+               markeredgecolor=colors[original_class % len(colors)], markeredgewidth=1.5, label='Original Sample'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='gray', markersize=10,
                markeredgecolor='gray', markeredgewidth=1.5, label='Final Counterfactuals')
     ]
     plt.legend(handles=legend_elements, loc='best')
@@ -1198,40 +1193,42 @@ def plot_pca_with_counterfactuals_comparison(
         )
     linewidth=5
     size=80
-    # Plot original sample
+    # Plot original sample with edge matching its class color
+    original_color = colors[original_class % len(colors)]
     plt.scatter(
         original_sample_pca[:, 0], original_sample_pca[:, 1],
         label='Original Sample',
-        marker='x',
-        color='black', 
-        linewidths=linewidth,
+        marker='o',
+        color=original_color, 
+        edgecolor='black',
+        linewidths=2,
         s=size, 
         zorder=10,
-
     )
     
-    # Plot counterfactuals from method 1 with colored X
+    # Plot counterfactuals from method 1 as circles with edges matching method color
     for idx, cf_class in enumerate(cf_predicted_classes_1):
-        # Plot colored X marker on top
+        class_color = colors[cf_class % len(colors)]
         plt.scatter(
             counterfactuals_pca_1[idx, 0], counterfactuals_pca_1[idx, 1],
-            color=method_1_color, 
-            marker='x', 
+            color=class_color, 
+            marker='o', 
             s=size,
-            linewidths=linewidth, 
+            edgecolor=method_1_color,
+            linewidths=2, 
             zorder=8,
         )
     
-    # Plot counterfactuals from method 2 with colored X
+    # Plot counterfactuals from method 2 as circles with edges matching method color
     for idx, cf_class in enumerate(cf_predicted_classes_2):
-
-        # Plot colored X marker on top
+        class_color = colors[cf_class % len(colors)]
         plt.scatter(
             counterfactuals_pca_2[idx, 0], counterfactuals_pca_2[idx, 1],
-            color=method_2_color, 
-            marker='x', 
+            color=class_color, 
+            marker='o', 
             s=size,
-            linewidths=linewidth, 
+            edgecolor=method_2_color,
+            linewidths=2, 
             zorder=8,
         )
 
@@ -1243,15 +1240,15 @@ def plot_pca_with_counterfactuals_comparison(
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], 
-               marker='X', 
+               marker='o', 
                color='w', 
-               markerfacecolor='black', 
+               markerfacecolor=original_color, 
                markersize=10, 
-               markeredgecolor='black', 
+               markeredgecolor=original_color, 
                markeredgewidth=1.5, 
                label='Original Sample'),
         Line2D([0], [0], 
-               marker='X', 
+               marker='o', 
                color='w', 
                markerfacecolor=method_1_color, 
                markersize=10,
@@ -1259,7 +1256,7 @@ def plot_pca_with_counterfactuals_comparison(
                markeredgewidth=1.5, 
                label=f'{method_1_name} CFs'),
         Line2D([0], [0], 
-               marker='X', 
+               marker='o', 
                color='w', 
                markerfacecolor=method_2_color, 
                markersize=10,
@@ -1351,7 +1348,7 @@ def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactual
     plt.scatter(
         original_sample_pca[:, 0], original_sample_pca[:, 1],
         color=colors[original_class % len(colors)], label='Original Sample',
-        edgecolor='black', linewidths=2.5, s=150, zorder=10
+        marker='o', edgecolor=colors[original_class % len(colors)], linewidths=2.5, s=150, zorder=10
     )
 
     # Plot evolution histories if provided
@@ -1479,20 +1476,14 @@ def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactual
             except Exception as e:
                 print(f"WARNING: Failed to draw evolution line for cf_idx {cf_idx}: {e}")
     
-    # Always plot final counterfactuals with X inside circle marker
+    # Always plot final counterfactuals as circles (same style as class samples)
     for idx, cf_class in enumerate(counterfactual_classes):
         cf_color = colors[cf_class % len(colors)]
-        # Plot circle outline
+        # Plot circle marker with edge matching class color
         plt.scatter(
             counterfactuals_pca[idx, 0], counterfactuals_pca[idx, 1],
-            facecolors='none', edgecolors=cf_color, marker='o', s=200,
-            linewidths=2.5, alpha=1.0, zorder=7
-        )
-        # Plot X marker inside the circle
-        plt.scatter(
-            counterfactuals_pca[idx, 0], counterfactuals_pca[idx, 1],
-            color=cf_color, marker='x', s=100,
-            linewidths=2.5, zorder=8
+            color=cf_color, marker='o', s=150,
+            edgecolor=cf_color, linewidths=2.5, alpha=1.0, zorder=10
         )
         
         # Add generation number label (same style as evolution nodes)
@@ -1525,10 +1516,10 @@ def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactual
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], marker='o', color='w', markerfacecolor=colors[original_class % len(colors)], markersize=10, 
-               markeredgecolor='black', markeredgewidth=1.5, label='Original Sample'),
+               markeredgecolor=colors[original_class % len(colors)], markeredgewidth=1.5, label='Original Sample'),
         Line2D([0], [0], marker='o', color='w', markerfacecolor='none', markersize=8,
                markeredgecolor='gray', markeredgewidth=1.5, label='GA Evolution (faint→solid)'),
-        Line2D([0], [0], marker='X', color='w', markerfacecolor='gray', markersize=10,
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='gray', markersize=10,
                markeredgecolor='gray', markeredgewidth=1.5, label='Final Counterfactuals')
     ]
     plt.legend(handles=legend_elements, loc='best')
