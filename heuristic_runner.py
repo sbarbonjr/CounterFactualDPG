@@ -298,69 +298,143 @@ class HeuristicRunner:
 
         # Get constraints and escape directions
         target_constraints = self.constraints.get(f"Class {target_class}", [])
-        escape_directions = (
+        raw_escape_directions = (
             boundary_analysis.get("escape_direction", {}) if boundary_analysis else {}
         )
+        
+        # Pre-compute feature bounds for all features (for stratified sampling)
+        # AND apply escape direction overrides based on actual sample position
+        feature_bounds = {}
+        escape_directions = {}  # Corrected escape directions
+        
+        for feature in feature_names:
+            matching_constraint = next(
+                (c for c in target_constraints if features_match_func(c.get("feature", ""), feature)),
+                None,
+            )
+            if matching_constraint:
+                # Raw target bounds (before weak_constraints extension)
+                raw_target_min = matching_constraint.get("min")
+                raw_target_max = matching_constraint.get("max")
+                original_value = sample[feature]
+                
+                # Apply weak_constraints extension
+                feature_min = raw_target_min
+                feature_max = raw_target_max
+                if weak_constraints:
+                    if feature_min is not None:
+                        feature_min = min(feature_min, original_value)
+                    if feature_max is not None:
+                        feature_max = max(feature_max, original_value)
+                
+                feature_bounds[feature] = {
+                    'min': feature_min,
+                    'max': feature_max,
+                    'base': base_counterfactual[feature],
+                    'range': (feature_max - feature_min) if (feature_min is not None and feature_max is not None) else 1.0
+                }
+                
+                # CRITICAL: Override escape direction based on actual sample position
+                # (same logic as in sample_generator.py)
+                norm_feature = normalize_feature_func(feature)
+                escape_dir = raw_escape_directions.get(norm_feature, "both")
+                
+                if raw_target_min is not None and raw_target_max is not None:
+                    if original_value < raw_target_min and escape_dir == "decrease":
+                        # Sample is BELOW target range, must INCREASE not decrease
+                        if self.verbose:
+                            print(f"[HeuristicRunner] OVERRIDE {feature}: escape=decrease→increase (value {original_value:.2f} < target_min {raw_target_min:.2f})")
+                        escape_dir = "increase"
+                    elif original_value > raw_target_max and escape_dir == "increase":
+                        # Sample is ABOVE target range, must DECREASE not increase
+                        if self.verbose:
+                            print(f"[HeuristicRunner] OVERRIDE {feature}: escape=increase→decrease (value {original_value:.2f} > target_max {raw_target_max:.2f})")
+                        escape_dir = "decrease"
+                elif raw_target_min is not None and original_value < raw_target_min and escape_dir == "decrease":
+                    if self.verbose:
+                        print(f"[HeuristicRunner] OVERRIDE {feature}: escape=decrease→increase (value {original_value:.2f} < target_min {raw_target_min:.2f})")
+                    escape_dir = "increase"
+                elif raw_target_max is not None and original_value > raw_target_max and escape_dir == "increase":
+                    if self.verbose:
+                        print(f"[HeuristicRunner] OVERRIDE {feature}: escape=increase→decrease (value {original_value:.2f} > target_max {raw_target_max:.2f})")
+                    escape_dir = "decrease"
+                
+                escape_directions[norm_feature] = escape_dir
+            else:
+                feature_bounds[feature] = None  # No constraint, keep original
 
-        # Create remaining individuals with escape-aware perturbations
-        for individual in range(population_size - 1):
-            # Perturbation rate scales from 0.1 to 0.5 (10% to 50% of feature range)
-            pertubation_rate = 0.1 + 0.4 * (individual + 1) / (population_size - 1)  
+        # Create remaining individuals using STRATIFIED sampling for diversity
+        # Strategy: divide the remaining slots into tiers that explore different regions
+        remaining_slots = population_size - 1
+        
+        for individual in range(remaining_slots):
             perturbed = base_counterfactual.copy()
+            
+            # Use stratified tiers: some near base, some in middle, some at extremes
+            # t goes from 0 to 1 across the population
+            t = (individual + 1) / remaining_slots
+            
+            # Create different "exploration strategies" based on position
+            if t < 0.3:
+                # First 30%: Small perturbations near base (for proximity)
+                perturbation_scale = 0.1 + t * 0.2  # 0.1 to 0.16
+            elif t < 0.7:
+                # Middle 40%: Medium perturbations (balanced)
+                perturbation_scale = 0.2 + (t - 0.3) * 0.5  # 0.2 to 0.4
+            else:
+                # Last 30%: Large perturbations toward boundaries (for diversity)
+                perturbation_scale = 0.4 + (t - 0.7) * 1.0  # 0.4 to 0.7
 
             for feature in feature_names:
+                bounds = feature_bounds.get(feature)
+                if bounds is None:
+                    perturbed[feature] = sample[feature]
+                    continue
+                
+                feature_min = bounds['min']
+                feature_max = bounds['max']
+                feature_range = bounds['range']
+                base_val = bounds['base']
+                
                 norm_feature = normalize_feature_func(feature)
                 escape_dir = escape_directions.get(norm_feature, "both")
                 
-                # Get constraint bounds for this feature to compute range-based perturbation
-                matching_constraint = next(
-                    (
-                        c
-                        for c in target_constraints
-                        if features_match_func(c.get("feature", ""), feature)
-                    ),
-                    None,
-                )
-                
-                if matching_constraint:
-                    feature_min = matching_constraint.get("min")
-                    feature_max = matching_constraint.get("max")
-                    original_value = sample[feature]
-                    
-                    # Apply weak_constraints: extend bounds to include original value
-                    if weak_constraints:
-                        if feature_min is not None:
-                            feature_min = min(feature_min, original_value)
-                        if feature_max is not None:
-                            feature_max = max(feature_max, original_value)
-                    
-                    # Compute feature range for proportional perturbation
-                    if feature_min is not None and feature_max is not None:
-                        feature_range = feature_max - feature_min
-                    else:
-                        # Fallback: use 10% of base value or 1.0, whichever is larger
-                        feature_range = max(abs(base_counterfactual[feature]) * 0.1, 1.0)
-                    
-                    # Apply range-based perturbation
+                # For extreme exploration (t > 0.7), bias toward boundary in ESCAPE direction
+                # Don't explore against escape direction as it leads to invalid predictions
+                if t > 0.7:
+                    # Determine target based on ESCAPE direction, not just alternating
                     if escape_dir == "increase":
-                        perturbation = np.random.uniform(0, pertubation_rate * feature_range)
+                        # Escape by increasing: explore toward max
+                        target_point = feature_max - 0.05 * feature_range if feature_max else base_val + feature_range * 0.5
                     elif escape_dir == "decrease":
-                        perturbation = np.random.uniform(-pertubation_rate * feature_range, 0)
+                        # Escape by decreasing: explore toward min
+                        target_point = feature_min + 0.05 * feature_range if feature_min else base_val - feature_range * 0.5
                     else:
-                        perturbation = np.random.uniform(-pertubation_rate * feature_range / 2, 
-                                                          pertubation_rate * feature_range / 2)
+                        # "both" direction: alternate but with less extreme jumps
+                        if individual % 2 == 0:
+                            target_point = base_val + 0.3 * feature_range
+                        else:
+                            target_point = base_val - 0.3 * feature_range
                     
-                    perturbed[feature] = base_counterfactual[feature] + perturbation
-                    
-                    # Clip to bounds
-                    if feature_min is not None:
-                        perturbed[feature] = max(feature_min, perturbed[feature])
-                    if feature_max is not None:
-                        perturbed[feature] = min(feature_max, perturbed[feature])
-                    if feature_min is None and feature_max is None:
-                        perturbed[feature] = sample[feature]
+                    # Interpolate between base and target with controlled noise
+                    noise = np.random.uniform(-0.05, 0.05) * feature_range
+                    perturbed[feature] = base_val + perturbation_scale * (target_point - base_val) + noise
                 else:
-                    perturbed[feature] = sample[feature]
+                    # Regular perturbation with escape-aware direction
+                    if escape_dir == "increase":
+                        perturbation = np.random.uniform(0, perturbation_scale * feature_range)
+                    elif escape_dir == "decrease":
+                        perturbation = np.random.uniform(-perturbation_scale * feature_range, 0)
+                    else:
+                        perturbation = np.random.uniform(-perturbation_scale * feature_range / 2, 
+                                                          perturbation_scale * feature_range / 2)
+                    perturbed[feature] = base_val + perturbation
+                
+                # Clip to bounds
+                if feature_min is not None:
+                    perturbed[feature] = max(feature_min, perturbed[feature])
+                if feature_max is not None:
+                    perturbed[feature] = min(feature_max, perturbed[feature])
 
                 # ENFORCE ACTIONABILITY CONSTRAINTS AFTER clipping (actionability wins over constraints)
                 if self.dict_non_actionable and feature in self.dict_non_actionable:
@@ -406,7 +480,7 @@ class HeuristicRunner:
         
         # Tunable parameter for diversity vs proximity
         # Lower values prioritize proximity (distance minimization) over diversity
-        diversity_lambda = 0.6
+        diversity_lambda = 0.9
         
         if self.verbose:
             print("\n=== CF Selection (Fitness -> Diverse Selection) ===")
