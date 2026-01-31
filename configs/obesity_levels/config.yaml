@@ -1,3 +1,4 @@
+# Kaggle dataset: https://www.kaggle.com/datasets/fatemehmehrparvar/obesity-levels
 data:
   dataset: obesity_levels
   dataset_path: configs/obesity_levels/ObesityDataSet_raw_and_data_sinthetic.csv
