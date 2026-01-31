@@ -1,7 +1,7 @@
 # Kaggle dataset: https://www.kaggle.com/fedesoriano/stroke-prediction-dataset
 data:
   dataset: healthcare_dataset_stroke
-  dataset_path: configs/healthcare_dataset_stroke/healthcare-dataset-stroke-data.csv
+  dataset_path: configs/healthcare_dataset_stroke/dataset.csv
   target_column: stroke
   categorical_features:
   - gender

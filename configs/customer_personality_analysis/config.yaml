@@ -1,7 +1,7 @@
 # Kaggle dataset: https://www.kaggle.com/imakash3011/customer-personality-analysis
 data:
   dataset: customer_personality_analysis
-  dataset_path: configs/customer_personality_analysis/marketing_campaign.csv
+  dataset_path: configs/customer_personality_analysis/dataset.csv
   target_column: Response
   separator: "\t"
   categorical_features:

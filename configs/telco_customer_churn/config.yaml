@@ -1,7 +1,7 @@
 # Kaggle dataset: https://www.kaggle.com/blastchar/telco-customer-churn
 data:
   dataset: telco_customer_churn
-  dataset_path: configs/telco_customer_churn/WA_Fn-UseC_-Telco-Customer-Churn.csv
+  dataset_path: configs/telco_customer_churn/dataset.csv
   target_column: Churn
   categorical_features:
   - gender

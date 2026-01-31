@@ -1,7 +1,7 @@
 # Kaggle dataset: https://www.kaggle.com/henriqueyamahata/bank-marketing
 data:
   dataset: bank_marketing
-  dataset_path: configs/bank_marketing/bank-additional-full.csv
+  dataset_path: configs/bank_marketing/dataset.csv
   target_column: y
   separator: ";"
   categorical_features:

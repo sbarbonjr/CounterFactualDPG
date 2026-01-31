@@ -1,7 +1,7 @@
 # Kaggle dataset: https://www.kaggle.com/datasets/fatemehmehrparvar/obesity-levels
 data:
   dataset: obesity_levels
-  dataset_path: configs/obesity_levels/ObesityDataSet_raw_and_data_sinthetic.csv
+  dataset_path: configs/obesity_levels/dataset.csv
   target_column: NObeyesdad
   categorical_features:
   - Gender
