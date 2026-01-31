@@ -53,6 +53,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 parser = argparse.ArgumentParser(description='Export DPG vs DiCE comparison results')
 parser.add_argument('--local-only', action='store_true',
                     help='Only regenerate visualizations from existing data, do not fetch from WandB')
+parser.add_argument('--ids', type=str, default=None,
+                    help='Path to YAML file containing specific run IDs to fetch (disregards min_created_at)')
 args = parser.parse_args()
 
 from scripts.compare_techniques import (
@@ -98,6 +100,89 @@ def load_included_datasets():
             config = yaml.safe_load(f)
             return config.get('priority_datasets', None)
     return None
+
+
+def load_run_ids_from_yaml(yaml_path):
+    """Load run IDs from YAML file.
+    
+    Args:
+        yaml_path: Path to YAML file with structure:
+            datasets:
+              dataset_name:
+                dice: run_id
+                dpg: run_id
+    
+    Returns:
+        Dictionary mapping dataset -> technique -> run_id
+    """
+    if not os.path.exists(yaml_path):
+        print(f"❌ YAML file not found: {yaml_path}")
+        return None
+    
+    with open(yaml_path, 'r') as f:
+        data = yaml.safe_load(f)
+    
+    if 'datasets' not in data:
+        print(f"❌ YAML file missing 'datasets' key: {yaml_path}")
+        return None
+    
+    run_ids = data['datasets']
+    print(f"✓ Loaded run IDs from {yaml_path}")
+    print(f"  Datasets: {list(run_ids.keys())}")
+    
+    return run_ids
+
+
+def fetch_specific_runs(run_ids_dict):
+    """Fetch specific runs by ID from WandB.
+    
+    Args:
+        run_ids_dict: Dictionary with structure:
+            dataset_name:
+              dice: run_id
+              dpg: run_id
+    
+    Returns:
+        DataFrame with run data
+    """
+    api = wandb.Api(timeout=60)
+    runs_data = []
+    
+    for dataset, techniques in run_ids_dict.items():
+        for technique, run_id in techniques.items():
+            try:
+                run = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{run_id}")
+                
+                if run.state != 'finished':
+                    print(f"  ⚠ {dataset}/{technique}: Run {run_id} not finished (state: {run.state})")
+                    continue
+                
+                # Extract metrics from run
+                run_data = {
+                    'run_id': run.id,
+                    'dataset': dataset,
+                    'technique': technique.lower(),
+                    'created_at': run.created_at
+                }
+                
+                # Get all metrics from summary
+                for key, value in run.summary.items():
+                    if not key.startswith('_') and isinstance(value, (int, float)):
+                        run_data[key] = value
+                
+                runs_data.append(run_data)
+                print(f"  ✓ {dataset}/{technique}: Fetched run {run_id}")
+                
+            except Exception as e:
+                print(f"  ❌ {dataset}/{technique}: Error fetching run {run_id}: {e}")
+                continue
+    
+    if not runs_data:
+        print("❌ No runs were successfully fetched")
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(runs_data)
+    return df
 
 
 def save_metadata(raw_df):
@@ -230,6 +315,33 @@ def fetch_and_filter_data():
     print("="*80)
     print(f"Entity: {WANDB_ENTITY}")
     print(f"Project: {WANDB_PROJECT}")
+    
+    # Check if --ids flag was provided
+    if args.ids:
+        print(f"Mode: Fetching specific run IDs from YAML")
+        print(f"YAML file: {args.ids}")
+        print(f"⚠ Ignoring min_created_at filter")
+        
+        # Load run IDs from YAML
+        run_ids_dict = load_run_ids_from_yaml(args.ids)
+        if run_ids_dict is None:
+            return pd.DataFrame()
+        
+        # Fetch specific runs
+        raw_df = fetch_specific_runs(run_ids_dict)
+        
+        if len(raw_df) == 0:
+            print("\n❌ No runs fetched from specified IDs")
+            return raw_df
+        
+        print(f"\n✓ Successfully fetched {len(raw_df)} runs from {len(run_ids_dict)} datasets")
+        print(f"  Datasets: {sorted(raw_df['dataset'].unique())}")
+        print(f"  Techniques: {sorted(raw_df['technique'].unique())}")
+        
+        return raw_df
+    
+    # Standard mode: fetch by date filter
+    print(f"Mode: Fetching runs by date filter")
     print(f"Datasets filter: {SELECTED_DATASETS or 'All'}")
     print(f"Min created at: {MIN_CREATED_AT}")
     print(f"Apply excluded datasets: {APPLY_EXCLUDED_DATASETS}")
