@@ -33,20 +33,28 @@ class Individual(dict):
 
 class DistanceBasedHOF:
     """
-    Hall of Fame that ranks individuals by distance to original sample.
+    Hall of Fame that maintains diverse candidates while considering distance.
     
-    Ranks purely by Euclidean distance to the original sample.
-    This prevents the drift-away problem where bonuses cause CFs to move far from original.
+    Uses a diversity-aware selection strategy:
+    1. Always keeps the closest candidate (best proximity)
+    2. For remaining slots, uses greedy diverse selection balancing proximity and diversity
+    
+    This ensures the HOF contains candidates that are:
+    - Close to the original (for good counterfactuals)
+    - Diverse from each other (for meaningful selection later)
     """
     
-    def __init__(self, maxsize, original_features, feature_names):
+    def __init__(self, maxsize, original_features, feature_names, diversity_weight=0.5):
         self.maxsize = maxsize
         self.original_features = original_features
         self.feature_names = feature_names
+        self.diversity_weight = diversity_weight  # Balance between diversity (1.0) and proximity (0.0)
         self.items = []
     
     def update(self, population):
-        """Update HOF with individuals from population, ranked by distance to original."""
+        """Update HOF with individuals, maintaining diversity while keeping good proximity."""
+        # Collect all valid candidates
+        new_candidates = []
         for ind in population:
             # Skip invalid fitness individuals
             if not hasattr(ind, 'fitness') or not ind.fitness.valid:
@@ -58,19 +66,94 @@ class DistanceBasedHOF:
             ind_array = np.array([ind[f] for f in self.feature_names])
             distance = np.linalg.norm(ind_array - self.original_features)
             
-            # Check for duplicates
+            # Check for duplicates in new_candidates
             is_dup = False
-            for existing_dist, existing_ind in self.items:
-                existing_array = np.array([existing_ind[f] for f in self.feature_names])
+            for _, _, existing_array in new_candidates:
                 if np.allclose(ind_array, existing_array, atol=0.01):
                     is_dup = True
                     break
             
+            # Also check existing items
             if not is_dup:
-                self.items.append((distance, dict(ind)))
-                # Sort by distance and keep top maxsize
-                self.items.sort(key=lambda x: x[0])
-                self.items = self.items[:self.maxsize]
+                for _, existing_ind in self.items:
+                    existing_array = np.array([existing_ind[f] for f in self.feature_names])
+                    if np.allclose(ind_array, existing_array, atol=0.01):
+                        is_dup = True
+                        break
+            
+            if not is_dup:
+                new_candidates.append((distance, dict(ind), ind_array))
+        
+        # Merge with existing items
+        all_candidates = []
+        for dist, ind in self.items:
+            ind_array = np.array([ind[f] for f in self.feature_names])
+            all_candidates.append((dist, ind, ind_array))
+        all_candidates.extend(new_candidates)
+        
+        if not all_candidates:
+            return
+        
+        # Sort by distance to get proximity ranking
+        all_candidates.sort(key=lambda x: x[0])
+        
+        # Calculate distance range for normalization
+        distances = [c[0] for c in all_candidates]
+        min_dist, max_dist = min(distances), max(distances)
+        dist_range = max_dist - min_dist if max_dist > min_dist else 1.0
+        
+        # Greedy diverse selection for HOF
+        selected = []
+        selected_arrays = []
+        
+        # Always include the closest candidate first
+        if all_candidates:
+            best = all_candidates[0]
+            selected.append((best[0], best[1]))
+            selected_arrays.append(best[2])
+            remaining = all_candidates[1:]
+        else:
+            remaining = []
+        
+        # For remaining slots, use diversity-aware selection
+        while len(selected) < self.maxsize and remaining:
+            best_score = float('-inf')
+            best_idx = 0
+            
+            for i, (dist, ind, ind_array) in enumerate(remaining):
+                # Normalize distance (0 = closest, 1 = farthest)
+                norm_dist = (dist - min_dist) / dist_range if dist_range > 0 else 0
+                
+                # Calculate minimum diversity from already selected
+                min_diversity = float('inf')
+                for sel_array in selected_arrays:
+                    div = np.linalg.norm(ind_array - sel_array)
+                    min_diversity = min(min_diversity, div)
+                
+                # Normalize diversity (estimate max possible diversity from data)
+                # Use distance range as rough estimate of feature space spread
+                max_possible_div = dist_range * 2 if dist_range > 0 else 1.0
+                norm_diversity = min(min_diversity / max_possible_div, 1.0)
+                
+                # Amplify diversity with sqrt for better discrimination
+                amplified_diversity = np.sqrt(norm_diversity)
+                
+                # Score: high diversity, low distance
+                # diversity_weight controls the trade-off
+                proximity_score = 1.0 - norm_dist  # Higher is better (closer)
+                score = self.diversity_weight * amplified_diversity + (1 - self.diversity_weight) * proximity_score
+                
+                if score > best_score:
+                    best_score = score
+                    best_idx = i
+            
+            # Add best candidate
+            best = remaining[best_idx]
+            selected.append((best[0], best[1]))
+            selected_arrays.append(best[2])
+            remaining.pop(best_idx)
+        
+        self.items = selected
     
     def __len__(self):
         return len(self.items)
@@ -255,8 +338,14 @@ class HeuristicRunner:
             print(f"Candidates generated: {len(population)}, Best fitness: {best_fitness:.4f}, Avg: {avg_fitness:.4f}")
             print(f"Overgeneration: requesting {internal_num_results} CFs to select best {num_best_results}")
 
-        # Create HOF using distance-based ranking (use internal_num_results for overgeneration)
-        hof = DistanceBasedHOF(internal_num_results * 4, original_features, feature_names)
+        # Create HOF using diversity-aware ranking
+        # Use larger capacity to preserve diverse candidates, pass diversity_lambda for balancing
+        hof = DistanceBasedHOF(
+            maxsize=internal_num_results * 6,  # Larger pool for diversity
+            original_features=original_features,
+            feature_names=feature_names,
+            diversity_weight=self.diversity_lambda  # Use same lambda for HOF diversity
+        )
         hof.update(population)
 
         # Validate and return results
