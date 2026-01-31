@@ -1204,15 +1204,8 @@ def plot_pca_with_counterfactuals_comparison(
         edgecolor='black', linewidths=2.5, s=150, zorder=10
     )
     
-    # Plot counterfactuals from method 1 with circle outline and colored X
+    # Plot counterfactuals from method 1 with colored X
     for idx, cf_class in enumerate(cf_predicted_classes_1):
-        cf_color = colors[cf_class % len(colors)]
-        # Plot circle outline
-        plt.scatter(
-            counterfactuals_pca_1[idx, 0], counterfactuals_pca_1[idx, 1],
-            facecolors='none', edgecolors=cf_color, marker='o', s=200,
-            linewidths=2.5, alpha=1.0, zorder=7
-        )
         # Plot colored X marker inside the circle
         plt.scatter(
             counterfactuals_pca_1[idx, 0], counterfactuals_pca_1[idx, 1],
@@ -1220,15 +1213,8 @@ def plot_pca_with_counterfactuals_comparison(
             linewidths=2.5, zorder=8
         )
     
-    # Plot counterfactuals from method 2 with circle outline and colored X
+    # Plot counterfactuals from method 2 with colored X
     for idx, cf_class in enumerate(cf_predicted_classes_2):
-        cf_color = colors[cf_class % len(colors)]
-        # Plot circle outline
-        plt.scatter(
-            counterfactuals_pca_2[idx, 0], counterfactuals_pca_2[idx, 1],
-            facecolors='none', edgecolors=cf_color, marker='o', s=200,
-            linewidths=2.5, alpha=1.0, zorder=7
-        )
         # Plot colored X marker inside the circle
         plt.scatter(
             counterfactuals_pca_2[idx, 0], counterfactuals_pca_2[idx, 1],
