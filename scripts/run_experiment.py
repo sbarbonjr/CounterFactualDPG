@@ -1486,6 +1486,7 @@ Final Results
                 "original_sample": ORIGINAL_SAMPLE,
                 "features_names": FEATURES_NAMES,
                 "target_class": TARGET_CLASS,
+                "restrictions": dict_non_actionable,
             },
             f,
         )
