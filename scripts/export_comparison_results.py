@@ -828,6 +828,7 @@ def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
             # Extract sample and counterfactuals from local data
             dpg_sample = dpg_data.get('original_sample')
             feature_names = dpg_data.get('features_names', [])
+            restrictions = dpg_data.get('restrictions')
             
             # Get class from sample prediction or default to 0
             dpg_class = 0  # Default, would need model to predict
@@ -858,7 +859,7 @@ def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
                 cf_list_1=dpg_cfs[:5],
                 cf_list_2=dice_cfs[:5],
                 technique_names=('DPG', 'DiCE'),
-                restrictions=None
+                restrictions=restrictions
             )
             
             if fig:
