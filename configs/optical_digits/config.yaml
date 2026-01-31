@@ -1,0 +1,14 @@
+data:
+  dataset: optical_digits
+  dataset_path: configs/optical_digits/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - optical_digits
+  name: optical_digits
+model:
+  type: RandomForestClassifier
+  max_depth: 10
+  max_features: 0.3
+  min_impurity_decrease: 0.0
+  n_estimators: 20

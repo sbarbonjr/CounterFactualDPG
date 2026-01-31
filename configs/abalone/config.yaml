@@ -1,0 +1,17 @@
+data:
+  dataset: abalone
+  dataset_path: configs/abalone/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - abalone
+  name: abalone
+model:
+  type: RandomForestClassifier
+  n_estimators: 2
+  min_impurity_decrease: 0.0
+  max_features: 0.5
+  max_depth: 5
+output:
+  save_visualizations: true
+  save_visualization_images: true

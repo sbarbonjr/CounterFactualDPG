@@ -1,0 +1,14 @@
+data:
+  dataset: ozone_level
+  dataset_path: configs/ozone_level/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - ozone_level
+  name: ozone_level
+model:
+  type: RandomForestClassifier
+  n_estimators: 7
+  min_impurity_decrease: 0.0
+  max_features: null
+  max_depth: 7

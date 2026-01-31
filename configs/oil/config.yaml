@@ -1,0 +1,20 @@
+data:
+  dataset: oil
+  dataset_path: configs/oil/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - oil
+  name: oil
+experiment_params:
+  sample_indices:
+  - 4
+output:
+  save_visualizations: true
+  save_visualization_images: true
+model:
+  type: RandomForestClassifier
+  n_estimators: 10
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 7

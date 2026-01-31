@@ -1,0 +1,19 @@
+data:
+  dataset: finance_dataset
+  dataset_path: configs/finance_dataset/dataset.csv
+  target_column: ApprovedLoan
+  categorical_features:
+  - MaritalStatus
+experiment:
+  tags:
+  - finance_dataset
+  name: finance_dataset
+model:
+  type: RandomForestClassifier
+  n_estimators: 3
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 3
+# methods:
+#   dpg:
+#     verbose: true

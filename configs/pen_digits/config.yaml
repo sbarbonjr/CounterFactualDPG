@@ -1,0 +1,14 @@
+data:
+  dataset: pen_digits
+  dataset_path: configs/pen_digits/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - pen_digits
+  name: pen_digits
+model:
+  type: RandomForestClassifier
+  n_estimators: 20
+  min_impurity_decrease: 0.0
+  max_features: 0.5
+  max_depth: 10

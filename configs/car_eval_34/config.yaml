@@ -1,0 +1,14 @@
+data:
+  dataset: car_eval_34
+  dataset_path: configs/car_eval_34/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - car_eval_34
+  name: car_eval_34
+model:
+  type: RandomForestClassifier
+  n_estimators: 4
+  min_impurity_decrease: 0.0
+  max_features: null
+  max_depth: 10

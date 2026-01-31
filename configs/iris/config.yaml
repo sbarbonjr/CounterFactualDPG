@@ -1,0 +1,28 @@
+# iris dataset is the only one that does not come from a csv file, but from the sklearn module
+data:
+  dataset: iris
+  dataset_path: configs/iris/dataset.csv
+  target_column: target
+model:
+  type: RandomForestClassifier
+  max_depth: 4
+  n_estimators: 7
+  max_features: 0.5
+  min_impurity_decrease: 0.1
+experiment:
+  tags:
+  - iris
+  - baseline
+  name: iris
+  entity: mllab-ts-universit-di-trieste
+  notes: Initial baseline run with default parameters
+experiment_params:
+  sample_indices:
+  - 2
+methods:
+  dpg:
+    verbose: false
+  # _default:
+  #   actionability:
+      # "petal length (cm)": non_increasing
+      # "petal width (cm)": non_decreasing

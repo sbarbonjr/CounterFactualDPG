@@ -1,0 +1,14 @@
+data:
+  dataset: energy_dataset
+  dataset_path: configs/energy_dataset/dataset.csv
+  target_column: Anomalous
+experiment:
+  tags:
+  - energy_dataset
+  name: energy_dataset
+model:
+  type: RandomForestClassifier
+  n_estimators: 20
+  min_impurity_decrease: 0.05
+  max_features: 0.3
+  max_depth: 7

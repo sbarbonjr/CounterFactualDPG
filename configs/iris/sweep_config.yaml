@@ -1,0 +1,80 @@
+# WandB Sweep Configuration for DPG Hyperparameter Optimization
+# Dataset: iris (baseline dataset for hyperparameter search)
+#
+# Usage:
+#   # Create sweep and get sweep ID
+#   wandb sweep configs/iris/sweep_config.yaml
+#   
+#   # Run agent(s) to execute experiments
+#   wandb agent <entity>/<project>/<sweep_id>
+#   
+#   # Or use the run_sweep.py script:
+#   python scripts/run_sweep.py --dataset iris --target-metric perc_actionable_cf_all
+#   python scripts/run_sweep.py --dataset iris --target-metric perc_valid_cf_all
+#
+# Available target metrics (9 from Guidotti's paper):
+#   Implausibility:    plausibility_nbr_cf (minimize) - DEFAULT
+#   Size:              perc_valid_cf_all (maximize)
+#   Actionability:     perc_actionable_cf_all (maximize)
+#   Dissimilarity_dist: distance_mh (minimize)
+#   Dissimilarity_count: avg_nbr_changes (minimize)
+#   Diversity_dist:    diversity_mh (maximize)
+#   Diversity_count:   count_diversity_all (maximize)
+#   Discriminative Power: accuracy_knn_sklearn (maximize)
+#   Runtime:           runtime (minimize)
+#
+# Note: All metrics are logged under 'metrics/combination/' prefix in WandB
+
+program: scripts/run_sweep.py
+method: random
+name: dpg_hyperparameter_sweep
+
+# Metric to optimize (overridden by --target-metric in run_sweep.py)
+# Use the full WandB path: metrics/combination/<metric_name>
+metric:
+  name: metrics/combination/plausibility_nbr_cf
+  goal: minimize
+
+# Sweep parameters - 4 most impactful GA hyperparameters
+parameters:
+  # Max generations: affects convergence depth
+  max_generations:
+    distribution: int_uniform
+    min: 30
+    max: 200
+
+  # Mutation rate: controls exploration/exploitation balance
+  mutation_rate:
+    distribution: uniform
+    min: 0.05
+    max: 0.5
+
+  # Diversity weight: encourages spread in solution space
+  diversity_weight:
+    distribution: uniform
+    min: 0.1
+    max: 3.0
+
+  # Repulsion weight: distance to nearest neighbor in population
+  repulsion_weight:
+    distribution: uniform
+    min: 1.0
+    max: 10.0
+
+# Early termination for poorly performing runs
+early_terminate:
+  type: hyperband
+  min_iter: 3
+  eta: 3
+  s: 2
+
+# Run settings
+command:
+  - ${env}
+  - .venv/bin/python
+  - ${program}
+  - --dataset
+  - iris
+  - --method
+  - dpg
+  - ${args}

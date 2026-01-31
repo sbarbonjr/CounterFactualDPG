@@ -1,0 +1,20 @@
+data:
+  dataset: thyroid_sick
+  dataset_path: configs/thyroid_sick/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - thyroid_sick
+  name: thyroid_sick
+methods:
+  _default:
+    actionability:
+      0: non_decreasing
+model:
+  type: RandomForestClassifier
+  n_estimators: 20
+  min_samples_split: 5
+  min_impurity_decrease: 0.0
+  max_features: 0.7
+  max_depth: 10
+  criterion: gini

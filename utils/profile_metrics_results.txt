@@ -1,0 +1,298 @@
+METRICS PROFILING RESULTS - Sorted by Total Time (cumulative)
+================================================================================
+
+         1645824 function calls (1598299 primitive calls) in 2.390 seconds
+
+   Ordered by: cumulative time
+   List reduced from 962 to 60 due to restriction <60>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      105    0.005    0.000    0.636    0.006 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1276(_update_ticks)
+      315    0.002    0.000    0.574    0.002 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1585(_get_tick)
+       35    0.000    0.000    0.518    0.015 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/pyplot.py:1621(subplots)
+       35    0.000    0.000    0.487    0.014 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/figure.py:785(subplots)
+       35    0.001    0.000    0.485    0.014 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/gridspec.py:249(subplots)
+       35    0.001    0.000    0.483    0.014 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/figure.py:644(add_subplot)
+       35    0.003    0.000    0.481    0.014 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axes/_base.py:615(__init__)
+      105    0.001    0.000    0.480    0.005 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1644(get_major_ticks)
+      245    0.005    0.000    0.465    0.002 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:428(__init__)
+       35    0.000    0.000    0.373    0.011 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axes/_base.py:1445(clear)
+       35    0.003    0.000    0.373    0.011 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axes/_base.py:1313(__clear)
+      315    0.016    0.000    0.357    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:59(__init__)
+     5390    0.035    0.000    0.266    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:1188(_update_props)
+     4375    0.003    0.000    0.232    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:1226(_internal_update)
+     3290    0.003    0.000    0.218    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:146(<lambda>)
+     3290    0.004    0.000    0.214    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:1237(set)
+      140    0.000    0.000    0.213    0.002 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:534(__get__)
+      945    0.023    0.000    0.158    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/lines.py:301(__init__)
+       70    0.000    0.000    0.149    0.002 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1115(set_clip_path)
+    12495    0.007    0.000    0.148    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:414(pchanged)
+      280    0.002    0.000    0.147    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:946(set_tick_params)
+      910    0.003    0.000    0.146    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:104(__init__)
+    12600    0.124    0.000    0.142    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:348(process)
+       70    0.000    0.000    0.130    0.002 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axes/_base.py:3318(grid)
+      140    0.001    0.000    0.129    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1696(grid)
+     2100    0.002    0.000    0.128    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/markers.py:220(__init__)
+     2100    0.007    0.000    0.119    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/markers.py:299(_set_marker)
+     2485    0.003    0.000    0.117    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:435(set_transform)
+      175    0.001    0.000    0.117    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1606(_copy_tick_props)
+       70    0.001    0.000    0.107    0.002 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:367(__init__)
+      525    0.002    0.000    0.101    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/lines.py:1352(update_from)
+     1415    0.097    0.000    0.097    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py:248(_prepare_font)
+     1050    0.009    0.000    0.088    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:157(_reset_visual_defaults)
+      210    0.001    0.000    0.087    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/ticker.py:2228(__call__)
+25900/525    0.032    0.000    0.086    0.000 /usr/lib/python3.12/copy.py:118(deepcopy)
+ 1575/525    0.011    0.000    0.084    0.000 /usr/lib/python3.12/copy.py:217(_deepcopy_dict)
+      210    0.001    0.000    0.080    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/ticker.py:2232(tick_values)
+      210    0.011    0.000    0.072    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/ticker.py:2159(_raw_ticks)
+    12000    0.026    0.000    0.070    0.000 /usr/lib/python3.12/copy.py:61(copy)
+   1120/5    0.006    0.000    0.067    0.013 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:65(_get_text_metrics_with_cache)
+    281/2    0.011    0.000    0.066    0.033 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:358(_get_layout)
+       35    0.001    0.000    0.064    0.002 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/spines.py:142(get_window_extent)
+     5280    0.004    0.000    0.062    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/font_manager.py:961(copy)
+     1415    0.005    0.000    0.062    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/font_manager.py:1363(_find_fonts_by_props)
+    56151    0.028    0.000    0.062    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/__init__.py:781(__getitem__)
+      105    0.002    0.000    0.059    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1527(get_minorticklocs)
+      455    0.003    0.000    0.056    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:784(set_clip_path)
+      945    0.004    0.000    0.056    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:194(update)
+     6435    0.015    0.000    0.052    0.000 /usr/lib/python3.12/copy.py:247(_reconstruct)
+       70    0.001    0.000    0.047    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:845(clear)
+      105    0.000    0.000    0.045    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1523(get_majorticklocs)
+     1485    0.009    0.000    0.045    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/font_manager.py:1293(findfont)
+      455    0.001    0.000    0.045    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/patches.py:307(get_transform)
+    62500    0.028    0.000    0.043    0.000 {built-in method builtins.getattr}
+    140/3    0.001    0.000    0.042    0.014 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:73(_get_text_metrics_with_cache_impl)
+      210    0.004    0.000    0.042    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:2810(get_tick_space)
+     1050    0.002    0.000    0.041    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:1316(set_fontproperties)
+    140/3    0.663    0.005    0.041    0.014 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py:206(get_text_width_height_descent)
+      140    0.000    0.000    0.038    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:234(set_clip_path)
+       35    0.001    0.000    0.038    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axes/_base.py:864(_init_axis)
+
+
+
+================================================================================
+METRICS PROFILING RESULTS - Sorted by Function Time (self)
+================================================================================
+
+         1645824 function calls (1598299 primitive calls) in 2.390 seconds
+
+   Ordered by: internal time
+   List reduced from 962 to 60 due to restriction <60>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    140/3    0.663    0.005    0.041    0.014 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py:206(get_text_width_height_descent)
+    12600    0.124    0.000    0.142    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:348(process)
+     1415    0.097    0.000    0.097    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py:248(_prepare_font)
+     5390    0.035    0.000    0.266    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:1188(_update_props)
+     9170    0.033    0.000    0.033    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+25900/525    0.032    0.000    0.086    0.000 /usr/lib/python3.12/copy.py:118(deepcopy)
+       35    0.029    0.001    0.032    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py:63(__init__)
+    62500    0.028    0.000    0.043    0.000 {built-in method builtins.getattr}
+    56151    0.028    0.000    0.062    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/__init__.py:781(__getitem__)
+    12000    0.026    0.000    0.070    0.000 /usr/lib/python3.12/copy.py:61(copy)
+    27665    0.025    0.000    0.031    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/_api/__init__.py:100(check_in_list)
+     4235    0.024    0.000    0.030    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:1752(normalize_kwargs)
+      945    0.023    0.000    0.158    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/lines.py:301(__init__)
+     8804    0.023    0.000    0.035    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/font_manager.py:700(__hash__)
+    98901    0.021    0.000    0.021    0.000 {method 'get' of 'dict' objects}
+    86508    0.020    0.000    0.033    0.000 {built-in method builtins.isinstance}
+65310/58345    0.020    0.000    0.033    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:315(stale)
+    12320    0.019    0.000    0.029    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:2020(_setattr_cm)
+     4165    0.018    0.000    0.019    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:180(set_children)
+    56151    0.018    0.000    0.034    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/__init__.py:701(_get)
+     2555    0.018    0.000    0.036    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:179(__init__)
+    56151    0.017    0.000    0.017    0.000 {function RcParams.__getitem__ at 0x7c387f386480}
+      315    0.016    0.000    0.357    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:59(__init__)
+     6435    0.015    0.000    0.052    0.000 /usr/lib/python3.12/copy.py:247(_reconstruct)
+    70089    0.013    0.000    0.013    0.000 {method 'items' of 'dict' objects}
+     6160    0.013    0.000    0.015    0.000 /usr/lib/python3.12/contextlib.py:104(__init__)
+     9240    0.013    0.000    0.013    0.000 {method 'copy' of 'numpy.ndarray' objects}
+      210    0.011    0.000    0.072    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/ticker.py:2159(_raw_ticks)
+     7246    0.011    0.000    0.011    0.000 {built-in method numpy.asarray}
+    281/2    0.011    0.000    0.066    0.033 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:358(_get_layout)
+ 1575/525    0.011    0.000    0.084    0.000 /usr/lib/python3.12/copy.py:217(_deepcopy_dict)
+     6435    0.010    0.000    0.011    0.000 {method '__reduce_ex__' of 'object' objects}
+     3150    0.010    0.000    0.024    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:750(__init__)
+    13720    0.010    0.000    0.010    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:109(__init__)
+  980/875    0.010    0.000    0.019    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:2432(get_affine)
+     7665    0.010    0.000    0.016    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:1770(__init__)
+      315    0.010    0.000    0.030    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/lines.py:686(recache)
+     4025    0.010    0.000    0.023    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:69(_wrapreduction)
+     2345    0.010    0.000    0.010    0.000 {built-in method matplotlib._path.affine_transform}
+     1485    0.009    0.000    0.045    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/font_manager.py:1293(findfont)
+     1050    0.009    0.000    0.088    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:157(_reset_visual_defaults)
+    13271    0.008    0.000    0.037    0.000 {built-in method builtins.next}
+     3360    0.008    0.000    0.015    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/_api/__init__.py:65(check_isinstance)
+     1750    0.008    0.000    0.021    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:41(_wrapit)
+     2800    0.007    0.000    0.009    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:259(__init__)
+     2100    0.007    0.000    0.119    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/markers.py:299(_set_marker)
+    12495    0.007    0.000    0.148    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:414(pchanged)
+6510/3780    0.007    0.000    0.009    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:165(_invalidate_internal)
+     1415    0.007    0.000    0.013    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/font_manager.py:1586(get_font)
+     6435    0.007    0.000    0.009    0.000 /usr/lib/python3.12/copyreg.py:98(__newobj__)
+     1050    0.006    0.000    0.014    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:1167(update_from)
+   1120/5    0.006    0.000    0.067    0.013 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:65(_get_text_metrics_with_cache)
+    13650    0.006    0.000    0.007    0.000 {built-in method builtins.setattr}
+     2835    0.006    0.000    0.006    0.000 {built-in method numpy.array}
+     4515    0.006    0.000    0.014    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/lines.py:1309(set_ydata)
+     3360    0.006    0.000    0.014    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/colors.py:278(to_rgba)
+      525    0.006    0.000    0.008    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/numpy/lib/_shape_base_impl.py:628(column_stack)
+     6160    0.006    0.000    0.021    0.000 /usr/lib/python3.12/contextlib.py:141(__exit__)
+    490/1    0.006    0.000    0.022    0.022 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:926(get_window_extent)
+     6160    0.006    0.000    0.021    0.000 /usr/lib/python3.12/contextlib.py:299(helper)
+
+
+
+================================================================================
+BREAKDOWN BY METRICS/EXPLAINER FUNCTION
+================================================================================
+
+
+CounterFactualExplainer:
+----------------------------------------
+         1645824 function calls (1598299 primitive calls) in 2.390 seconds
+
+   Random listing order was used
+   List reduced from 962 to 1 due to restriction <'CounterFactualExplainer'>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/CounterFactualExplainer.py:12(__init__)
+
+
+
+
+plot_explainer_summary:
+----------------------------------------
+         1645824 function calls (1598299 primitive calls) in 2.390 seconds
+
+
+
+__init__:
+----------------------------------------
+         1645824 function calls (1598299 primitive calls) in 2.390 seconds
+
+   Random listing order was used
+   List reduced from 962 to 99 due to restriction <'__init__'>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      105    0.000    0.000    0.000    0.000 <frozen _collections_abc>:845(__init__)
+        7    0.000    0.000    0.001    0.000 /usr/lib/python3.12/re/__init__.py:280(_compile)
+      455    0.001    0.000    0.001    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/numpy/_core/getlimits.py:698(__init__)
+        2    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/numpy/lib/_version.py:54(__init__)
+       70    0.000    0.000    0.000    0.000 /usr/lib/python3.12/pathlib.py:357(__init__)
+      210    0.000    0.000    0.000    0.000 /usr/lib/python3.12/logging/__init__.py:1790(isEnabledFor)
+     3360    0.008    0.000    0.015    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/_api/__init__.py:65(check_isinstance)
+      526    0.002    0.000    0.004    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/_api/__init__.py:133(check_shape)
+    56151    0.028    0.000    0.062    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/__init__.py:781(__getitem__)
+      105    0.000    0.000    0.001    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:800(__init__)
+      526    0.002    0.000    0.010    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/path.py:99(__init__)
+     2555    0.018    0.000    0.036    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:179(__init__)
+     1295    0.006    0.000    0.028    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/font_manager.py:656(__init__)
+       70    0.001    0.000    0.001    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backend_bases.py:1711(__init__)
+       35    0.000    0.000    0.002    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backend_bases.py:2611(__init__)
+      245    0.003    0.000    0.028    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/patches.py:48(__init__)
+      945    0.023    0.000    0.158    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/lines.py:301(__init__)
+       35    0.001    0.000    0.005    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/figure.py:123(__init__)
+       35    0.003    0.000    0.481    0.014 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axes/_base.py:615(__init__)
+       35    0.003    0.000    0.025    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/figure.py:2464(__init__)
+      315    0.016    0.000    0.357    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:59(__init__)
+       70    0.001    0.000    0.107    0.002 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:367(__init__)
+      140    0.002    0.000    0.020    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/spines.py:35(__init__)
+      245    0.005    0.000    0.465    0.002 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:428(__init__)
+       70    0.002    0.000    0.025    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:612(__init__)
+       35    0.029    0.001    0.032    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py:63(__init__)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/CounterFactualExplainer.py:12(__init__)
+       35    0.000    0.000    0.001    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/gridspec.py:313(__init__)
+       35    0.000    0.000    0.001    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/gridspec.py:32(__init__)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/projections/__init__.py:110(get_projection_class)
+       35    0.000    0.000    0.001    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/gridspec.py:736(__init__)
+       35    0.000    0.000    0.021    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:2374(__init__)
+       35    0.000    0.000    0.015    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:2598(__init__)
+      140    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:494(__init__)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/gridspec.py:541(__init__)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/spines.py:552(__init__)
+       35    0.000    0.000    0.001    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/layout_engine.py:145(__init__)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/layout_engine.py:125(__init__)
+       70    0.000    0.000    0.002    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axes/_base.py:216(__init__)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/projections/__init__.py:81(get_projection_class)
+       35    0.000    0.000    0.006    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/patches.py:3904(__init__)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/textpath.py:26(__init__)
+       70    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/layout_engine.py:67(__init__)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/patches.py:2567(__init__)
+       70    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/widgets.py:38(__init__)
+     2100    0.002    0.000    0.128    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/markers.py:220(__init__)
+       70    0.000    0.000    0.001    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/mathtext.py:48(__init__)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/figure.py:79(__init__)
+       35    0.000    0.000    0.001    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backend_bases.py:150(__init__)
+       70    0.001    0.000    0.012    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/patches.py:748(__init__)
+      175    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/cycler/__init__.py:185(keys)
+      910    0.003    0.000    0.146    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:104(__init__)
+     2695    0.002    0.000    0.002    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/cycler/__init__.py:259(__iter__)
+    13720    0.010    0.000    0.010    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:109(__init__)
+      210    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/ticker.py:2002(__init__)
+       70    0.000    0.000    0.006    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/ticker.py:2056(__init__)
+       70    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/scale.py:113(__init__)
+       70    0.000    0.000    0.002    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:1702(__init__)
+     2660    0.006    0.000    0.017    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:1887(__init__)
+       70    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:2185(__init__)
+      490    0.001    0.000    0.005    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:2576(__init__)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:2634(__init__)
+      175    0.002    0.000    0.003    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/cycler/__init__.py:416(by_key)
+     3150    0.010    0.000    0.024    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:750(__init__)
+     7665    0.010    0.000    0.016    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:1770(__init__)
+      455    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:120(__init__)
+       70    0.000    0.000    0.012    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/ticker.py:452(__init__)
+      315    0.001    0.000    0.004    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:2276(__init__)
+     1960    0.004    0.000    0.017    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:2342(__init__)
+       70    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/cycler/__init__.py:334(__len__)
+       70    0.000    0.000    0.007    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/ticker.py:2916(__init__)
+      490    0.002    0.000    0.009    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:1088(__init__)
+      700    0.002    0.000    0.005    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:2667(__init__)
+       70    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/__init__.py:336(wrapper)
+    56151    0.018    0.000    0.034    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/__init__.py:701(_get)
+       70    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/_api/__init__.py:54(__get__)
+      840    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/_api/__init__.py:79(<genexpr>)
+     1578    0.001    0.000    0.001    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/_api/__init__.py:153(<genexpr>)
+     2800    0.002    0.000    0.002    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:152(__init__)
+       35    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:2065(__init__)
+    27665    0.025    0.000    0.031    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/_api/__init__.py:100(check_in_list)
+     2135    0.001    0.000    0.004    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/__init__.py:1342(is_interactive)
+     3115    0.001    0.000    0.004    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/__init__.py:1354(_val_or_rc)
+     2800    0.007    0.000    0.009    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:259(__init__)
+      175    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/_api/__init__.py:168(check_getitem)
+        1    0.000    0.000    0.000    0.000 /usr/lib/python3.12/logging/__init__.py:234(_acquireLock)
+        1    0.000    0.000    0.000    0.000 /usr/lib/python3.12/logging/__init__.py:243(_releaseLock)
+        1    0.000    0.000    0.000    0.000 /usr/lib/python3.12/logging/__init__.py:1369(disable)
+      210    0.000    0.000    0.000    0.000 /usr/lib/python3.12/logging/__init__.py:1517(debug)
+        1    0.000    0.000    0.000    0.000 /usr/lib/python3.12/logging/__init__.py:1776(getEffectiveLevel)
+       70    0.000    0.000    0.001    0.000 /usr/lib/python3.12/pathlib.py:1159(__init__)
+      175    0.000    0.000    0.000    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/numpy/_core/_ufunc_config.py:438(__init__)
+     6160    0.013    0.000    0.015    0.000 /usr/lib/python3.12/contextlib.py:104(__init__)
+        7    0.000    0.000    0.000    0.000 /usr/lib/python3.12/re/_parser.py:113(__init__)
+        3    0.000    0.000    0.000    0.000 /usr/lib/python3.12/re/_parser.py:77(__init__)
+        5    0.000    0.000    0.001    0.000 /usr/lib/python3.12/re/__init__.py:164(match)
+        2    0.000    0.000    0.000    0.000 /usr/lib/python3.12/re/__init__.py:174(search)
+      210    0.000    0.000    0.001    0.000 /usr/lib/python3.12/weakref.py:367(__init__)
+        3    0.000    0.000    0.000    0.000 /usr/lib/python3.12/re/_parser.py:231(__init__)
+
+
+
+
+compute_:
+----------------------------------------
+         1645824 function calls (1598299 primitive calls) in 2.390 seconds
+
+   Random listing order was used
+   List reduced from 962 to 1 due to restriction <'compute_'>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      105    0.002    0.000    0.006    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/ticker.py:746(_compute_offset)
+
+
+
+
+extract_:
+----------------------------------------
+         1645824 function calls (1598299 primitive calls) in 2.390 seconds
+
+

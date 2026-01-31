@@ -1,0 +1,17 @@
+data:
+  dataset: banknote_authentication
+  dataset_path: configs/banknote_authentication/dataset.csv
+  target_column: class
+experiment:
+  tags:
+  - banknote_authentication
+  name: banknote_authentication
+model:
+  type: RandomForestClassifier
+  n_estimators: 3
+  min_impurity_decrease: 0.01
+  max_features: 0.3
+  max_depth: 4
+# methods:
+#   dpg:
+#     verbose: true

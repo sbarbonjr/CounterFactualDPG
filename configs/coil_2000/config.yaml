@@ -1,0 +1,16 @@
+data:
+  dataset: coil_2000
+  dataset_path: configs/coil_2000/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - coil_2000
+  name: coil_2000
+model:
+  type: RandomForestClassifier
+  n_estimators: 7
+  min_samples_split: 12
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 6
+  criterion: entropy

@@ -1,7 +1,0 @@
-Class 0: [{'feature': 'petal_length', 'min': None, 'max': 2.5}, {'feature': 'petal_width', 'min': None, 'max': 1.65}]
-Class 1: [{'feature': 'petal_length', 'min': 2.45, 'max': 5.35}, {'feature': 'petal_width', 'min': 0.8, 'max': 1.75}, {'feature': 'sepal_length', 'min': 5.25, 'max': 6.05}, {'feature': 'sepal_width', 'min': 2.75, 'max': 2.9}]
-Class 2: [{'feature': 'petal_length', 'min': 2.45, 'max': 5.35}, {'feature': 'petal_width', 'min': 0.8, 'max': 1.75}, {'feature': 'sepal_length', 'min': 5.75, 'max': 6.05}, {'feature': 'sepal_width', 'min': 2.75, 'max': 3.1}]
-
-Class 0: ['petal_length < 2.5', 'petal_width < 1.65']
-Class 1: ['2.45 <= petal_length < 5.35', '0.8 <= petal_width < 1.75', '5.25 <= sepal_length < 6.05', '2.75 <= sepal_width < 2.9']
-Class 2: ['2.45 <= petal_length < 5.35', '0.8 <= petal_width < 1.75', '5.75 <= sepal_length < 6.05', '2.75 <= sepal_width < 3.1']

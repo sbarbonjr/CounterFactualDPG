@@ -1,0 +1,124 @@
+PROFILING RESULTS - Sorted by Total Time (cumulative)
+================================================================================
+
+         50025960 function calls (49158753 primitive calls) in 40.345 seconds
+
+   Ordered by: cumulative time
+   List reduced from 2736 to 50 due to restriction <50>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       51    0.001    0.000   19.225    0.377 /home/rafael/gitgud/CounterFactualDPG/CounterFactualModel.py:449(generate_counterfactual)
+       51    0.727    0.014   19.107    0.375 /home/rafael/gitgud/CounterFactualDPG/CounterFactualModel.py:345(genetic_algorithm)
+    31840    0.181    0.000   17.337    0.001 /home/rafael/gitgud/CounterFactualDPG/CounterFactualModel.py:294(calculate_fitness)
+    31840    0.116    0.000   15.702    0.000 /home/rafael/gitgud/CounterFactualDPG/CounterFactualModel.py:61(check_validity)
+    28384    0.100    0.000   15.574    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/ensemble/_forest.py:882(predict)
+    28444    0.510    0.000   15.439    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/ensemble/_forest.py:921(predict_proba)
+    28444    0.064    0.000    7.401    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/parallel.py:54(__call__)
+    28444    0.173    0.000    7.294    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/joblib/parallel.py:1969(__call__)
+   142220    0.226    0.000    6.615    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/joblib/parallel.py:1888(_get_sequential_output)
+    835/3    0.004    0.000    5.531    1.844 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/text.py:73(_get_text_metrics_with_cache_impl)
+    85332    0.466    0.000    5.081    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/parallel.py:131(__call__)
+     2550    0.074    0.000    4.690    0.002 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1276(_update_ticks)
+    28444    0.094    0.000    4.285    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/ensemble/_forest.py:628(_validate_X_predict)
+     3375    0.012    0.000    3.666    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1585(_get_tick)
+      261    0.003    0.000    3.645    0.014 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/figure.py:644(add_subplot)
+      261    0.013    0.000    3.634    0.014 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axes/_base.py:615(__init__)
+       36    0.001    0.000    3.604    0.100 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/seaborn/regression.py:752(regplot)
+       36    0.001    0.000    3.568    0.099 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/seaborn/regression.py:356(plot)
+     3000    0.010    0.000    3.555    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1644(get_major_ticks)
+       36    0.001    0.000    3.457    0.096 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/seaborn/regression.py:426(lineplot)
+       36    0.001    0.000    3.349    0.093 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/seaborn/regression.py:196(fit_regression)
+    28465    0.140    0.000    3.305    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/validation.py:2845(validate_data)
+    85332    0.267    0.000    3.200    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/ensemble/_forest.py:723(_accumulate_prediction)
+       93    0.001    0.000    3.050    0.033 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/pyplot.py:1621(subplots)
+       36    0.002    0.000    3.001    0.083 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/seaborn/regression.py:239(fit_fast)
+   142235    0.182    0.000    2.999    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/validation.py:1670(check_is_fitted)
+       93    0.001    0.000    2.992    0.032 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/figure.py:785(subplots)
+       93    0.002    0.000    2.989    0.032 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/gridspec.py:249(subplots)
+       36    0.302    0.008    2.978    0.083 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/seaborn/algorithms.py:6(bootstrap)
+    85332    0.946    0.000    2.904    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/tree/_classes.py:1032(predict_proba)
+     3375    0.112    0.000    2.787    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:59(__init__)
+    28465    0.378    0.000    2.649    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/validation.py:734(check_array)
+      261    0.001    0.000    2.456    0.009 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axes/_base.py:1445(clear)
+      261    0.016    0.000    2.456    0.009 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axes/_base.py:1313(__clear)
+    36036    0.064    0.000    2.324    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/seaborn/regression.py:241(reg_func)
+    36036    0.611    0.000    2.192    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/numpy/linalg/_linalg.py:2178(pinv)
+     1881    0.020    0.000    2.066    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:428(__init__)
+  504/468    0.006    0.000    1.916    0.004 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/__init__.py:1521(inner)
+59849/57989    0.304    0.000    1.824    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:1188(_update_props)
+256032/170700    0.100    0.000    1.673    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/_tags.py:298(get_tags)
+     1494    0.017    0.000    1.587    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:367(__init__)
+49042/47542    0.024    0.000    1.577    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:1226(_internal_update)
+284440/199108    0.249    0.000    1.552    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/base.py:515(__sklearn_tags__)
+    10347    0.174    0.000    1.379    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/lines.py:301(__init__)
+    28444    0.353    0.000    1.352    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/joblib/parallel.py:1212(__init__)
+356687/354971    0.176    0.000    1.342    0.000 {built-in method builtins.next}
+   142238    0.682    0.000    1.317    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/validation.py:1632(_is_fitted)
+   113776    0.073    0.000    1.274    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/parallel.py:74(<genexpr>)
+      522    0.002    0.000    1.262    0.002 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axis.py:1115(set_clip_path)
+      186    0.019    0.000    1.224    0.007 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/axes/_axes.py:2374(bar)
+
+
+
+================================================================================
+PROFILING RESULTS - Sorted by Function Time (self)
+================================================================================
+
+         50025960 function calls (49158753 primitive calls) in 40.345 seconds
+
+   Ordered by: internal time
+   List reduced from 2736 to 50 due to restriction <50>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+   1277/3    1.535    0.001    0.109    0.036 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py:206(get_text_width_height_descent)
+   366237    1.035    0.000    1.035    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+    85332    0.946    0.000    2.904    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/tree/_classes.py:1032(predict_proba)
+3208942/3201922    0.733    0.000    1.060    0.000 {built-in method builtins.getattr}
+       51    0.727    0.014   19.107    0.375 /home/rafael/gitgud/CounterFactualDPG/CounterFactualModel.py:345(genetic_algorithm)
+   142238    0.682    0.000    1.317    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/validation.py:1632(_is_fitted)
+    36036    0.667    0.000    0.982    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/numpy/linalg/_linalg.py:1689(svd)
+    36036    0.611    0.000    2.192    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/numpy/linalg/_linalg.py:2178(pinv)
+    28444    0.510    0.000   15.439    0.001 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/ensemble/_forest.py:921(predict_proba)
+2176319/2176028    0.510    0.000    0.834    0.000 {built-in method builtins.isinstance}
+   298365    0.508    0.000    0.555    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/_api/__init__.py:100(check_in_list)
+    85332    0.466    0.000    5.081    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/parallel.py:131(__call__)
+      123    0.435    0.004    0.445    0.004 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py:63(__init__)
+    31750    0.426    0.000    0.439    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:259(__init__)
+  3271908    0.417    0.000    0.417    0.000 {method 'endswith' of 'str' objects}
+2041099/2040883    0.407    0.000    0.509    0.000 {built-in method builtins.hasattr}
+   284476    0.399    0.000    0.658    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/base.py:454(__sklearn_tags__)
+   170664    0.392    0.000    0.735    0.000 /usr/lib/python3.12/functools.py:35(update_wrapper)
+   170676    0.383    0.000    0.591    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/_config.py:63(set_config)
+    28465    0.378    0.000    2.649    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/validation.py:734(check_array)
+   205907    0.361    0.000    0.361    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:109(__init__)
+    41744    0.357    0.000    0.404    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/_api/__init__.py:65(check_isinstance)
+    28444    0.353    0.000    1.352    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/joblib/parallel.py:1212(__init__)
+   198538    0.325    0.000    1.004    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:69(_wrapreduction)
+347868/7053    0.316    0.000    0.763    0.000 /usr/lib/python3.12/copy.py:118(deepcopy)
+59849/57989    0.304    0.000    1.824    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:1188(_update_props)
+       36    0.302    0.008    2.978    0.083 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/seaborn/algorithms.py:6(bootstrap)
+    57531    0.297    0.000    0.307    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/transforms.py:180(set_children)
+   295534    0.289    0.000    0.336    0.000 {built-in method numpy.array}
+    28465    0.280    0.000    0.904    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/validation.py:90(_assert_all_finite)
+  1885630    0.278    0.000    0.278    0.000 {method 'get' of 'dict' objects}
+    31840    0.269    0.000    0.324    0.000 /home/rafael/gitgud/CounterFactualDPG/CounterFactualModel.py:141(validate_constraints)
+    85332    0.267    0.000    3.200    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/ensemble/_forest.py:723(_accumulate_prediction)
+    66941    0.263    0.000    0.263    0.000 {method 'round' of 'numpy.generic' objects}
+284440/199108    0.249    0.000    1.552    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/base.py:515(__sklearn_tags__)
+     4313    0.246    0.000    0.347    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py:248(_prepare_font)
+422629/422137    0.244    0.000    0.257    0.000 {built-in method numpy.asarray}
+    56888    0.241    0.000    0.543    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/joblib/parallel.py:141(_get_active_backend)
+   113797    0.238    0.000    0.333    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/validation.py:328(_num_features)
+   142220    0.226    0.000    6.615    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/joblib/parallel.py:1888(_get_sequential_output)
+    28444    0.218    0.000    0.893    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/ensemble/_base.py:165(_partition_estimators)
+   277880    0.208    0.000    1.058    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:51(_wrapfunc)
+   554392    0.205    0.000    0.454    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/__init__.py:781(__getitem__)
+    43182    0.196    0.000    0.242    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:1752(normalize_kwargs)
+805606/702060    0.195    0.000    0.354    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/artist.py:315(stale)
+149414/149234    0.192    0.000    0.680    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/matplotlib/cbook.py:348(process)
+   154610    0.183    0.000    0.211    0.000 /usr/lib/python3.12/contextlib.py:104(__init__)
+56888/28444    0.182    0.000    0.404    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/joblib/parallel.py:1376(_initialize_backend)
+   142235    0.182    0.000    2.999    0.000 /home/rafael/gitgud/CounterFactualDPG/.venv/lib/python3.12/site-packages/sklearn/utils/validation.py:1670(check_is_fitted)
+    31840    0.181    0.000   17.337    0.001 /home/rafael/gitgud/CounterFactualDPG/CounterFactualModel.py:294(calculate_fitness)
+
+

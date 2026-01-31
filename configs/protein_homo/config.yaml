@@ -1,0 +1,16 @@
+data:
+  dataset: protein_homo
+  dataset_path: configs/protein_homo/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - protein_homo
+  name: protein_homo
+model:
+  type: RandomForestClassifier
+  n_estimators: 10
+  min_samples_split: 2
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 10
+  criterion: entropy

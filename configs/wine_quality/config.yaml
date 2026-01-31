@@ -1,0 +1,16 @@
+data:
+  dataset: wine_quality
+  dataset_path: configs/wine_quality/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - wine_quality
+  name: wine_quality
+model:
+  type: RandomForestClassifier
+  n_estimators: 20
+  min_samples_split: 4
+  min_impurity_decrease: 0.0
+  max_features: 0.5
+  max_depth: 4
+  criterion: gini

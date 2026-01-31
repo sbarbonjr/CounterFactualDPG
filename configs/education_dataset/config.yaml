@@ -1,0 +1,16 @@
+data:
+  dataset: education_dataset
+  dataset_path: configs/education_dataset/dataset.csv
+  target_column: PassFail
+experiment:
+  tags:
+  - education_dataset
+  name: education_dataset
+model:
+  type: RandomForestClassifier
+  n_estimators: 15
+  min_samples_split: 4
+  min_impurity_decrease: 0.01
+  max_features: 0.3
+  max_depth: 3
+  criterion: entropy

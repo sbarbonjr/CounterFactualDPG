@@ -1,0 +1,16 @@
+data:
+  dataset: us_crime
+  dataset_path: configs/us_crime/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - us_crime
+  name: us_crime
+model:
+  type: RandomForestClassifier
+  n_estimators: 10
+  min_samples_split: 15
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 8
+  criterion: entropy

@@ -1,0 +1,28 @@
+data:
+  dataset: diabetes
+  dataset_path: configs/diabetes/dataset.csv
+  target_column: Outcome
+experiment:
+  tags:
+  - diabetes
+  name: diabetes
+methods:
+  _default:
+    actionability:
+      Age: non_decreasing
+      Pregnancies: non_decreasing
+      DiabetesPedigreeFunction: no_change
+      BMI: actionable
+      Glucose: actionable
+      BloodPressure: actionable
+  dpg:
+    verbose: false
+model:
+  type: RandomForestClassifier
+  n_estimators: 12
+  min_impurity_decrease: 0.01
+  max_features: null
+  max_depth: 5
+experiment_params:
+  sample_indices:
+  - 2

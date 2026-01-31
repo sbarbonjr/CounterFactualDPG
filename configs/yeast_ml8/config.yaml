@@ -1,0 +1,16 @@
+data:
+  dataset: yeast_ml8
+  dataset_path: configs/yeast_ml8/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - yeast_ml8
+  name: yeast_ml8
+model:
+  type: RandomForestClassifier
+  n_estimators: 4
+  min_samples_split: 10
+  min_impurity_decrease: 0.0
+  max_features: 0.7
+  max_depth: 3
+  criterion: entropy

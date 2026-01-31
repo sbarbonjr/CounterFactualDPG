@@ -1,0 +1,14 @@
+data:
+  dataset: breast_cancer_wisconsin
+  dataset_path: configs/breast_cancer_wisconsin/dataset.csv
+  target_column: diagnosis
+experiment:
+  tags:
+  - breast_cancer_wisconsin
+  name: breast_cancer_wisconsin
+model:
+  type: RandomForestClassifier
+  n_estimators: 20
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 3

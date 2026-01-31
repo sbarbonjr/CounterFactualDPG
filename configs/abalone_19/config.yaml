@@ -1,0 +1,14 @@
+data:
+  dataset: abalone_19
+  dataset_path: configs/abalone_19/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - abalone_19
+  name: abalone_19
+model:
+  type: RandomForestClassifier
+  n_estimators: 3
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 6

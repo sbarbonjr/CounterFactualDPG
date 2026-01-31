@@ -1,0 +1,16 @@
+data:
+  dataset: scene
+  dataset_path: configs/scene/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - scene
+  name: scene
+model:
+  type: RandomForestClassifier
+  n_estimators: 10
+  min_samples_split: 12
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 6
+  criterion: entropy

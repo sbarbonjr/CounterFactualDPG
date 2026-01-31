@@ -1,0 +1,14 @@
+data:
+  dataset: arrhythmia
+  dataset_path: configs/arrhythmia/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - arrhythmia
+  name: arrhythmia
+model:
+  type: RandomForestClassifier
+  n_estimators: 20
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 8

@@ -1,0 +1,14 @@
+data:
+  dataset: isolet
+  dataset_path: configs/isolet/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - isolet
+  name: isolet
+model:
+  type: RandomForestClassifier
+  n_estimators: 7
+  max_depth: 10
+  min_impurity_decrease: 0.0
+  max_features: 0.3

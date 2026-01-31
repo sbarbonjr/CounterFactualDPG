@@ -1,0 +1,14 @@
+data:
+  dataset: letter_img
+  dataset_path: configs/letter_img/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - letter_img
+  name: letter_img
+model:
+  type: RandomForestClassifier
+  n_estimators: 10
+  min_impurity_decrease: 0.0
+  max_features: 0.5
+  max_depth: 5

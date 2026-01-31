@@ -1,0 +1,17 @@
+data:
+  dataset: fraud_detection_dataset
+  dataset_path: configs/fraud_detection_dataset/dataset.csv
+  target_column: Fraudulent
+  categorical_features:
+  - Country
+  - BillingCountry
+experiment:
+  tags:
+  - fraud_detection_dataset
+  name: fraud_detection_dataset
+model:
+  type: RandomForestClassifier
+  n_estimators: 7
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 4

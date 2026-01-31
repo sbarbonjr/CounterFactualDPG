@@ -1,0 +1,14 @@
+data:
+  dataset: mammography
+  dataset_path: configs/mammography/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - mammography
+  name: mammography
+model:
+  type: RandomForestClassifier
+  n_estimators: 12
+  min_impurity_decrease: 0.0
+  max_features: 0.5
+  max_depth: 10

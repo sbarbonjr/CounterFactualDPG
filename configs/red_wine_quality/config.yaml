@@ -1,0 +1,21 @@
+data:
+  dataset: red_wine_quality
+  dataset_path: configs/red_wine_quality/dataset.csv
+  target_column: quality
+experiment:
+  tags:
+  - red_wine_quality
+  name: red_wine_quality
+experiment_params:
+  sample_indices: null
+methods:
+  _default:
+    actionability:
+      alcohol: non_decreasing
+      fixed_acidity: non_increasing
+model:
+  type: RandomForestClassifier
+  n_estimators: 15
+  min_samples_split: 3
+  min_impurity_decrease: 0.0
+  max_depth: 4

@@ -1,0 +1,20 @@
+numpy
+pandas
+matplotlib
+seaborn
+scipy
+scikit-learn
+deap
+dice-ml
+
+# experiment tracking & configuration
+wandb>=0.16.0
+pyyaml>=6.0
+
+# notebooks
+ipywidgets
+ipython
+jupyter
+tqdm
+nbstripout
+GitPython

@@ -1,0 +1,16 @@
+data:
+  dataset: libras_move
+  dataset_path: configs/libras_move/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - libras_move
+  name: libras_move
+model:
+  type: RandomForestClassifier
+  n_estimators: 20
+  min_samples_split: 12
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 8
+  criterion: entropy

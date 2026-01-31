@@ -1,14 +1,37 @@
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-import ast
-from scipy.spatial.distance import euclidean, cityblock, cosine
-from scipy.spatial.distance import cdist
+from boundary_analyzer import BoundaryAnalyzer
+from utils.feature_utils import normalize_feature_name, features_match
+from constraint_validator import ConstraintValidator
+from fitness_calculator import FitnessCalculator
+from sample_generator import SampleGenerator
+from heuristic_runner import HeuristicRunner
+from constants import UNCONSTRAINED_CHANGE_PENALTY_FACTOR
+
 
 class CounterFactualModel:
-    def __init__(self, model, constraints, dict_non_actionable=None, verbose=False):
+    def __init__(
+        self,
+        model,
+        constraints,
+        dict_non_actionable=None,
+        verbose=False,
+        diversity_weight=0.1,
+        repulsion_weight=0.1,
+        boundary_weight=15.0,
+        distance_factor=5.0,
+        sparsity_factor=1.0,
+        constraints_factor=3.0,
+        original_escape_weight=2.0,
+        escape_pressure=0.5,
+        prioritize_non_overlapping=True,
+        max_bonus_cap=10.0,
+        unconstrained_penalty_factor=UNCONSTRAINED_CHANGE_PENALTY_FACTOR,
+        min_probability_margin=0.001,
+        overgeneration_factor=20,
+        requested_counterfactuals=5,
+        diversity_lambda=0.5,
+    ):
         """
         Initialize the CounterFactualDPG object.
 
@@ -19,455 +42,346 @@ class CounterFactualModel:
               non_decreasing: feature cannot decrease
               non_increasing: feature cannot increase
               no_change: feature cannot change
+            diversity_weight (float): Weight for diversity bonus in fitness calculation.
+            repulsion_weight (float): Weight for repulsion bonus in fitness calculation.
+            boundary_weight (float): Weight for boundary proximity in fitness calculation.
+            distance_factor (float): Weight for distance component in fitness calculation.
+            sparsity_factor (float): Weight for sparsity component in fitness calculation.
+            constraints_factor (float): Weight for constraint violation component in fitness calculation.
+            original_escape_weight (float): Weight for penalizing staying within original class bounds.
+            escape_pressure (float): Balance between escaping original (1.0) vs approaching target (0.0).
+            prioritize_non_overlapping (bool): Prioritize mutating features with non-overlapping boundaries.
+            max_bonus_cap (float): Maximum cap for diversity/repulsion bonuses to prevent unbounded negative fitness.
+            unconstrained_penalty_factor (float): Penalty multiplier for changing features without target constraints.
+                Higher values (e.g., 2.0-3.0) make unconstrained features change as last resort.
+            min_probability_margin (float): Minimum margin the target class probability must exceed the
+                second-highest class probability by. Prevents accepting weak counterfactuals where
+                the prediction is essentially a tie. Default 0.001 (0.1% margin).
+            overgeneration_factor (int): Multiplier for population size calculation. The population
+                size is calculated as overgeneration_factor * requested_counterfactuals.
+                Default 20 means if 5 CFs are requested, 100 candidates are generated initially.
+                Higher values increase quality at the cost of computation.
+            requested_counterfactuals (int): Number of counterfactuals to generate. Used with
+                overgeneration_factor to calculate population_size internally.
+                Default 5.
+            diversity_lambda (float): Weight for diversity vs proximity trade-off in CF selection (0-1).
+                Higher values (e.g., 0.7-0.9) prioritize selecting diverse counterfactuals.
+                Lower values (e.g., 0.1-0.3) prioritize selecting the best-fitness/closest counterfactuals.
+                Default 0.5 for balanced selection.
         """
         self.model = model
         self.constraints = constraints
-        self.dict_non_actionable = dict_non_actionable #non_decreasing, non_increasing, no_change
+        self.dict_non_actionable = (
+            dict_non_actionable  # non_decreasing, non_increasing, no_change
+        )
         self.average_fitness_list = []
         self.best_fitness_list = []
+        self.std_fitness_list = []
+        self.evolution_history = []  # Store best individual per generation for visualization
         self.verbose = verbose
+        self.diversity_weight = diversity_weight
+        self.repulsion_weight = repulsion_weight
+        self.boundary_weight = boundary_weight
+        self.distance_factor = distance_factor
+        self.sparsity_factor = sparsity_factor
+        self.constraints_factor = constraints_factor
+        self.unconstrained_penalty_factor = unconstrained_penalty_factor
+        # Dual-boundary parameters
+        self.original_escape_weight = original_escape_weight
+        self.escape_pressure = escape_pressure
+        self.prioritize_non_overlapping = prioritize_non_overlapping
+        # Fitness calculation parameters
+        self.max_bonus_cap = max_bonus_cap
+        # Store feature names from the model if available
+        self.feature_names = getattr(model, "feature_names_in_", None)
+        # Initialize BoundaryAnalyzer for constraint boundary analysis
+        self.boundary_analyzer = BoundaryAnalyzer(constraints=constraints, verbose=verbose)
+        # Initialize ConstraintValidator for constraint validation
+        self.constraint_validator = ConstraintValidator(
+            model=model,
+            constraints=constraints,
+            dict_non_actionable=dict_non_actionable,
+            feature_names=self.feature_names,
+            boundary_analyzer=self.boundary_analyzer,
+            verbose=verbose,
+        )
+        # Initialize FitnessCalculator for fitness calculation
+        self.fitness_calculator = FitnessCalculator(
+            model=model,
+            feature_names=self.feature_names,
+            diversity_weight=diversity_weight,
+            repulsion_weight=repulsion_weight,
+            boundary_weight=boundary_weight,
+            distance_factor=distance_factor,
+            sparsity_factor=sparsity_factor,
+            constraints_factor=constraints_factor,
+            original_escape_weight=original_escape_weight,
+            max_bonus_cap=max_bonus_cap,
+            unconstrained_penalty_factor=unconstrained_penalty_factor,
+            constraint_validator=self.constraint_validator,
+            boundary_analyzer=self.boundary_analyzer,
+            verbose=verbose,
+        )
+        # Initialize SampleGenerator for sample generation
+        self.sample_generator = SampleGenerator(
+            model=model,
+            constraints=constraints,
+            dict_non_actionable=dict_non_actionable,
+            feature_names=self.feature_names,
+            escape_pressure=escape_pressure,    
+            min_probability_margin=min_probability_margin,
+            verbose=verbose,
+            boundary_analyzer=self.boundary_analyzer,
+            constraint_validator=self.constraint_validator,
+        )
+        # Initialize HeuristicRunner for candidate generation
+        self.heuristic_runner = HeuristicRunner(
+            model=model,
+            constraints=constraints,
+            dict_non_actionable=dict_non_actionable,
+            feature_names=self.feature_names,
+            verbose=verbose,
+            min_probability_margin=min_probability_margin,
+            diversity_lambda=diversity_lambda,
+        )
+        # Minimum probability margin for accepting counterfactuals
+        self.min_probability_margin = min_probability_margin
+        # Overgeneration factor and requested counterfactuals for population size calculation
+        self.overgeneration_factor = overgeneration_factor
+        self.requested_counterfactuals = requested_counterfactuals
+        # Calculate population_size internally: overgeneration_factor * requested_counterfactuals
+        self.population_size = overgeneration_factor * requested_counterfactuals
+
+        # Print configuration if verbose
+        if self.verbose:
+            print("=" * 80)
+            print("CounterFactualModel Configuration")
+            print("=" * 80)
+            print(f"Model type: {type(self.model).__name__}")
+            print(f"Verbose: {self.verbose}")
+            print(f"Feature names: {self.feature_names}")
+            print()
+            print("Fitness Weights:")
+            print(f"  - diversity_weight: {self.diversity_weight}")
+            print(f"  - repulsion_weight: {self.repulsion_weight}")
+            print(f"  - boundary_weight: {self.boundary_weight}")
+            print(f"  - distance_factor: {self.distance_factor}")
+            print(f"  - sparsity_factor: {self.sparsity_factor}")
+            print(f"  - constraints_factor: {self.constraints_factor}")
+            print(f"  - original_escape_weight: {self.original_escape_weight}")
+            print(f"  - max_bonus_cap: {self.max_bonus_cap}")
+            print()
+            print("Generation Parameters:")
+            print(f"  - escape_pressure: {self.escape_pressure}")
+            print(f"  - prioritize_non_overlapping: {self.prioritize_non_overlapping}")
+            print(f"  - unconstrained_penalty_factor: {self.unconstrained_penalty_factor}")
+            print()
+            print("Validation Parameters:")
+            print(f"  - min_probability_margin: {self.min_probability_margin}")
+            print()
+            print("Population Parameters:")
+            print(f"  - overgeneration_factor: {self.overgeneration_factor}")
+            print(f"  - requested_counterfactuals: {self.requested_counterfactuals}")
+            print(f"  - calculated population_size: {self.population_size}")
+            print("=" * 80)
+
+    def _analyze_boundary_overlap(self, original_class, target_class):
+        """Delegate to BoundaryAnalyzer for boundary overlap analysis."""
+        return self.boundary_analyzer.analyze_boundary_overlap(original_class, target_class)
 
     def is_actionable_change(self, counterfactual_sample, original_sample):
-      """
-      Check if changes in features are actionable based on constraints.
-
-      Args:
-          counterfactual_sample (dict): The modified sample with new feature values.
-          original_sample (dict): The original sample with feature values.
-
-      Returns:
-          bool: True if all changes are actionable, False otherwise.
-      """
-      if not self.dict_non_actionable:
-          return True
-
-      for feature, new_value in counterfactual_sample.items():
-          if feature not in self.dict_non_actionable:
-              continue
-
-          original_value = original_sample.get(feature)
-          constraint = self.dict_non_actionable[feature]
-
-          if constraint == "non_decreasing" and new_value < original_value:
-              return False
-          if constraint == "non_increasing" and new_value > original_value:
-              return False
-          if constraint == "no_change" and new_value != original_value:
-              return False
-
-      return True
-
+        """Delegate to ConstraintValidator for actionability check."""
+        return self.constraint_validator.is_actionable_change(
+            counterfactual_sample, original_sample
+        )
 
     def check_validity(self, counterfactual_sample, original_sample, desired_class):
-        """
-        Checks the validity of a counterfactual sample.
+        """Delegate to ConstraintValidator for validity check."""
+        return self.constraint_validator.check_validity(
+            counterfactual_sample, original_sample, desired_class
+        )
 
-        Parameters:
-        - counterfactual_sample: Array-like, shape (n_features,), the counterfactual sample.
-        - original_sample: Array-like, shape (n_features,), the original input sample.
-        - desired_class: The desired class label.
+    def calculate_distance(
+        self, original_sample, counterfactual_sample, metric="euclidean"
+    ):
+        """Delegate to FitnessCalculator for distance calculation."""
+        return self.fitness_calculator.calculate_distance(
+            original_sample, counterfactual_sample, metric
+        )
 
-        Returns:
-        - 0 if the predicted class matches the desired class and the sample is different from the original.
-        - np.inf if the predicted class does not match the desired class or the sample is identical to the original.
-        """
-        # Ensure the input samples are numpy arrays
-        counterfactual_sample = np.array(counterfactual_sample).reshape(1, -1)
-        original_sample = np.array(original_sample).reshape(1, -1)
+    def _normalize_feature_name(self, feature):
+        """Delegate to feature_utils for feature name normalization."""
+        return normalize_feature_name(feature)
 
-        # Check if the counterfactual sample is different from the original sample
-        if np.array_equal(counterfactual_sample, original_sample):
-            return False  # Return np.inf if the samples are identical
+    def _features_match(self, feature1, feature2):
+        """Delegate to feature_utils for feature matching."""
+        return features_match(feature1, feature2)
 
-        # Predict the class for the counterfactual sample
-        #print('self.model.predict(counterfactual_sample)[0]', self.model.predict(counterfactual_sample)[0])
-        predicted_class = self.model.predict(counterfactual_sample)[0]
+    def validate_constraints(
+        self, S_prime, sample, target_class, original_class=None, strict_mode=True
+    ):
+        """Delegate to ConstraintValidator for constraint validation."""
+        return self.constraint_validator.validate_constraints(
+            S_prime, sample, target_class, original_class, strict_mode
+        )
 
-        # Check if the predicted class matches the desired class
-        if predicted_class == desired_class:
-            return True
-        else:
-            return False
-
-    def plot_fitness(self):
-        fig, axs = plt.subplots(2, 1, figsize=(10, 8))  # Create two subplots vertically
-
-        # Plot best fitness
-        axs[0].plot(self.best_fitness_list, label='Best Fitness', color='blue')
-        axs[0].set_title('Best Fitness Over Generations')
-        axs[0].set_xlabel('Generation')
-        axs[0].set_ylabel('Best Fitness')
-        axs[0].legend()
-
-        # Plot average fitness
-        axs[1].plot(self.average_fitness_list, label='Average Fitness', color='green')
-        axs[1].set_title('Average Fitness Over Generations')
-        axs[1].set_xlabel('Generation')
-        axs[1].set_ylabel('Average Fitness')
-        axs[1].legend()
-
-        plt.tight_layout()
-        return(plt)
-        #plt.show()
-
-
-
-    def calculate_distance(self,original_sample, counterfactual_sample, metric="euclidean"):
-        """
-        Calculates the distance between the original sample and the counterfactual sample.
-
-        Parameters:
-        - original_sample: Array-like, shape (n_features,), the original input sample.
-        - counterfactual_sample: Array-like, shape (n_features,), the counterfactual sample.
-        - metric: String, the distance metric to use. Options are "euclidean", "manhattan", or "cosine".
-
-        Returns:
-        - Distance between the original sample and the counterfactual sample.
-        """
-        # Ensure inputs are numpy arrays
-        original_sample = np.array(original_sample)
-        counterfactual_sample = np.array(counterfactual_sample)
-
-        # Validate metric and compute distance
-        if metric == "euclidean":
-            distance = euclidean(original_sample, counterfactual_sample)
-        elif metric == "manhattan":
-            distance = cityblock(original_sample, counterfactual_sample)
-        elif metric == "cosine":
-            # Avoid division by zero in cosine similarity
-            if np.all(original_sample == 0) or np.all(counterfactual_sample == 0):
-                distance = 1  # Max cosine distance if one vector is zero
-            else:
-                distance = cosine(original_sample, counterfactual_sample)
-        else:
-            raise ValueError("Invalid metric. Choose from 'euclidean', 'manhattan', or 'cosine'.")
-
-        return distance
-
-    def validate_constraints(self, S_prime, sample, target_class):
-        """
-        Validate if the modified sample S_prime meets all constraints for the specified target class.
-
-        Args:
-            S_prime (dict): Modified sample with feature values.
-            sample (dict): The original sample with feature values.
-            target_class (int): The target class for filtering constraints.
-
-        Returns:
-            (bool, float): Tuple of whether the changes are valid and a penalty score.
-        """
-        penalty = 0.0
-        valid_change = True
-
-        # Filter the constraints for the specified target class
-        class_constraints = self.constraints.get(str("Class "+str(target_class)), [])
-
-        for feature, new_value in S_prime.items():
-            original_value = sample.get(feature)
-
-            # Check if the feature value has changed
-            if new_value != original_value:
-                # Validate numerical constraints specific to the target class
-                for condition in class_constraints:
-                    if condition["feature"] == feature:
-                        operator = condition["operator"]
-                        constraint_value = condition["value"]
-
-                        #print("Feature:", feature)
-                        #print("Operator:", operator)
-                        #print("Constraint Value:", constraint_value)
-                        #print("New Value:", new_value)
-
-                        # Check if the new value violates any constraints
-                        if operator == "<" and not (new_value < constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == "<=" and not (new_value <= constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == ">" and not (new_value > constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == ">=" and not (new_value >= constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-
-        # Collect all constraints that are NOT related to the target class
-        non_target_class_constraints = [
-            condition
-            for class_name, conditions in self.constraints.items()
-            if class_name != "Class " + str(target_class)  # Exclude the target class constraints
-            for condition in conditions
-        ]
-
-        for feature, new_value in S_prime.items():
-            original_value = sample.get(feature)
-
-            # Check if the feature value has changed
-            if new_value != original_value:
-                # Validate numerical constraints NOT related to the target class
-                for condition in non_target_class_constraints:
-                    if condition["feature"] == feature:
-                        operator = condition["operator"]
-                        constraint_value = condition["value"]
-
-                        # Check if the new value violates any constraints
-                        if operator == "<" and (new_value < constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == "<=" and (new_value <= constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == ">" and (new_value > constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-                        elif operator == ">=" and (new_value >= constraint_value):
-                            valid_change = False
-                            penalty += constraint_value
-
-
-        #print('Total Penalty:', penalty)
-        return valid_change, penalty
-
-
-    def get_valid_sample(self, sample, target_class):
-        """
-        Generate a valid sample that meets all constraints for the specified target class
-        while respecting actionable changes.
-
-        Args:
-            sample (dict): The sample with feature values.
-            target_class (int): The target class for filtering constraints.
-
-        Returns:
-            dict: A valid sample that meets all constraints for the target class
-                  and respects actionable changes.
-        """
-        adjusted_sample = sample.copy()  # Start with the original values
-
-        for feature, original_value in sample.items():
-            min_value = -np.inf
-            max_value = np.inf
-
-            # Filter the constraints for the specified target class
-            class_constraints = self.constraints.get(f"Class {target_class}", [])
-
-            # Find the constraints for this feature
-            for condition in class_constraints:
-                if condition["feature"] == feature:
-                    operator = condition["operator"]
-                    constraint_value = condition["value"]
-
-                    # Update the min and max values based on the constraints
-                    if operator == "<":
-                        max_value = min(max_value, constraint_value - 1e-5)
-                    elif operator == "<=":
-                        max_value = min(max_value, constraint_value)
-                    elif operator == ">":
-                        min_value = max(min_value, constraint_value + 1e-5)
-                    elif operator == ">=":
-                        min_value = max(min_value, constraint_value)
-
-            # Incorporate non-actionable constraints
-            if self.dict_non_actionable and feature in self.dict_non_actionable:
-                actionability = self.dict_non_actionable[feature]
-                if actionability == "non_decreasing":
-                    min_value = max(min_value, original_value)
-                elif actionability == "non_increasing":
-                    max_value = min(max_value, original_value)
-                elif actionability == "no_change":
-                    adjusted_sample[feature] = original_value
-                    continue
-
-            # Generate a random value within the valid range
-            if min_value == -np.inf:
-                min_value = 0  # Default lower bound if no constraint is specified
-            if max_value == np.inf:
-                max_value = min_value + 10  # Default upper bound if no constraint is specified
-
-            adjusted_sample[feature] = np.random.uniform(min_value, max_value)
-
-        return adjusted_sample
+    def get_valid_sample(self, sample, target_class, original_class=None, weak_constraints=True):
+        """Delegate to SampleGenerator for valid sample generation."""
+        return self.sample_generator.get_valid_sample(sample, target_class, original_class,weak_constraints)
 
     def calculate_sparsity(self, original_sample, counterfactual_sample):
-        total_features = len(original_sample)
-        unchanged_features = sum(
-            original_sample[feature]*3 for feature in original_sample if original_sample[feature] != counterfactual_sample[feature]
+        """Delegate to FitnessCalculator for sparsity calculation."""
+        return self.fitness_calculator.calculate_sparsity(
+            original_sample, counterfactual_sample
         )
-        sparsity = unchanged_features / total_features
-        return sparsity
 
-    def calculate_fitness(self, individual, original_features, sample, target_class, metric="cosine"):
-            """
-            Calculate the fitness score for an individual sample.
+    def calculate_fitness(
+        self,
+        individual,
+        original_features,
+        sample,
+        target_class,
+        metric="euclidean",
+        population=None,
+        original_class=None,
+        return_components=False,
+    ):
+        """Delegate to FitnessCalculator for fitness calculation."""
+        return self.fitness_calculator.calculate_fitness(
+            individual,
+            original_features,
+            sample,
+            target_class,
+            metric,
+            population,
+            original_class,
+            return_components=return_components,
+        )
 
-            Args:
-                individual (dict): The individual sample with feature values.
-                original_features (np.array): The original feature values.
-                sample (dict): The original sample with feature values.
-                target_class (int): The desired class for the counterfactual.
-                metric (str): The distance metric to use for calculating distance.
+    def generate_candidates(
+        self,
+        sample,
+        target_class,
+        metric="euclidean",
+        original_class=None,
+        num_best_results=None,
+    ):
+        """Generate counterfactual candidates using heuristic approach.
 
-            Returns:
-                float: The fitness score for the individual.
-            """
-            #print('individual', individual)
+        Uses escape-aware perturbations to generate candidates, evaluates fitness,
+        and returns the best candidates using greedy diverse selection.
 
-            # Convert individual feature values to a numpy array
-            features = np.array([individual[feature] for feature in sample.keys()]).reshape(1, -1)
+        Population size is calculated internally as:
+        population_size = overgeneration_factor * requested_counterfactuals
 
-            # Calculate validity score based on class
-            is_valid_class = self.check_validity(features.flatten(), original_features.flatten(), target_class)
-            #print('is_valid_class', is_valid_class)
+        Args:
+            sample (dict): Original sample features.
+            target_class (int): Target class for counterfactual.
+            metric (str): Distance metric for fitness calculation.
+            original_class (int): Original class for escape-aware generation.
+            num_best_results (int): Number of top individuals to return. If None,
+                uses the instance's requested_counterfactuals.
 
-            # Calculate distance score
-            distance_score = self.calculate_distance(original_features, features.flatten(), metric)
-
-            #Calculate sparcity (number of features modified)
-            sparsity_score = self.calculate_sparsity(sample, individual)
-
-            # Calculate_manufold_distance
-            #manifold_distance = self.calculate_manifold_distance(self.X, individual)
-            #print('calculate_manifold_distance', manifold_distance)
-
-            # Check the constraints
-            is_valid_constraint, penalty_constraints = self.validate_constraints(individual, sample, target_class)
-
-            # Check if the change is actionable
-            if not self.is_actionable_change(individual, sample) or not is_valid_class:
-                fitness = +np.inf
-                return fitness
-
-            if is_valid_class :
-                fitness = (2*distance_score) + penalty_constraints + sparsity_score
-            elif is_valid_constraint:
-                fitness = 5 * ((2*distance_score) + penalty_constraints + sparsity_score)  # High penalty for invalid samples
-            else:
-                fitness = 10 * ((2*distance_score) + penalty_constraints + sparsity_score)  # High penalty for invalid samples
-
-            return fitness
-
-
-    def genetic_algorithm(self, sample, target_class, population_size=100, generations=100, mutation_rate=0.8, metric="euclidean", delta_threshold=0.01, patience=10):
-      # Initialize population with random values within a reasonable range
-      population = []
-      feature_names = list(sample.keys())
-      previous_best_fitness = float('inf')
-      stable_generations = 0  # Counter for generations with minimal fitness improvement
-
-      for _ in range(population_size):
-          individual = self.get_valid_sample(sample, target_class)
-          population.append(individual)
-
-      original_features = np.array([sample[feature] for feature in feature_names])
-
-      self.best_fitness_list = []
-      self.average_fitness_list = []
-      # Main loop for generations
-      for generation in range(generations):
-          fitness_scores = []
-
-          # Calculate fitness for each individual
-          for individual in population:
-              fitness = self.calculate_fitness(individual, original_features, sample, target_class, metric)
-              fitness_scores.append(fitness)
-
-          # Find the best candidate and its fitness score
-          best_index = np.argmin(fitness_scores)
-          best_candidate = population[best_index]
-          best_fitness = fitness_scores[best_index]
-
-          # Check for convergence based on the fitness delta threshold
-          fitness_improvement = previous_best_fitness - best_fitness
-          if fitness_improvement < delta_threshold:
-              stable_generations += 1
-          else:
-              stable_generations = 0  # Reset if there's sufficient improvement
-
-          # Print the average fitness and the best candidate
-
-          finite_fitness_scores = np.array(fitness_scores)
-          finite_fitness_scores[np.isinf(finite_fitness_scores)] = np.nan
-          average_fitness = np.nanmean(finite_fitness_scores)
-          if self.verbose:
-            print(f"****** Generation {generation + 1}: Average Fitness = {average_fitness:.4f}, Best Fitness = {best_fitness:.4f}, fitness improvement = {fitness_improvement:.4f}")
-
-          previous_best_fitness = best_fitness
-          self.best_fitness_list.append(best_fitness)
-          self.average_fitness_list.append(average_fitness)
-
-          # Stop if improvement is less than the threshold for a consecutive number of generations
-          if stable_generations >= patience:
-              if self.verbose:
-                print(f"Convergence reached at generation {generation + 1}")
-              break
-
-            # Use tournament selection to choose parents
-          selected_parents = []
-          for _ in range(population_size):
-              tournament = np.random.choice(population, size=4, replace=False)
-              tournament_fitness = [fitness_scores[population.index(ind)] for ind in tournament]
-              selected_parents.append(tournament[np.argmin(tournament_fitness)])
-
-          # Generate new population using crossover and mutation
-          new_population = []
-          for parent in selected_parents:
-              offspring = parent.copy()
-              for feature in feature_names:
-                  if np.random.rand() < mutation_rate:
-                      # Apply mutation only if the feature is actionable
-                      if self.dict_non_actionable and feature in self.dict_non_actionable:
-                          actionability = self.dict_non_actionable[feature]
-                          original_value = parent[feature]
-                          if actionability == "non_decreasing":
-                              mutation_value = np.random.uniform(0, 0.5)  # Only allow increase
-                              offspring[feature] += mutation_value
-                          elif actionability == "non_increasing":
-                              mutation_value = np.random.uniform(-0.5, 0)  # Only allow decrease
-                              offspring[feature] += mutation_value
-                          elif actionability == "no_change":
-                              offspring[feature] = original_value  # Do not change
-                          else:
-                              # If no specific actionability rule, apply normal mutation
-                              offspring[feature] += np.random.uniform(-0.5, 0.5)
-                      else:
-                          # If the feature is not in the non-actionable list, apply normal mutation
-                          offspring[feature] += np.random.uniform(-0.5, 0.5)
-
-                      # Ensure offspring values stay within valid domain constraints
-                      offspring[feature] = np.round(max(0, offspring[feature]), 2)  # Adjust this based on domain-specific constraints
-              new_population.append(offspring)
-
-
-          # Reduce mutation rate over generations (adaptive mutation)
-          mutation_rate *= 0.99
-
-          # Update population
-          population = new_population
-
-      if best_fitness == np.inf:
-          return None
-
-      # Return the best individual based on the lowest fitness score
-      best_index = np.argmin(fitness_scores)
-      return population[best_index]
-
-    def generate_counterfactual(self, sample, target_class, population_size=100, generations=100 ):
+        Returns:
+            list: Valid counterfactuals (or None if none found).
         """
-        Generate a counterfactual for the given sample and target class using a genetic algorithm.
+        # Pre-compute boundary analysis for dual-boundary operations
+        boundary_analysis = None
+        if original_class is not None:
+            boundary_analysis = self._analyze_boundary_overlap(
+                original_class, target_class
+            )
+        
+        # Use instance's calculated population_size
+        population_size = self.population_size
+        
+        # Use provided num_best_results or fall back to instance default
+        if num_best_results is None:
+            num_best_results = self.requested_counterfactuals
+
+        # Delegate to HeuristicRunner
+        result = self.heuristic_runner.run(
+            sample=sample,
+            target_class=target_class,
+            original_class=original_class,
+            population_size=population_size,
+            metric=metric,
+            num_best_results=num_best_results,
+            boundary_analysis=boundary_analysis,
+            create_individual_func=lambda d, _: dict(d),  # Simple dict copy
+            calculate_fitness_func=self.calculate_fitness,
+            get_valid_sample_func=self.get_valid_sample,
+            normalize_feature_func=self._normalize_feature_name,
+            features_match_func=self._features_match,
+            overgeneration_factor=self.overgeneration_factor,
+        )
+
+        # Copy tracking attributes back from runner
+        self.best_fitness_list = self.heuristic_runner.best_fitness_list
+        self.average_fitness_list = self.heuristic_runner.average_fitness_list
+        self.std_fitness_list = self.heuristic_runner.std_fitness_list
+        self.evolution_history = self.heuristic_runner.evolution_history
+        self.per_cf_evolution_histories = self.heuristic_runner.per_cf_evolution_histories
+        self.cf_generation_found = getattr(self.heuristic_runner, 'cf_generation_found', [])
+
+        return result
+
+    def generate_counterfactual(
+        self,
+        sample,
+        target_class,
+        num_best_results=None,
+    ):
+        """
+        Generate counterfactuals for the given sample and target class.
+
+        Uses heuristic approach to generate candidate counterfactuals.
+
+        Population size is calculated internally as:
+        population_size = overgeneration_factor * requested_counterfactuals
 
         Args:
             sample (dict): The original sample with feature values.
             target_class (int): The desired class for the counterfactual.
+            num_best_results (int): Number of top counterfactuals to return. If None,
+                uses the instance's requested_counterfactuals.
 
         Returns:
-            dict: A modified sample representing the counterfactual or None if not found.
+            list or None: A list of counterfactuals, or None if not found.
         """
         sample_class = self.model.predict(pd.DataFrame([sample]))[0]
-        # Check if the predicted class matches the desired class
+
         if sample_class == target_class:
-            raise ValueError("Target class need to be different from the predicted class label.")
-        #counterfactual = None
-        #while counterfactual is None:
-        counterfactual = self.genetic_algorithm(sample, target_class, population_size, generations)
-        return counterfactual
+            raise ValueError(
+                "Target class need to be different from the predicted class label."
+            )
+
+        # Use provided num_best_results or fall back to instance default
+        if num_best_results is None:
+            num_best_results = self.requested_counterfactuals
+
+        # Generate counterfactuals using heuristic approach
+        counterfactuals = self.generate_candidates(
+            sample,
+            target_class,
+            original_class=sample_class,
+            num_best_results=num_best_results,
+        )
+
+        return counterfactuals
+
+    def find_nearest_counterfactual(
+        self,
+        sample,
+        target_class,
+        X_train=None,
+        y_train=None,
+        metric="euclidean",
+        validate_prediction=True,
+    ):
+        """
+        Delegate to SampleGenerator for nearest counterfactual search.
+        """
+        return self.sample_generator.find_nearest_counterfactual(
+            sample, target_class, X_train, y_train, metric, validate_prediction
+        )

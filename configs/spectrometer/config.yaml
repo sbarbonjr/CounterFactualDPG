@@ -1,0 +1,16 @@
+data:
+  dataset: spectrometer
+  dataset_path: configs/spectrometer/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - spectrometer
+  name: spectrometer
+model:
+  type: RandomForestClassifier
+  n_estimators: 20
+  min_samples_split: 5
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 7
+  criterion: entropy

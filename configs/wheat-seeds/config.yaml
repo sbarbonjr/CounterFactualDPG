@@ -1,0 +1,14 @@
+data:
+  dataset: wheat-seeds
+  dataset_path: configs/wheat-seeds/dataset.csv
+  target_column: Type
+experiment:
+  tags:
+  - wheat-seeds
+  name: wheat-seeds
+model:
+  type: RandomForestClassifier
+  n_estimators: 2
+  min_impurity_decrease: 0.08
+  max_features: 0.3
+  max_depth: 7

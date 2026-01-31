@@ -1,0 +1,20 @@
+data:
+  dataset: healthcare_dataset
+  dataset_path: configs/healthcare_dataset/dataset.csv
+  target_column: HighRisk
+  categorical_features:
+  - Exercise
+experiment:
+  tags:
+  - healthcare_dataset
+  name: healthcare_dataset
+methods:
+  _default:
+    actionability:
+      Age: non_decreasing
+model:
+  type: RandomForestClassifier
+  n_estimators: 4
+  min_impurity_decrease: 0.01
+  max_features: null
+  max_depth: 6

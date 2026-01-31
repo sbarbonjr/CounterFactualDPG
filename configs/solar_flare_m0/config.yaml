@@ -1,0 +1,16 @@
+data:
+  dataset: solar_flare_m0
+  dataset_path: configs/solar_flare_m0/dataset.csv
+  target_column: target
+experiment:
+  tags:
+  - solar_flare_m0
+  name: solar_flare_m0
+model:
+  type: RandomForestClassifier
+  n_estimators: 5
+  min_samples_split: 7
+  min_impurity_decrease: 0.1
+  max_features: 0.3
+  max_depth: 3
+  criterion: entropy
