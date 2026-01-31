@@ -866,7 +866,7 @@ def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
                 output_path = os.path.join(dataset_viz_dir, 'heatmap_techniques.png')
                 fig.savefig(output_path, dpi=150, bbox_inches='tight')
                 plt.close(fig)
-                print(f"  ✓ {dataset}: Exported heatmap_techniques (from local data)")
+                print(f"  ✓ {dataset}: Exported heatmap_techniques (from local data) and with restrictions: {restrictions is not None}")
                 return True
             
             return False
