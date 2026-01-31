@@ -1,0 +1,51 @@
+data:
+  dataset: bank_marketing
+  dataset_path: configs/bank_marketing/bank-additional-full.csv
+  target_column: y
+  separator: ";"
+  categorical_features:
+  - job
+  - marital
+  - education
+  - default
+  - housing
+  - loan
+  - contact
+  - month
+  - day_of_week
+  - poutcome
+experiment:
+  tags:
+  - bank_marketing
+  name: bank_marketing
+methods:
+  _default:
+    actionability:
+      age: non_decreasing
+      job: actionable
+      marital: actionable
+      education: actionable
+      default: no_change
+      housing: actionable
+      loan: actionable
+      contact: actionable
+      month: actionable
+      day_of_week: actionable
+      duration: non_decreasing
+      campaign: non_decreasing
+      pdays: non_decreasing
+      previous: non_decreasing
+      poutcome: actionable
+      emp.var.rate: actionable
+      cons.price.idx: actionable
+      cons.conf.idx: actionable
+      euribor3m: actionable
+      nr.employed: actionable
+model:
+  type: RandomForestClassifier
+  n_estimators: 15
+  min_samples_split: 10
+  min_impurity_decrease: 0.01
+  max_features: 0.4
+  max_depth: 6
+  criterion: entropy

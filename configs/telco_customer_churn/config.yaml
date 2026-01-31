@@ -1,0 +1,56 @@
+data:
+  dataset: telco_customer_churn
+  dataset_path: configs/telco_customer_churn/WA_Fn-UseC_-Telco-Customer-Churn.csv
+  target_column: Churn
+  categorical_features:
+  - gender
+  - SeniorCitizen
+  - Partner
+  - Dependents
+  - PhoneService
+  - MultipleLines
+  - InternetService
+  - OnlineSecurity
+  - OnlineBackup
+  - DeviceProtection
+  - TechSupport
+  - StreamingTV
+  - StreamingMovies
+  - Contract
+  - PaperlessBilling
+  - PaymentMethod
+experiment:
+  tags:
+  - telco_customer_churn
+  name: telco_customer_churn
+methods:
+  _default:
+    actionability:
+      customerID: no_change
+      gender: no_change
+      SeniorCitizen: no_change
+      Partner: actionable
+      Dependents: actionable
+      tenure: non_decreasing
+      PhoneService: actionable
+      MultipleLines: actionable
+      InternetService: actionable
+      OnlineSecurity: actionable
+      OnlineBackup: actionable
+      DeviceProtection: actionable
+      TechSupport: actionable
+      StreamingTV: actionable
+      StreamingMovies: actionable
+      Contract: actionable
+      PaperlessBilling: actionable
+      PaymentMethod: actionable
+      MonthlyCharges: actionable
+      TotalCharges: actionable
+model:
+  type: RandomForestClassifier
+  n_estimators: 15
+  min_samples_split: 10
+  min_impurity_decrease: 0.01
+  max_features: 0.3
+  max_depth: 6
+  criterion: gini

@@ -1,0 +1,37 @@
+data:
+  dataset: healthcare_dataset_stroke
+  dataset_path: configs/healthcare_dataset_stroke/healthcare-dataset-stroke-data.csv
+  target_column: stroke
+  categorical_features:
+  - gender
+  - hypertension
+  - heart_disease
+  - ever_married
+  - work_type
+  - Residence_type
+  - smoking_status
+experiment:
+  tags:
+  - healthcare_dataset_stroke
+  name: healthcare_dataset_stroke
+methods:
+  _default:
+    actionability:
+      age: non_decreasing
+      gender: no_change
+      hypertension: no_change
+      heart_disease: no_change
+      ever_married: no_change
+      work_type: actionable
+      Residence_type: actionable
+      avg_glucose_level: actionable
+      bmi: actionable
+      smoking_status: actionable
+model:
+  type: RandomForestClassifier
+  n_estimators: 12
+  min_samples_split: 10
+  min_impurity_decrease: 0.0
+  max_features: 0.3
+  max_depth: 6
+  criterion: entropy

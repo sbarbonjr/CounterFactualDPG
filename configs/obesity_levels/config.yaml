@@ -1,0 +1,44 @@
+data:
+  dataset: obesity_levels
+  dataset_path: configs/obesity_levels/ObesityDataSet_raw_and_data_sinthetic.csv
+  target_column: NObeyesdad
+  categorical_features:
+  - Gender
+  - CALC
+  - FAVC
+  - SCC
+  - SMOKE
+  - family_history_with_overweight
+  - CAEC
+  - MTRANS
+experiment:
+  tags:
+  - obesity_levels
+  name: obesity_levels
+methods:
+  _default:
+    actionability:
+      Age: non_decreasing
+      Gender: no_change
+      Height: no_change
+      Weight: actionable
+      CALC: actionable
+      FAVC: actionable
+      FCVC: actionable
+      NCP: actionable
+      SCC: actionable
+      SMOKE: actionable
+      CH2O: actionable
+      family_history_with_overweight: no_change
+      FAF: actionable
+      TUE: actionable
+      CAEC: actionable
+      MTRANS: actionable
+model:
+  type: RandomForestClassifier
+  n_estimators: 15
+  min_samples_split: 8
+  min_impurity_decrease: 0.01
+  max_features: 0.4
+  max_depth: 7
+  criterion: entropy
