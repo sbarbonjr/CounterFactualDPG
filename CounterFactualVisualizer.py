@@ -1177,9 +1177,9 @@ def plot_pca_with_counterfactuals_comparison(
     # Determine original sample class for consistent styling
     original_class = model.predict(pd.DataFrame([sample]))[0]
 
-    lower_opacity=0.5
-    size=80
-    linewidth=1.5
+    lower_opacity=0.8
+    size=75
+    linewidth=2
 
     # Plot dataset points by class
     for class_value in np.unique(target):
@@ -1187,7 +1187,7 @@ def plot_pca_with_counterfactuals_comparison(
             iris_pca[target == class_value, 0],
             iris_pca[target == class_value, 1],
             label=f"Class {class_value}",
-            color=mcolors.to_rgba(colors[class_value % len(colors)], 0.2),
+            color=mcolors.to_rgba(colors[class_value % len(colors)], 0.4),
             edgecolor=mcolors.to_rgba(colors[class_value % len(colors)], 0.1),
         )
     # Plot original sample with edge matching its class color
@@ -1210,7 +1210,7 @@ def plot_pca_with_counterfactuals_comparison(
         plt.scatter(
             counterfactuals_pca_1[idx, 0], counterfactuals_pca_1[idx, 1],
             color=mcolors.to_rgba(class_color, lower_opacity), 
-            marker='o', 
+            marker='v', 
             s=size,
             edgecolor=method_1_color,
             linewidths=linewidth, 
@@ -1223,7 +1223,7 @@ def plot_pca_with_counterfactuals_comparison(
         plt.scatter(
             counterfactuals_pca_2[idx, 0], counterfactuals_pca_2[idx, 1],
             color=mcolors.to_rgba(class_color, lower_opacity), 
-            marker='o', 
+            marker='s', 
             s=size,
             edgecolor=method_2_color,
             linewidths=linewidth, 
@@ -1246,7 +1246,7 @@ def plot_pca_with_counterfactuals_comparison(
                markeredgewidth=linewidth, 
                label='Original Sample'),
         Line2D([0], [0], 
-               marker='o', 
+               marker='v', 
                color='w', 
                markerfacecolor=(0, 0, 0, 0), 
                markersize=10,
@@ -1254,7 +1254,7 @@ def plot_pca_with_counterfactuals_comparison(
                markeredgewidth=linewidth, 
                label=f'{method_1_name} CFs'),
         Line2D([0], [0], 
-               marker='o', 
+               marker='s', 
                color='w', 
                markerfacecolor=(0, 0, 0, 0), 
                markersize=10,
@@ -1266,7 +1266,7 @@ def plot_pca_with_counterfactuals_comparison(
                color='w', 
                markerfacecolor=mcolors.to_rgba(colors[0], 0.5),
                markersize=10,
-               markeredgecolor=colors[0], 
+               markeredgecolor=(0, 0, 0, 0), 
                markeredgewidth=linewidth, 
                label='Class 0'),
         Line2D([0], [0], 
@@ -1274,7 +1274,7 @@ def plot_pca_with_counterfactuals_comparison(
                color='w', 
                markerfacecolor=mcolors.to_rgba(colors[1], 0.5),
                markersize=10,
-               markeredgecolor=colors[1], 
+               markeredgecolor=(0, 0, 0, 0), 
                markeredgewidth=linewidth, 
                label='Class 1')
     ]
