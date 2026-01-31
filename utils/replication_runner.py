@@ -97,6 +97,8 @@ def run_counterfactual_generation_dpg(args):
             # Population size calculation: overgeneration_factor * requested_counterfactuals
             overgeneration_factor=overgeneration_factor,
             requested_counterfactuals=requested_counterfactuals,
+            # Diversity selection parameter (higher = more diverse CF selection)
+            diversity_lambda=getattr(config.counterfactual, 'diversity_lambda', 0.5),
         )
         
         counterfactuals = cf_model.generate_counterfactual(

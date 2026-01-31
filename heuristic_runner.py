@@ -99,6 +99,7 @@ class HeuristicRunner:
         feature_names=None,
         verbose=False,
         min_probability_margin=0.001,
+        diversity_lambda=0.5,
     ):
         """
         Initialize the heuristic runner.
@@ -112,6 +113,9 @@ class HeuristicRunner:
             verbose (bool): Whether to print progress messages.
             min_probability_margin (float): Minimum probability difference between
                 target class and second-best class for valid counterfactuals.
+            diversity_lambda (float): Weight for diversity vs proximity trade-off (0-1).
+                Higher values prioritize diversity, lower values prioritize fitness/proximity.
+                Default 0.5 for balanced selection.
         """
         self.model = model
         self.constraints = constraints
@@ -119,6 +123,7 @@ class HeuristicRunner:
         self.feature_names = feature_names
         self.verbose = verbose
         self.min_probability_margin = min_probability_margin
+        self.diversity_lambda = diversity_lambda
 
         # Tracking attributes
         self.best_fitness_list = []
@@ -404,52 +409,57 @@ class HeuristicRunner:
                 # Handle None target_extreme - fallback to base value perturbation
                 if target_extreme is None:
                     # No valid target extreme, just perturb around base
-                    perturbation = np.random.uniform(-0.1, 0.1) * feature_range
+                    perturbation = np.random.uniform(-0.25, 0.25) * feature_range
                     perturbed[feature] = base_val + perturbation
-                elif t < 0.2:
-                    # Tier 1 (20%): Near base CF - small perturbations for proximity
-                    perturbation = np.random.uniform(-0.15, 0.15) * feature_range
+                elif t < 0.15:
+                    # Tier 1 (15%): Near base CF - small perturbations for proximity
+                    perturbation = np.random.uniform(-0.2, 0.2) * feature_range
                     perturbed[feature] = base_val + perturbation
-                elif t < 0.5:
-                    # Tier 2 (30%): Medium exploration around base
-                    perturbation_scale = 0.2 + (t - 0.2) * 0.6  # 0.2 to 0.38
+                elif t < 0.4:
+                    # Tier 2 (25%): Medium exploration around base - INCREASED ranges
+                    perturbation_scale = 0.3 + (t - 0.15) * 0.8  # 0.3 to 0.5
                     if escape_dir == "increase":
-                        perturbation = np.random.uniform(-0.1 * feature_range, perturbation_scale * feature_range)
+                        perturbation = np.random.uniform(-0.15 * feature_range, perturbation_scale * feature_range)
                     elif escape_dir == "decrease":
-                        perturbation = np.random.uniform(-perturbation_scale * feature_range, 0.1 * feature_range)
+                        perturbation = np.random.uniform(-perturbation_scale * feature_range, 0.15 * feature_range)
                     else:
                         perturbation = np.random.uniform(-perturbation_scale * feature_range / 2, 
                                                           perturbation_scale * feature_range / 2)
                     perturbed[feature] = base_val + perturbation
                 else:
-                    # Tier 3-4 (50%): ASYMMETRIC exploration for diversity
+                    # Tier 3-4 (60%): WIDE exploration for diversity - SIGNIFICANTLY INCREASED
                     # Create feature-wise variation: randomly decide if this feature pushes toward
                     # extreme or stays conservative. This creates diverse combinations.
                     # Use individual index + feature index for deterministic but varied patterns
                     feature_idx = list(feature_names).index(feature) if feature in feature_names else 0
-                    pattern = (individual + feature_idx) % 4
+                    pattern = (individual + feature_idx) % 5  # 5 patterns for more variety
                     
                     if pattern == 0:
-                        # Push toward extreme (max for increase, min for decrease)
-                        push_factor = 0.6 + np.random.uniform(0, 0.4)  # 0.6 to 1.0 toward extreme
+                        # Push strongly toward extreme (max for increase, min for decrease)
+                        push_factor = 0.7 + np.random.uniform(0, 0.3)  # 0.7 to 1.0 toward extreme
                         perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
                     elif pattern == 1:
-                        # Stay near base with small perturbation
-                        perturbed[feature] = base_val + np.random.uniform(-0.1, 0.1) * feature_range
+                        # Medium-high push toward extreme
+                        push_factor = 0.5 + np.random.uniform(0, 0.3)  # 0.5 to 0.8 toward extreme
+                        perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
                     elif pattern == 2:
                         # Medium push
-                        push_factor = 0.3 + np.random.uniform(0, 0.3)  # 0.3 to 0.6 toward extreme
+                        push_factor = 0.25 + np.random.uniform(0, 0.35)  # 0.25 to 0.6 toward extreme
                         perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
+                    elif pattern == 3:
+                        # Moderate perturbation around base
+                        perturbed[feature] = base_val + np.random.uniform(-0.25, 0.25) * feature_range
                     else:
-                        # Counter-direction (small) if escape is "both", else stay near base
+                        # Counter-direction exploration if escape is "both", else medium push
                         if escape_dir == "both":
                             counter_extreme = feature_min if target_extreme == feature_max else feature_max
                             if counter_extreme is not None:
-                                perturbed[feature] = base_val + np.random.uniform(0, 0.2) * (counter_extreme - base_val)
+                                perturbed[feature] = base_val + np.random.uniform(0.1, 0.4) * (counter_extreme - base_val)
                             else:
-                                perturbed[feature] = base_val + np.random.uniform(-0.15, 0.15) * feature_range
+                                perturbed[feature] = base_val + np.random.uniform(-0.3, 0.3) * feature_range
                         else:
-                            perturbed[feature] = base_val + np.random.uniform(-0.1, 0.1) * feature_range
+                            push_factor = 0.3 + np.random.uniform(0, 0.4)  # 0.3 to 0.7 toward extreme
+                            perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
                 
                 # Clip to bounds
                 if feature_min is not None:
@@ -499,9 +509,9 @@ class HeuristicRunner:
         feature_names = list(sample.keys())
         original_features = self._original_features
         
-        # Tunable parameter for diversity vs proximity
-        # Lower values prioritize proximity (distance minimization) over diversity
-        diversity_lambda = 0.9
+        # Use instance-level diversity_lambda (configurable)
+        # Higher values prioritize diversity, lower values prioritize fitness/proximity
+        diversity_lambda = self.diversity_lambda
         
         if self.verbose:
             print("\n=== CF Selection (Fitness -> Diverse Selection) ===")
@@ -657,15 +667,21 @@ class HeuristicRunner:
                 # Diversity: higher is better (normalize to 0-1)
                 normalized_diversity = min(min_dist_to_selected / max_diversity, 1.0)
                 
+                # DIVERSITY AMPLIFICATION: Use sqrt to amplify small diversity differences
+                # This makes the diversity term more impactful when candidates are similar
+                # sqrt(0.1) = 0.316, sqrt(0.5) = 0.707, sqrt(1.0) = 1.0
+                # This spreads out small values more, giving diversity more influence
+                amplified_diversity = np.sqrt(normalized_diversity)
+                
                 # Fitness: lower is better, so normalize and invert (0=best, 1=worst)
                 if fitness_range > 0:
                     normalized_fitness = (cand['fitness'] - fitness_min) / fitness_range
                 else:
                     normalized_fitness = 0.0
                 
-                # MMR-style score: high diversity (normalized), low fitness (normalized)
-                # Both terms now in [0, 1] range
-                score = diversity_lambda * normalized_diversity - (1 - diversity_lambda) * normalized_fitness
+                # MMR-style score: high diversity (amplified), low fitness (normalized)
+                # Both terms now in [0, 1] range, diversity amplified for more impact
+                score = diversity_lambda * amplified_diversity - (1 - diversity_lambda) * normalized_fitness
                 
                 if score > best_score:
                     best_score = score

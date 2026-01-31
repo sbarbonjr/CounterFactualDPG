@@ -30,6 +30,7 @@ class CounterFactualModel:
         min_probability_margin=0.001,
         overgeneration_factor=20,
         requested_counterfactuals=5,
+        diversity_lambda=0.5,
     ):
         """
         Initialize the CounterFactualDPG object.
@@ -63,6 +64,10 @@ class CounterFactualModel:
             requested_counterfactuals (int): Number of counterfactuals to generate. Used with
                 overgeneration_factor to calculate population_size internally.
                 Default 5.
+            diversity_lambda (float): Weight for diversity vs proximity trade-off in CF selection (0-1).
+                Higher values (e.g., 0.7-0.9) prioritize selecting diverse counterfactuals.
+                Lower values (e.g., 0.1-0.3) prioritize selecting the best-fitness/closest counterfactuals.
+                Default 0.5 for balanced selection.
         """
         self.model = model
         self.constraints = constraints
@@ -137,6 +142,7 @@ class CounterFactualModel:
             feature_names=self.feature_names,
             verbose=verbose,
             min_probability_margin=min_probability_margin,
+            diversity_lambda=diversity_lambda,
         )
         # Minimum probability margin for accepting counterfactuals
         self.min_probability_margin = min_probability_margin
