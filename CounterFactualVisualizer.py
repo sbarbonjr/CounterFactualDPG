@@ -427,7 +427,6 @@ def plot_fitness(cf_model, figsize=(10, 6), title='Fitness Over Generations'):
     plt.close(fig)
     return fig
 
-
 def plot_fitness_std(cf_model, figsize=(10, 6), title='Fitness Standard Deviation Over Generations'):
     """
     Plot fitness standard deviation curve using stored fitness history on a model instance.
@@ -484,7 +483,6 @@ def plot_fitness_std(cf_model, figsize=(10, 6), title='Fitness Standard Deviatio
     plt.tight_layout()
     plt.close(fig)
     return fig
-
 
 def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterfactual, constraints=None, class_colors_list=None, generation=None):
     """
@@ -836,7 +834,6 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
     plt.close(fig)
     return fig
 
-
 def plot_pairwise_with_counterfactual(model, dataset, target, sample, counterfactual):
     """
     Plot a Seaborn pairplot of the dataset, highlighting the original sample and counterfactual.
@@ -874,7 +871,6 @@ def plot_pairwise_with_counterfactual(model, dataset, target, sample, counterfac
     return(plt)    
 
     #plt.show()
-
 
 def plot_sample_and_counterfactual_heatmap(sample, class_sample, counterfactual, class_counterfactual, restrictions, is_valid=True):
     """
@@ -956,7 +952,6 @@ def plot_sample_and_counterfactual_heatmap(sample, class_sample, counterfactual,
 #class_counterfactual = model.predict(pd.DataFrame([counterfactual]))[0]
 #restrictions = {'petal width (cm)': 'non_decreasing', 'petal length (cm)': 'non_increasing', 'sepal length (cm)': 'non_increasing', 'sepal width (cm)': 'no_change'}
 #plot_sample_and_counterfactual_heatmap(sample, class_sample,  counterfactual, class_counterfactual, restrictions)
-
 
 def plot_pairwise_with_counterfactual_df(model, dataset, target, sample, counterfactual_df):
     """
@@ -1117,7 +1112,6 @@ def plot_pca_with_counterfactuals_clean(model, dataset, target, sample, counterf
     plt.legend(handles=legend_elements, loc='best')
     plt.close(fig)
     return fig
-
 
 def plot_pca_with_counterfactuals_comparison(
     model, dataset, target, sample,
@@ -1283,7 +1277,6 @@ def plot_pca_with_counterfactuals_comparison(
     plt.legend(handles=legend_elements, loc='best')
     plt.close(fig)
     return fig
-
 
 def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactuals_df, cf_predicted_classes, evolution_histories=None, cf_generations_found=None):
     """
