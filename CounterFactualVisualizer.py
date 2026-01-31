@@ -1265,7 +1265,23 @@ def plot_pca_with_counterfactuals_comparison(
                markersize=10,
                markeredgecolor=method_2_color, 
                markeredgewidth=1.5, 
-               label=f'{method_2_name} CFs')
+               label=f'{method_2_name} CFs'),
+        Line2D([0], [0], 
+               marker='o', 
+               color='w', 
+               markerfacecolor=colors[0], 
+               markersize=10,
+               markeredgecolor=colors[0], 
+               markeredgewidth=1.5, 
+               label='Class 0'),
+        Line2D([0], [0], 
+               marker='o', 
+               color='w', 
+               markerfacecolor=colors[1], 
+               markersize=10,
+               markeredgecolor=colors[1], 
+               markeredgewidth=1.5, 
+               label='Class 1')
     ]
     plt.legend(handles=legend_elements, loc='best')
     plt.close(fig)
