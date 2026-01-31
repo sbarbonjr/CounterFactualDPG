@@ -1119,6 +1119,9 @@ def export_pca_comparison(raw_df, dataset, dataset_viz_dir):
             # Predict classes for counterfactuals
             dpg_cf_classes = model.predict(dpg_cfs_df)
             dice_cf_classes = model.predict(dice_cfs_df)
+
+            print(f"  → {dataset}: Creating PCA comparison plot from cached local data...")
+            print(f"     predictions: DPG CF classes: {dpg_cf_classes}, DiCE CF classes: {dice_cf_classes}")
             
             # Create PCA comparison plot
             fig = plot_pca_with_counterfactuals_comparison(
