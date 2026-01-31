@@ -1124,6 +1124,137 @@ def plot_pca_with_counterfactuals_clean(model, dataset, target, sample, counterf
     return fig
 
 
+def plot_pca_with_counterfactuals_comparison(
+    model, dataset, target, sample,
+    counterfactuals_df_1, cf_predicted_classes_1,
+    counterfactuals_df_2, cf_predicted_classes_2,
+    method_1_name='Method 1', method_2_name='Method 2',
+    method_1_color='red', method_2_color='blue'
+):
+    """
+    Plot a PCA visualization comparing counterfactuals from two different methods.
+    
+    Args:
+        model: Trained model for predictions
+        dataset: Full dataset for PCA
+        target: Target labels
+        sample: Original sample dict
+        counterfactuals_df_1: DataFrame of counterfactuals from method 1
+        cf_predicted_classes_1: Pre-computed predicted classes for method 1 counterfactuals
+        counterfactuals_df_2: DataFrame of counterfactuals from method 2
+        cf_predicted_classes_2: Pre-computed predicted classes for method 2 counterfactuals
+        method_1_name: Display name for method 1 (default: 'Method 1')
+        method_2_name: Display name for method 2 (default: 'Method 2')
+        method_1_color: Color for method 1 X markers (default: 'red')
+        method_2_color: Color for method 2 X markers (default: 'blue')
+    
+    Returns:
+        matplotlib.figure.Figure: The generated figure
+    """
+    # Standardize the dataset
+    scaler = StandardScaler()
+    dataset_scaled = scaler.fit_transform(dataset.select_dtypes(include=[np.number]))
+
+    # Perform PCA on the scaled dataset
+    pca = PCA(n_components=2)
+    iris_pca = pca.fit_transform(dataset_scaled)
+
+    # Ensure the sample is formatted as numeric DataFrame
+    sample_df = pd.DataFrame([sample]).select_dtypes(include=[np.number])
+    sample_df_scaled = scaler.transform(sample_df)
+    
+    # Transform original sample using PCA
+    original_sample_pca = pca.transform(sample_df_scaled)
+    
+    # Process counterfactuals from method 1
+    if not isinstance(counterfactuals_df_1, pd.DataFrame):
+        raise ValueError("counterfactuals_df_1 must be a pandas DataFrame")
+    numeric_cf_df_1 = counterfactuals_df_1.select_dtypes(include=[np.number])
+    numeric_cf_df_1_scaled = scaler.transform(numeric_cf_df_1)
+    counterfactuals_pca_1 = pca.transform(numeric_cf_df_1_scaled)
+    
+    # Process counterfactuals from method 2
+    if not isinstance(counterfactuals_df_2, pd.DataFrame):
+        raise ValueError("counterfactuals_df_2 must be a pandas DataFrame")
+    numeric_cf_df_2 = counterfactuals_df_2.select_dtypes(include=[np.number])
+    numeric_cf_df_2_scaled = scaler.transform(numeric_cf_df_2)
+    counterfactuals_pca_2 = pca.transform(numeric_cf_df_2_scaled)
+
+    # Plot the PCA results
+    fig = plt.figure(figsize=(10, 6))
+    colors = ['purple', 'green', 'orange']
+    
+    # Determine original sample class for consistent styling
+    original_class = model.predict(pd.DataFrame([sample]))[0]
+
+    # Plot dataset points by class
+    for class_value in np.unique(target):
+        plt.scatter(
+            iris_pca[target == class_value, 0],
+            iris_pca[target == class_value, 1],
+            label=f"Class {class_value}",
+            color=colors[class_value % len(colors)],
+            alpha=0.5
+        )
+
+    # Plot original sample
+    plt.scatter(
+        original_sample_pca[:, 0], original_sample_pca[:, 1],
+        color=colors[original_class % len(colors)], label='Original Sample',
+        edgecolor='black', linewidths=2.5, s=150, zorder=10
+    )
+    
+    # Plot counterfactuals from method 1 with circle outline and colored X
+    for idx, cf_class in enumerate(cf_predicted_classes_1):
+        cf_color = colors[cf_class % len(colors)]
+        # Plot circle outline
+        plt.scatter(
+            counterfactuals_pca_1[idx, 0], counterfactuals_pca_1[idx, 1],
+            facecolors='none', edgecolors=cf_color, marker='o', s=200,
+            linewidths=2.5, alpha=1.0, zorder=7
+        )
+        # Plot colored X marker inside the circle
+        plt.scatter(
+            counterfactuals_pca_1[idx, 0], counterfactuals_pca_1[idx, 1],
+            color=method_1_color, marker='x', s=100,
+            linewidths=2.5, zorder=8
+        )
+    
+    # Plot counterfactuals from method 2 with circle outline and colored X
+    for idx, cf_class in enumerate(cf_predicted_classes_2):
+        cf_color = colors[cf_class % len(colors)]
+        # Plot circle outline
+        plt.scatter(
+            counterfactuals_pca_2[idx, 0], counterfactuals_pca_2[idx, 1],
+            facecolors='none', edgecolors=cf_color, marker='o', s=200,
+            linewidths=2.5, alpha=1.0, zorder=7
+        )
+        # Plot colored X marker inside the circle
+        plt.scatter(
+            counterfactuals_pca_2[idx, 0], counterfactuals_pca_2[idx, 1],
+            color=method_2_color, marker='x', s=100,
+            linewidths=2.5, zorder=8
+        )
+
+    plt.xlabel('PCA Component 1')
+    plt.ylabel('PCA Component 2')
+    plt.title(f'PCA Comparison: {method_1_name} vs {method_2_name}')
+    
+    # Create custom legend
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor=colors[original_class % len(colors)], markersize=10, 
+               markeredgecolor='black', markeredgewidth=1.5, label='Original Sample'),
+        Line2D([0], [0], marker='X', color='w', markerfacecolor=method_1_color, markersize=10,
+               markeredgecolor=method_1_color, markeredgewidth=1.5, label=f'{method_1_name} CFs'),
+        Line2D([0], [0], marker='X', color='w', markerfacecolor=method_2_color, markersize=10,
+               markeredgecolor=method_2_color, markeredgewidth=1.5, label=f'{method_2_name} CFs')
+    ]
+    plt.legend(handles=legend_elements, loc='best')
+    plt.close(fig)
+    return fig
+
+
 def plot_pca_with_counterfactuals(model, dataset, target, sample, counterfactuals_df, cf_predicted_classes, evolution_histories=None, cf_generations_found=None):
     """
     Plot a PCA visualization of the dataset with the original sample and multiple counterfactuals from a DataFrame.

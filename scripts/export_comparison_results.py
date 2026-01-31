@@ -18,6 +18,7 @@ Outputs are saved to: outputs/comparison_results/
 - radar_charts.png: Radar charts for datasets
 - visualizations/<dataset>/: Per-dataset visualizations including:
   - heatmap_techniques.png: Heatmap comparing DPG vs DiCE counterfactuals
+  - pca_comparison.png: PCA plot comparing both methods' counterfactuals (requires dataset/model)
   - radar.png: Radar chart for the dataset
   - bar_*.png: Bar charts for each metric
   - WandB visualizations (comparison, pca_clean, heatmap, etc.)
@@ -27,6 +28,7 @@ Outputs are saved to: outputs/comparison_results/
 Usage:
     python scripts/export_comparison_results.py                    # Full export (fetches from WandB)
     python scripts/export_comparison_results.py --local-only         # Regenerate images only from disk
+    python scripts/export_comparison_results.py --ids <yaml_file>  # Fetch specific run IDs from YAML
 """
 
 import sys
@@ -69,7 +71,7 @@ from scripts.compare_techniques import (
     filter_to_latest_run_per_combo,
 )
 
-from CounterFactualVisualizer import heatmap_techniques
+from CounterFactualVisualizer import heatmap_techniques, plot_pca_with_counterfactuals_comparison
 
 # Configuration (matches notebook hardcoded values)
 WANDB_ENTITY = 'mllab-ts-universit-di-trieste'
@@ -929,6 +931,158 @@ def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
         return False
 
 
+def export_pca_comparison(raw_df, dataset, dataset_viz_dir, model=None, full_dataset=None, target=None):
+    """Export PCA comparison plot with counterfactuals from both DPG and DiCE."""
+    
+    # Handle local-only mode by loading from disk
+    if args.local_only:
+        try:
+            dpg_data = _load_local_viz_data(dataset, 'dpg')
+            dice_data = _load_local_viz_data(dataset, 'dice')
+            
+            if not dpg_data or not dice_data:
+                missing = []
+                if not dpg_data:
+                    missing.append('DPG')
+                if not dice_data:
+                    missing.append('DiCE')
+                print(f"  ⚠ {dataset}: Missing local {' and '.join(missing)} data, skipping PCA comparison")
+                return False
+            
+            # Extract sample and counterfactuals from local data
+            dpg_sample = dpg_data.get('original_sample')
+            
+            # Extract counterfactuals from visualizations
+            dpg_cfs = []
+            for viz in dpg_data.get('visualizations', []):
+                for cf_data in viz.get('counterfactuals', []):
+                    cf = cf_data.get('counterfactual')
+                    if cf:
+                        dpg_cfs.append(cf)
+            
+            dice_cfs = []
+            for viz in dice_data.get('visualizations', []):
+                for cf_data in viz.get('counterfactuals', []):
+                    cf = cf_data.get('counterfactual')
+                    if cf:
+                        dice_cfs.append(cf)
+            
+            if not dpg_sample or not dpg_cfs or not dice_cfs:
+                print(f"  ⚠ {dataset}: Missing local data - sample: {bool(dpg_sample)}, dpg_cfs: {len(dpg_cfs)}, dice_cfs: {len(dice_cfs)}")
+                return False
+            
+            # Need model, dataset, and target for PCA
+            # These would need to be loaded from local files
+            print(f"  ⚠ {dataset}: PCA comparison requires model and dataset (not available in local-only mode)")
+            return False
+            
+        except Exception as e:
+            print(f"  ⚠ {dataset}: Error loading local data for PCA comparison: {e}")
+            return False
+    
+    # WandB mode
+    try:
+        dataset_runs = raw_df[raw_df['dataset'] == dataset]
+        
+        dpg_run = dataset_runs[dataset_runs['technique'] == 'dpg'].iloc[0] if len(dataset_runs[dataset_runs['technique'] == 'dpg']) > 0 else None
+        dice_run = dataset_runs[dataset_runs['technique'] == 'dice'].iloc[0] if len(dataset_runs[dataset_runs['technique'] == 'dice']) > 0 else None
+        
+        if dpg_run is None or dice_run is None:
+            print(f"  ⚠ {dataset}: Missing DPG or DiCE run data, skipping PCA comparison")
+            return False
+        
+        api = wandb.Api(timeout=60)
+        dpg_run_obj = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{dpg_run['run_id']}")
+        dice_run_obj = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{dice_run['run_id']}")
+        
+        # Fetch feature names (needed to convert lists to dicts)
+        feature_names = dpg_run_obj.config.get('feature_names', [])
+        
+        # Fetch sample
+        dpg_sample = dpg_run_obj.config.get('sample')
+        if not dpg_sample:
+            dpg_sample = dpg_run_obj.summary.get('sample')
+        if not dpg_sample:
+            dpg_sample = dpg_run_obj.summary.get('original_sample')
+        
+        # Get counterfactuals from both runs
+        dpg_cfs = dpg_run_obj.summary.get('final_counterfactuals', [])
+        if isinstance(dpg_cfs, str):
+            try:
+                dpg_cfs = json.loads(dpg_cfs)
+            except:
+                dpg_cfs = []
+        
+        dice_cfs = dice_run_obj.summary.get('final_counterfactuals', [])
+        if isinstance(dice_cfs, str):
+            try:
+                dice_cfs = json.loads(dice_cfs)
+            except:
+                dice_cfs = []
+        
+        # Convert list format to dict format if needed
+        if feature_names:
+            # Convert sample from list to dict
+            if isinstance(dpg_sample, list):
+                dpg_sample = dict(zip(feature_names, dpg_sample))
+            
+            # Convert counterfactuals from list of lists to list of dicts
+            if dpg_cfs and isinstance(dpg_cfs[0], list):
+                dpg_cfs = [dict(zip(feature_names, cf)) for cf in dpg_cfs]
+            if dice_cfs and isinstance(dice_cfs[0], list):
+                dice_cfs = [dict(zip(feature_names, cf)) for cf in dice_cfs]
+        
+        if not dpg_sample or not dpg_cfs or not dice_cfs:
+            print(f"  ⚠ {dataset}: Missing required data - sample: {bool(dpg_sample)}, dpg_cfs: {len(dpg_cfs) if dpg_cfs else 0}, dice_cfs: {len(dice_cfs) if dice_cfs else 0}")
+            return False
+        
+        # For PCA we need the full dataset, target, and model
+        # These need to be loaded from the dataset files
+        # Since we don't have easy access to these in the export script,
+        # we'll skip PCA comparison for now unless model/dataset are provided
+        if model is None or full_dataset is None or target is None:
+            print(f"  ⚠ {dataset}: PCA comparison requires model, dataset, and target (not provided)")
+            return False
+        
+        # Convert counterfactuals to DataFrames
+        dpg_cfs_df = pd.DataFrame(dpg_cfs[:5])  # Limit to first 5
+        dice_cfs_df = pd.DataFrame(dice_cfs[:5])
+        
+        # Predict classes for counterfactuals
+        dpg_cf_classes = model.predict(dpg_cfs_df)
+        dice_cf_classes = model.predict(dice_cfs_df)
+        
+        # Create PCA comparison plot
+        fig = plot_pca_with_counterfactuals_comparison(
+            model=model,
+            dataset=full_dataset,
+            target=target,
+            sample=dpg_sample,
+            counterfactuals_df_1=dpg_cfs_df,
+            cf_predicted_classes_1=dpg_cf_classes,
+            counterfactuals_df_2=dice_cfs_df,
+            cf_predicted_classes_2=dice_cf_classes,
+            method_1_name='DPG',
+            method_2_name='DiCE',
+            method_1_color='#1f77b4',  # Blue for DPG
+            method_2_color='#ff7f0e'   # Orange for DiCE
+        )
+        
+        if fig:
+            output_path = os.path.join(dataset_viz_dir, 'pca_comparison.png')
+            fig.savefig(output_path, dpi=150, bbox_inches='tight')
+            plt.close(fig)
+            print(f"  ✓ {dataset}: Exported PCA comparison")
+            return True
+        else:
+            print(f"  ⚠ {dataset}: Could not create PCA comparison")
+            return False
+            
+    except Exception as e:
+        print(f"  ⚠ {dataset}: Error exporting PCA comparison: {e}")
+        return False
+
+
 def export_winner_heatmap_csv(comparison_df, metrics_to_include=None, filename_suffix=''):
     """Export winner heatmap data to CSV.
     
@@ -1054,6 +1208,10 @@ def export_dataset_visualizations(comparison_df, raw_df):
         
         # Export heatmap comparing DPG vs DiCE counterfactuals
         export_heatmap_techniques(raw_df, dataset, dataset_viz_dir)
+        
+        # Export PCA comparison (requires model/dataset - currently skipped)
+        # To enable, would need to load dataset and model first
+        # export_pca_comparison(raw_df, dataset, dataset_viz_dir)
         
         # Fetch WandB visualizations (comparison, pca_clean, heatmap)
         wandb_viz = fetch_wandb_visualizations(raw_df, dataset, dataset_viz_dir)
