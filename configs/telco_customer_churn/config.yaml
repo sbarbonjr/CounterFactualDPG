@@ -1,4 +1,3 @@
-# Kaggle dataset: https://www.kaggle.com/blastchar/telco-customer-churn
 data:
   dataset: telco_customer_churn
   dataset_path: configs/telco_customer_churn/dataset.csv
@@ -49,9 +48,7 @@ methods:
       TotalCharges: actionable
 model:
   type: RandomForestClassifier
-  n_estimators: 15
-  min_samples_split: 10
-  min_impurity_decrease: 0.01
+  n_estimators: 7
+  min_impurity_decrease: 0.0
   max_features: 0.3
-  max_depth: 6
-  criterion: gini
+  max_depth: 4
