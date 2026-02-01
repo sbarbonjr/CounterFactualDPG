@@ -50,3 +50,6 @@ healthcare_dataset_stroke:
 telco_customer_churn:
     dice: 1r3dtya0
     dpg: wxko28pd
+bank_marketing:
+    dice: vro54d27
+    dpg: alpor15p
