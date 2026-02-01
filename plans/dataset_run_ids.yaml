@@ -39,17 +39,17 @@ datasets:
     dice: aers3zg7
     dpg: xmr7fj8q
   obesity_levels:
-      dice: 38ajzw5s
-      dpg: 486q0lwp
+    dice: 38ajzw5s
+    dpg: 486q0lwp
   customer_personality_analysis:
-      dice: 8sbjngf4
-      dpg: jup8n3ip
+    dice: 8sbjngf4
+    dpg: jup8n3ip
   healthcare_dataset_stroke:
-      dice: 3atwqpqb
-      dpg: 0vzcrs5b
+    dice: 3atwqpqb
+    dpg: 0vzcrs5b
   bank_marketing:
-      dice: vro54d27
-      dpg: alpor15p
+    dice: vro54d27
+    dpg: alpor15p
   telco_customer_churn:
-      dice: 1r3dtya0
-      dpg: wxko28pd
+    dice: 1r3dtya0
+    dpg: wxko28pd
