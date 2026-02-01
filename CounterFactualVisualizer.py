@@ -112,7 +112,15 @@ def plot_constraints(constraints, overlapping=False, class_colors=None, class_co
         
         for idx, class_name in enumerate(class_names):
             class_constraints = constraints[class_name]
-            constraint_dict = {c['feature'].replace('_', ' '): c for c in class_constraints}
+            # Handle both formats:
+            # 1. List format: [{'feature': 'Age', 'min': x, 'max': y}, ...]
+            # 2. Dict format: {'Age': {'min': x, 'max': y}, ...}
+            if isinstance(class_constraints, list):
+                constraint_dict = {c['feature'].replace('_', ' '): c for c in class_constraints}
+            elif isinstance(class_constraints, dict):
+                constraint_dict = {k.replace('_', ' '): {'min': v.get('min'), 'max': v.get('max')} for k, v in class_constraints.items()}
+            else:
+                constraint_dict = {}
             
             # Offset each class slightly
             y_offset = (idx - n_classes/2 + 0.5) * bar_height
@@ -193,7 +201,15 @@ def plot_constraints(constraints, overlapping=False, class_colors=None, class_co
             class_constraints = constraints[class_name]
             
             # Create a dictionary for easy lookup
-            constraint_dict = {c['feature'].replace('_', ' '): c for c in class_constraints}
+            # Handle both formats:
+            # 1. List format: [{'feature': 'Age', 'min': x, 'max': y}, ...]
+            # 2. Dict format: {'Age': {'min': x, 'max': y}, ...}
+            if isinstance(class_constraints, list):
+                constraint_dict = {c['feature'].replace('_', ' '): c for c in class_constraints}
+            elif isinstance(class_constraints, dict):
+                constraint_dict = {k.replace('_', ' '): {'min': v.get('min'), 'max': v.get('max')} for k, v in class_constraints.items()}
+            else:
+                constraint_dict = {}
             
             y_positions = np.arange(n_features)
             
@@ -591,7 +607,15 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
                 class_constraints = constraints[class_name]
                 
                 # Create a dictionary for easy lookup by feature name
-                constraint_dict = {c['feature']: c for c in class_constraints}
+                # Handle both formats:
+                # 1. List format: [{'feature': 'Age', 'min': x, 'max': y}, ...]
+                # 2. Dict format: {'Age': {'min': x, 'max': y}, ...}
+                if isinstance(class_constraints, list):
+                    constraint_dict = {c['feature']: c for c in class_constraints}
+                elif isinstance(class_constraints, dict):
+                    constraint_dict = {k: {'min': v.get('min'), 'max': v.get('max')} for k, v in class_constraints.items()}
+                else:
+                    constraint_dict = {}
                 
                 # Determine vertical offset based on class
                 y_offset = -width/2 if class_idx == predicted_class else width/2
@@ -714,7 +738,15 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
             class_name = f'Class {class_idx}'
             if class_name in constraints:
                 class_constraints = constraints[class_name]
-                constraint_dict = {c['feature']: c for c in class_constraints}
+                # Handle both formats:
+                # 1. List format: [{'feature': 'Age', 'min': x, 'max': y}, ...]
+                # 2. Dict format: {'Age': {'min': x, 'max': y}, ...}
+                if isinstance(class_constraints, list):
+                    constraint_dict = {c['feature']: c for c in class_constraints}
+                elif isinstance(class_constraints, dict):
+                    constraint_dict = {k: {'min': v.get('min'), 'max': v.get('max')} for k, v in class_constraints.items()}
+                else:
+                    constraint_dict = {}
                 
                 # Determine vertical offset based on class
                 y_offset = -0.15 if class_idx == predicted_class else 0.15
@@ -937,7 +969,17 @@ def plot_sample_and_counterfactual_comparison_simple(model, sample, sample_df, c
                 class_constraints = constraints[class_name]
                 
                 # Create a dictionary for easy lookup by feature name
-                constraint_dict = {c['feature']: c for c in class_constraints}
+                # Handle both formats:
+                # 1. List format: [{'feature': 'Age', 'min': x, 'max': y}, ...]
+                # 2. Dict format: {'Age': {'min': x, 'max': y}, ...}
+                if isinstance(class_constraints, list):
+                    # List format - convert to dict
+                    constraint_dict = {c['feature']: c for c in class_constraints}
+                elif isinstance(class_constraints, dict):
+                    # Dict format - use directly but normalize structure
+                    constraint_dict = {k: {'min': v.get('min'), 'max': v.get('max')} for k, v in class_constraints.items()}
+                else:
+                    constraint_dict = {}
                 
                 # Determine vertical offset based on class
                 y_offset = -width/2 if class_idx == predicted_class else width/2

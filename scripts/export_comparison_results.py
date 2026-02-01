@@ -1128,6 +1128,7 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
             dpg_cfs = cached_data['dpg_cfs']
             dice_cfs = cached_data['dice_cfs']
             restrictions = cached_data.get('restrictions')
+            constraints = cached_data.get('constraints')
         else:
             # Fallback to local pkl files
             try:
