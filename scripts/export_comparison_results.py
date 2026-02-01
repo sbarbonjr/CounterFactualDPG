@@ -2021,7 +2021,9 @@ def get_dpg_constraints_formatted(dataset_name):
     """Get DPG constraints formatted for LaTeX table display.
     
     Extracts the DPG-learned constraints (min/max bounds per feature per class)
-    from the dpg_constraints_normalized.json file and formats them compactly.
+    from multiple sources and formats them compactly. Tries:
+    1. Local filesystem (outputs/{dataset}_dpg/)
+    2. WandB data cache (if available)
     
     Args:
         dataset_name: Name of the dataset
@@ -2030,37 +2032,39 @@ def get_dpg_constraints_formatted(dataset_name):
         Formatted string for LaTeX table or "None" if no constraints
     """
     try:
-        # Look for dpg_constraints_normalized.json in outputs/{dataset}_dpg/{sample_id}/
+        constraints = None
+        
+        # Try source 1: Local filesystem
         outputs_base = os.path.join(REPO_ROOT, 'outputs')
         dpg_dir = os.path.join(outputs_base, f"{dataset_name}_dpg")
         
-        if not os.path.exists(dpg_dir):
-            return "None"
+        if os.path.exists(dpg_dir):
+            # Find the most recent sample directory (highest number)
+            sample_dirs = []
+            for name in os.listdir(dpg_dir):
+                sample_path = os.path.join(dpg_dir, name)
+                if os.path.isdir(sample_path):
+                    try:
+                        sample_dirs.append((int(name), sample_path))
+                    except ValueError:
+                        continue
+            
+            if sample_dirs:
+                # Get most recent (highest sample ID)
+                sample_dirs.sort(key=lambda x: x[0], reverse=True)
+                _, sample_dir = sample_dirs[0]
+                
+                # Load constraints from JSON
+                constraints_path = os.path.join(sample_dir, 'dpg_constraints_normalized.json')
+                if os.path.exists(constraints_path):
+                    with open(constraints_path, 'r') as f:
+                        constraints = json.load(f)
         
-        # Find the most recent sample directory (highest number)
-        sample_dirs = []
-        for name in os.listdir(dpg_dir):
-            sample_path = os.path.join(dpg_dir, name)
-            if os.path.isdir(sample_path):
-                try:
-                    sample_dirs.append((int(name), sample_path))
-                except ValueError:
-                    continue
-        
-        if not sample_dirs:
-            return "None"
-        
-        # Get most recent (highest sample ID)
-        sample_dirs.sort(key=lambda x: x[0], reverse=True)
-        _, sample_dir = sample_dirs[0]
-        
-        # Load constraints from JSON
-        constraints_path = os.path.join(sample_dir, 'dpg_constraints_normalized.json')
-        if not os.path.exists(constraints_path):
-            return "None"
-        
-        with open(constraints_path, 'r') as f:
-            constraints = json.load(f)
+        # Try source 2: WandB data cache
+        if not constraints and dataset_name in _WANDB_DATA_CACHE:
+            cached_constraints = _WANDB_DATA_CACHE[dataset_name].get('constraints')
+            if cached_constraints:
+                constraints = cached_constraints
         
         if not constraints:
             return "None"
@@ -2136,7 +2140,10 @@ def export_dpg_constraints(comparison_df):
     """Export DPG constraints for all datasets as JSON and CSV files.
     
     Exports the DPG-learned constraints (min/max bounds per feature per class)
-    to individual files per dataset.
+    to individual files per dataset. Tries multiple sources:
+    1. Local filesystem (outputs/{dataset}_dpg/)
+    2. WandB data cache (if available)
+    3. WandB API (if not in local-only mode)
     """
     print("\n" + "="*80)
     print("EXPORTING DPG CONSTRAINTS")
@@ -2156,47 +2163,76 @@ def export_dpg_constraints(comparison_df):
     constraints_not_found = 0
     
     for dataset in datasets:
-        # Look for dpg_constraints_normalized.json in outputs/{dataset}_dpg/{sample_id}/
+        constraints = None
+        source = None
+        
+        # Try source 1: Local filesystem
         outputs_base = os.path.join(REPO_ROOT, 'outputs')
         dpg_dir = os.path.join(outputs_base, f"{dataset}_dpg")
         
-        if not os.path.exists(dpg_dir):
-            print(f"  ✗ {dataset}: No DPG output directory found")
-            constraints_not_found += 1
-            continue
+        if os.path.exists(dpg_dir):
+            # Find the most recent sample directory (highest number)
+            sample_dirs = []
+            for name in os.listdir(dpg_dir):
+                sample_path = os.path.join(dpg_dir, name)
+                if os.path.isdir(sample_path):
+                    try:
+                        sample_dirs.append((int(name), sample_path))
+                    except ValueError:
+                        continue
+            
+            if sample_dirs:
+                # Get most recent (highest sample ID)
+                sample_dirs.sort(key=lambda x: x[0], reverse=True)
+                sample_id, sample_dir = sample_dirs[0]
+                
+                # Load constraints from JSON
+                constraints_path = os.path.join(sample_dir, 'dpg_constraints_normalized.json')
+                if os.path.exists(constraints_path):
+                    try:
+                        with open(constraints_path, 'r') as f:
+                            constraints = json.load(f)
+                        source = f"local filesystem (sample {sample_id})"
+                    except Exception as e:
+                        print(f"  ⚠ {dataset}: Error reading local constraints: {e}")
         
-        # Find the most recent sample directory (highest number)
-        sample_dirs = []
-        for name in os.listdir(dpg_dir):
-            sample_path = os.path.join(dpg_dir, name)
-            if os.path.isdir(sample_path):
-                try:
-                    sample_dirs.append((int(name), sample_path))
-                except ValueError:
-                    continue
+        # Try source 2: WandB data cache
+        if not constraints and dataset in _WANDB_DATA_CACHE:
+            cached_constraints = _WANDB_DATA_CACHE[dataset].get('constraints')
+            if cached_constraints:
+                constraints = cached_constraints
+                source = "WandB cache"
         
-        if not sample_dirs:
-            print(f"  ✗ {dataset}: No sample directories found")
-            constraints_not_found += 1
-            continue
+        # Try source 3: WandB API (if not in local-only mode)
+        if not constraints and not args.local_only:
+            try:
+                # Get DPG run for this dataset
+                dataset_runs = comparison_df[comparison_df['dataset'] == dataset]
+                dpg_runs = dataset_runs[dataset_runs['technique'] == 'dpg']
+                
+                if len(dpg_runs) > 0:
+                    run_id = dpg_runs.iloc[0]['run_id']
+                    api = wandb.Api()
+                    run = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{run_id}")
+                    
+                    dpg_config = run.config.get('dpg', {})
+                    api_constraints = dpg_config.get('constraints')
+                    
+                    if api_constraints:
+                        constraints = api_constraints
+                        source = "WandB API"
+            except Exception as e:
+                print(f"  ⚠ {dataset}: Error fetching from WandB API: {e}")
         
-        # Get most recent (highest sample ID)
-        sample_dirs.sort(key=lambda x: x[0], reverse=True)
-        sample_id, sample_dir = sample_dirs[0]
-        
-        # Load constraints from JSON
-        constraints_path = os.path.join(sample_dir, 'dpg_constraints_normalized.json')
-        if not os.path.exists(constraints_path):
-            print(f"  ✗ {dataset}: No constraints file found")
+        # Export constraints if found
+        if not constraints:
+            print(f"  ✗ {dataset}: No constraints found")
             constraints_not_found += 1
             continue
         
         try:
-            with open(constraints_path, 'r') as f:
-                constraints = json.load(f)
-            
-            if not constraints:
-                print(f"  ✗ {dataset}: Empty constraints")
+            if not isinstance(constraints, dict) or len(constraints) == 0:
+                print(f"  ✗ {dataset}: Empty or invalid constraints")
                 constraints_not_found += 1
                 continue
             
@@ -2210,20 +2246,22 @@ def export_dpg_constraints(comparison_df):
             csv_rows = []
             
             for class_name, class_constraints in constraints.items():
-                for feature, bounds in class_constraints.items():
-                    csv_rows.append({
-                        'class': class_name,
-                        'feature': feature,
-                        'min': bounds.get('min'),
-                        'max': bounds.get('max')
-                    })
+                if isinstance(class_constraints, dict):
+                    for feature, bounds in class_constraints.items():
+                        if isinstance(bounds, dict):
+                            csv_rows.append({
+                                'class': class_name,
+                                'feature': feature,
+                                'min': bounds.get('min'),
+                                'max': bounds.get('max')
+                            })
             
             if csv_rows:
                 df_constraints = pd.DataFrame(csv_rows)
                 df_constraints.to_csv(csv_output_path, index=False)
             
             num_features = len(set(row['feature'] for row in csv_rows))
-            print(f"  ✓ {dataset}: Exported {num_features} constrained features from sample {sample_id}")
+            print(f"  ✓ {dataset}: Exported {num_features} constrained features from {source}")
             constraints_found += 1
             
         except Exception as e:
