@@ -458,10 +458,21 @@ class HeuristicRunner:
             else:
                 feature_bounds[feature] = None  # No constraint, keep original
 
+        # Identify critical features - those that actually changed in base counterfactual
+        # These are the features we should prioritize for perturbation
+        critical_features = []
+        for feature in feature_names:
+            if abs(base_counterfactual[feature] - sample[feature]) > 0.01:
+                critical_features.append(feature)
+        
+        if self.verbose:
+            print(f"[HeuristicRunner] Critical features (changed in base CF): {critical_features}")
+            print(f"[HeuristicRunner] Non-critical features (keep near base): {[f for f in feature_names if f not in critical_features]}")
+
         # Create remaining individuals using STRATIFIED sampling for diversity
         # Strategy: divide the remaining slots into tiers that explore different regions
         # KEY INSIGHT: To get diversity, we need to explore at different "depths" from original to boundary
-        # Not just perturb around the already-deep base CF
+        # NEW: Focus perturbations on critical features, keep non-critical near base values
         remaining_slots = population_size - 1
         
         for individual in range(remaining_slots):
@@ -505,15 +516,36 @@ class HeuristicRunner:
                     perturbation = np.random.uniform(-0.2, 0.2) * feature_range
                     perturbed[feature] = base_val + perturbation
                 elif t < 0.4:
-                    # Tier 2 (25%): Medium exploration around base - INCREASED ranges
-                    perturbation_scale = 0.3 + (t - 0.15) * 0.8  # 0.3 to 0.5
-                    if escape_dir == "increase":
-                        perturbation = np.random.uniform(-0.15 * feature_range, perturbation_scale * feature_range)
-                    elif escape_dir == "decrease":
-                        perturbation = np.random.uniform(-perturbation_scale * feature_range, 0.15 * feature_range)
+                    # Tier 2 (25%): Medium exploration around base
+                    # Determine if this is a critical or non-critical feature
+                    is_critical = feature in critical_features
+                    
+                    # CRITICAL: Use different perturbation scales for critical vs non-critical
+                    # Critical features get full perturbation range for diversity
+                    # Non-critical features get smaller perturbations to stay valid
+                    if is_critical:
+                        perturbation_scale = 0.3 + (t - 0.15) * 0.8  # 0.3 to 0.5 (full range)
                     else:
-                        perturbation = np.random.uniform(-perturbation_scale * feature_range / 2, 
-                                                          perturbation_scale * feature_range / 2)
+                        # Non-critical: only small perturbations to maintain validity
+                        perturbation_scale = 0.05 + (t - 0.15) * 0.15  # 0.05 to 0.2 (much smaller)
+                    
+                    if escape_dir == "increase":
+                        if is_critical:
+                            perturbation = np.random.uniform(-0.15 * feature_range, perturbation_scale * feature_range)
+                        else:
+                            perturbation = np.random.uniform(-0.05 * feature_range, perturbation_scale * feature_range)
+                    elif escape_dir == "decrease":
+                        if is_critical:
+                            perturbation = np.random.uniform(-perturbation_scale * feature_range, 0.15 * feature_range)
+                        else:
+                            perturbation = np.random.uniform(-perturbation_scale * feature_range, 0.05 * feature_range)
+                    else:
+                        if is_critical:
+                            perturbation = np.random.uniform(-perturbation_scale * feature_range / 2, 
+                                                              perturbation_scale * feature_range / 2)
+                        else:
+                            perturbation = np.random.uniform(-perturbation_scale * feature_range / 3,
+                                                              perturbation_scale * feature_range / 3)
                     perturbed[feature] = base_val + perturbation
                 else:
                     # Tier 3-4 (60%): WIDE exploration for diversity - SIGNIFICANTLY INCREASED
@@ -521,34 +553,66 @@ class HeuristicRunner:
                     # extreme or stays conservative. This creates diverse combinations.
                     # Use individual index + feature index for deterministic but varied patterns
                     feature_idx = list(feature_names).index(feature) if feature in feature_names else 0
-                    pattern = (individual + feature_idx) % 5  # 5 patterns for more variety
+                    is_critical = feature in critical_features
                     
-                    if pattern == 0:
-                        # Push strongly toward extreme (max for increase, min for decrease)
-                        push_factor = 0.7 + np.random.uniform(0, 0.3)  # 0.7 to 1.0 toward extreme
-                        perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
-                    elif pattern == 1:
-                        # Medium-high push toward extreme
-                        push_factor = 0.5 + np.random.uniform(0, 0.3)  # 0.5 to 0.8 toward extreme
-                        perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
-                    elif pattern == 2:
-                        # Medium push
-                        push_factor = 0.25 + np.random.uniform(0, 0.35)  # 0.25 to 0.6 toward extreme
-                        perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
-                    elif pattern == 3:
-                        # Moderate perturbation around base
-                        perturbed[feature] = base_val + np.random.uniform(-0.25, 0.25) * feature_range
+                    # CRITICAL: Different patterns for critical vs non-critical features
+                    # Non-critical features get reduced push factors to maintain validity
+                    if is_critical:
+                        pattern = (individual + feature_idx) % 5  # 5 patterns for variety
+                        # Pattern 0: Strong push, 1: Medium-high, 2: Medium, 3: Conservative, 4: Alternative
+                        # Corresponds to push_factors: [0.7-1.0, 0.5-0.8, 0.25-0.6, 0.0±0.25, alternative]
                     else:
-                        # Counter-direction exploration if escape is "both", else medium push
-                        if escape_dir == "both":
-                            counter_extreme = feature_min if target_extreme == feature_max else feature_max
-                            if counter_extreme is not None:
-                                perturbed[feature] = base_val + np.random.uniform(0.1, 0.4) * (counter_extreme - base_val)
-                            else:
-                                perturbed[feature] = base_val + np.random.uniform(-0.3, 0.3) * feature_range
-                        else:
-                            push_factor = 0.3 + np.random.uniform(0, 0.4)  # 0.3 to 0.7 toward extreme
+                        # Use different pattern set for non-critical to reduce extreme changes
+                        pattern = (individual + feature_idx) % 3  # 3 patterns (more conservative)
+                        # Pattern 0: Small push (0.1), 1: Conservative (0.0±0.15), 2: Very small push (0.05)
+                    
+                    if is_critical:
+                        if pattern == 0:
+                            # Push strongly toward extreme (max for increase, min for decrease)
+                            push_factor = 0.7 + np.random.uniform(0, 0.3)  # 0.7 to 1.0 toward extreme
                             perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
+                        elif pattern == 1:
+                            # Medium-high push toward extreme
+                            push_factor = 0.5 + np.random.uniform(0, 0.3)  # 0.5 to 0.8 toward extreme
+                            perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
+                        elif pattern == 2:
+                            # Medium push
+                            push_factor = 0.25 + np.random.uniform(0, 0.35)  # 0.25 to 0.6 toward extreme
+                            perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
+                        elif pattern == 3:
+                            # Moderate perturbation around base
+                            perturbed[feature] = base_val + np.random.uniform(-0.25, 0.25) * feature_range
+                        else:
+                            # Counter-direction exploration if escape is "both", else medium push
+                            if escape_dir == "both":
+                                counter_extreme = feature_min if target_extreme == feature_max else feature_max
+                                if counter_extreme is not None:
+                                    perturbed[feature] = base_val + np.random.uniform(0.1, 0.4) * (counter_extreme - base_val)
+                                else:
+                                    perturbed[feature] = base_val + np.random.uniform(-0.3, 0.3) * feature_range
+                            else:
+                                push_factor = 0.3 + np.random.uniform(0, 0.4)  # 0.3 to 0.7 toward extreme
+                                perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
+                    else:
+                        # Non-critical features: apply much more conservative perturbations
+                        if pattern == 0:
+                            # Small push toward extreme (0.1)
+                            push_factor = 0.05 + np.random.uniform(0, 0.1)  # 0.05 to 0.15 toward extreme
+                            perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
+                        elif pattern == 1:
+                            # Conservative perturbation around base
+                            perturbed[feature] = base_val + np.random.uniform(-0.15, 0.15) * feature_range
+                        else:
+                            # Very small push toward extreme (0.05)
+                            push_factor = 0.03 + np.random.uniform(0, 0.05)  # 0.03 to 0.08 toward extreme
+                            perturbed[feature] = base_val + push_factor * (target_extreme - base_val)
+                    
+                    # CRITICAL ADDITION: For non-critical features, blend heavily toward base
+                    # This ensures they stay close to the working base counterfactual
+                    if not is_critical:
+                        # Blend base_val with perturbed value (80% base, 20% perturbed)
+                        # This strongly constrains non-critical features to stay near working values
+                        perturbed[feature] = 0.8 * base_val + 0.2 * perturbed[feature]
                 
                 # Clip to bounds
                 if feature_min is not None:
