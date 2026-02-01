@@ -71,6 +71,8 @@ from scripts.compare_techniques import (
     filter_to_latest_run_per_combo,
 )
 
+from scripts.statistical_analysis import run_full_analysis as run_statistical_analysis
+
 from utils.config_manager import load_config
 
 from CounterFactualVisualizer import (
@@ -1745,6 +1747,21 @@ def main():
 
     # export_radar_charts(comparison_df)
     export_dataset_visualizations(comparison_df, raw_df)
+    
+    # Run statistical analysis (Wilcoxon tests, LaTeX tables, etc.)
+    print("\n" + "="*80)
+    print("RUNNING STATISTICAL ANALYSIS")
+    print("="*80)
+    small_csv_path = os.path.join(OUTPUT_DIR, 'comparison_numeric_small.csv')
+    if os.path.exists(small_csv_path):
+        stats_output_dir = os.path.join(OUTPUT_DIR, 'statistics')
+        run_statistical_analysis(
+            csv_path=small_csv_path,
+            output_dir=stats_output_dir,
+            bad_datasets=None,  # Uses default exclusions from statistics module
+        )
+    else:
+        print(f"⚠ Skipping statistical analysis: {small_csv_path} not found")
     
     # Always export comparison summary (even in local-only mode, to reflect filtered datasets)
     export_comparison_summary(comparison_df)
