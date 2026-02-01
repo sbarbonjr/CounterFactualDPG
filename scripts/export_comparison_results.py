@@ -810,46 +810,56 @@ def _load_local_viz_data(dataset, technique):
 def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
     """Export heatmap comparing DPG vs DiCE counterfactuals."""
     
-    # Handle local-only mode by loading from disk
+    # Handle local-only mode by loading from cache or disk
     if args.local_only:
         try:
-            dpg_data = _load_local_viz_data(dataset, 'dpg')
-            dice_data = _load_local_viz_data(dataset, 'dice')
-            
-            if not dpg_data or not dice_data:
-                missing = []
-                if not dpg_data:
-                    missing.append('DPG')
-                if not dice_data:
-                    missing.append('DiCE')
-                print(f"  ⚠ {dataset}: Missing local {' and '.join(missing)} data, skipping heatmap_techniques")
-                return False
-            
-            # Extract sample and counterfactuals from local data
-            dpg_sample = dpg_data.get('original_sample')
-            feature_names = dpg_data.get('features_names', [])
-            restrictions = dpg_data.get('restrictions')
-            
-            # Get class from sample prediction or default to 0
-            dpg_class = 0  # Default, would need model to predict
-            
-            # Extract counterfactuals from visualizations
-            dpg_cfs = []
-            for viz in dpg_data.get('visualizations', []):
-                for cf_data in viz.get('counterfactuals', []):
-                    cf = cf_data.get('counterfactual')
-                    if cf:
-                        dpg_cfs.append(cf)
-            
-            dice_cfs = []
-            for viz in dice_data.get('visualizations', []):
-                for cf_data in viz.get('counterfactuals', []):
-                    cf = cf_data.get('counterfactual')
-                    if cf:
-                        dice_cfs.append(cf)
+            # Try to load from WandB data cache first (saved from previous non-local run)
+            if dataset in _WANDB_DATA_CACHE:
+                cached_data = _WANDB_DATA_CACHE[dataset]
+                dpg_sample = cached_data['sample']
+                dpg_class = cached_data.get('class', 0)
+                dpg_cfs = cached_data['dpg_cfs']
+                dice_cfs = cached_data['dice_cfs']
+                restrictions = cached_data.get('restrictions')
+            else:
+                # Fallback to local pkl files
+                dpg_data = _load_local_viz_data(dataset, 'dpg')
+                dice_data = _load_local_viz_data(dataset, 'dice')
+                
+                if not dpg_data or not dice_data:
+                    missing = []
+                    if not dpg_data:
+                        missing.append('DPG')
+                    if not dice_data:
+                        missing.append('DiCE')
+                    print(f"  ⚠ {dataset}: Missing local {' and '.join(missing)} data, skipping heatmap_techniques")
+                    return False
+                
+                # Extract sample and counterfactuals from local data
+                dpg_sample = dpg_data.get('original_sample')
+                feature_names = dpg_data.get('features_names', [])
+                restrictions = dpg_data.get('restrictions')
+                
+                # Get class from sample prediction or default to 0
+                dpg_class = 0  # Default, would need model to predict
+                
+                # Extract counterfactuals from visualizations
+                dpg_cfs = []
+                for viz in dpg_data.get('visualizations', []):
+                    for cf_data in viz.get('counterfactuals', []):
+                        cf = cf_data.get('counterfactual')
+                        if cf:
+                            dpg_cfs.append(cf)
+                
+                dice_cfs = []
+                for viz in dice_data.get('visualizations', []):
+                    for cf_data in viz.get('counterfactuals', []):
+                        cf = cf_data.get('counterfactual')
+                        if cf:
+                            dice_cfs.append(cf)
             
             if not dpg_sample or not dpg_cfs or not dice_cfs:
-                print(f"  ⚠ {dataset}: Missing local data - sample: {bool(dpg_sample)}, dpg_cfs: {len(dpg_cfs)}, dice_cfs: {len(dice_cfs)}")
+                print(f"  ⚠ {dataset}: Missing local data - sample: {bool(dpg_sample)}, dpg_cfs: {len(dpg_cfs) if dpg_cfs else 0}, dice_cfs: {len(dice_cfs) if dice_cfs else 0}")
                 return False
             
             # Create heatmap
