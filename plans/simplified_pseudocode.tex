@@ -1,0 +1,89 @@
+% Main Algorithm
+\begin{algorithm}
+\caption{DPG-Based Counterfactual Generation}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Original sample $\mathbf{x}$, classifier $f$, target class $y_t$, DPG constraints $\mathcal{C}$, number of counterfactuals $k$
+\State \textbf{Output:} Set of $k$ diverse counterfactual explanations $\mathcal{CF}$
+\State $y_0 \gets f(\mathbf{x})$
+\State $\mathcal{B} \gets \textsc{AnalyzeBoundaries}(\mathcal{C}_{y_0}, \mathcal{C}_{y_t})$ \Comment{Identify escape directions}
+\State $\mathbf{x}_0 \gets \textsc{GenerateBase}(\mathbf{x}, \mathcal{C}_{y_t}, \mathcal{B})$ \Comment{Initial valid counterfactual}
+\State $\mathcal{P} \gets \textsc{InitializePopulation}(\mathbf{x}_0, \mathcal{C}_{y_t}, \mathcal{B}, n)$
+\For{each $\mathbf{x}' \in \mathcal{P}$}
+    \State $\text{fitness}(\mathbf{x}') \gets \textsc{EvaluateFitness}(\mathbf{x}', \mathbf{x}, y_t, \mathcal{C}, \mathcal{P})$
+\EndFor
+\State $\mathcal{CF} \gets \textsc{SelectDiverse}(\mathcal{P}, k)$
+\State \textbf{return} $\mathcal{CF}$
+\end{algorithmic}
+\end{algorithm}
+
+% Boundary Analysis
+\begin{algorithm}
+\caption{Analyze Class Boundaries}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Original class constraints $\mathcal{C}_{y_0}$, target class constraints $\mathcal{C}_{y_t}$
+\State \textbf{Output:} Boundary analysis $\mathcal{B}$ with escape directions
+\State $\mathcal{B} \gets \emptyset$
+\For{each feature $i$ with constraint $c_t \in \mathcal{C}_{y_t}$}
+    \State $c_0 \gets$ corresponding constraint in $\mathcal{C}_{y_0}$
+    \If{$c_t.\max < c_0.\min$}
+        \State $\mathcal{B}[i] \gets \texttt{decrease}$
+    \ElsIf{$c_t.\min > c_0.\max$}
+        \State $\mathcal{B}[i] \gets \texttt{increase}$
+    \Else
+        \State $\mathcal{B}[i] \gets \texttt{overlap}$
+    \EndIf
+\EndFor
+\State \textbf{return} $\mathcal{B}$
+\end{algorithmic}
+\end{algorithm}
+
+% Fitness Evaluation
+\begin{algorithm}
+\caption{Evaluate Candidate Fitness}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Candidate $\mathbf{x}'$, original $\mathbf{x}$, target class $y_t$, constraints $\mathcal{C}$, population $\mathcal{P}$
+\State \textbf{Output:} Fitness score (lower is better)
+\State $d \gets \|\mathbf{x}' - \mathbf{x}\|_2$
+\State $s \gets \frac{1}{|\mathbf{x}|}\sum_i \mathbb{1}[x'_i \neq x_i]$
+\State $p_c \gets \sum_{i} \max(0, \text{violation}(x'_i, \mathcal{C}_{y_t}[i]))$
+\State $p_{pred} \gets \begin{cases} 
+0 & \text{if } f(\mathbf{x}') = y_t \\
+\beta & \text{otherwise}
+\end{cases}$
+\State $\text{div} \gets \frac{1}{|\mathcal{P}|} \sum_{\mathbf{z} \in \mathcal{P}} \|\mathbf{x}' - \mathbf{z}\|_2$
+\State \textbf{return} $w_d \cdot d + w_s \cdot s + w_c \cdot p_c + p_{pred} - w_{div} \cdot \text{div}$
+\end{algorithmic}
+\end{algorithm}
+
+% Selection
+\begin{algorithm}
+\caption{Select Diverse Counterfactuals}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Population $\mathcal{P}$, number of counterfactuals $k$
+\State \textbf{Output:} Diverse counterfactual set $\mathcal{CF}$
+\State $\mathcal{V} \gets \{\mathbf{x}' \in \mathcal{P} : f(\mathbf{x}') = y_t\}$
+\State $\mathcal{V} \gets \textsc{SortByFitness}(\mathcal{V})$
+\State $\mathcal{CF} \gets \{\mathcal{V}[1]\}$
+\While{$|\mathcal{CF}| < k$ and $\mathcal{V} \neq \emptyset$}
+    \State $\mathbf{x}^* \gets \arg\max_{\mathbf{x}' \in \mathcal{V} \setminus \mathcal{CF}} \left[\lambda \cdot \min_{\mathbf{z} \in \mathcal{CF}} \|\mathbf{x}' - \mathbf{z}\|_2 - (1-\lambda) \cdot \text{fitness}(\mathbf{x}')\right]$
+    \State $\mathcal{CF} \gets \mathcal{CF} \cup \{\mathbf{x}^*\}$
+\EndWhile
+\State \textbf{return} $\mathcal{CF}$
+\end{algorithmic}
+\end{algorithm}
+
+\section*{Notation}
+\begin{tabular}{ll}
+$\mathbf{x}$ & Original input sample \\
+$\mathbf{x}'$ & Candidate counterfactual \\
+$f$ & Trained classifier \\
+$y_0$ & Original predicted class \\
+$y_t$ & Target class \\
+$\mathcal{C}$ & DPG constraints (per class) \\
+$\mathcal{B}$ & Boundary analysis with escape directions \\
+$\mathcal{P}$ & Population of candidates \\
+$\mathcal{CF}$ & Final counterfactual set \\
+$k$ & Number of counterfactuals to generate \\
+$\lambda$ & Diversity-quality tradeoff parameter \\
+$w_d, w_s, w_c, w_{div}$ & Fitness component weights \\
+\end{tabular}
