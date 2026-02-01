@@ -22,7 +22,7 @@ priority_datasets:
   - yeast_ml8
   - obesity_levels
   - customer_personality_analysis
-  - coil_2000
+  # - coil_2000
   - telco_customer_churn
   - healthcare_dataset_stroke
   - bank_marketing
