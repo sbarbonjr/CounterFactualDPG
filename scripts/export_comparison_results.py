@@ -82,7 +82,8 @@ from CounterFactualVisualizer import (
     heatmap_techniques, 
     plot_pca_with_counterfactuals_comparison,
     plot_sample_and_counterfactual_comparison,
-    plot_sample_and_counterfactual_comparison_simple
+    plot_sample_and_counterfactual_comparison_simple,
+    plot_sample_and_counterfactual_comparison_combined
 )
 from utils.dataset_loader import load_dataset
 from utils.config_manager import DictConfig
@@ -1296,7 +1297,11 @@ def export_constraints_with_first_cfs(raw_df, dataset, dataset_viz_dir):
 
 
 def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
-    """Export individual counterfactual comparison plots for each CF."""
+    """Export individual counterfactual comparison plots for each CF.
+    
+    Creates combined images showing DPG and DiCE counterfactuals side-by-side
+    on the same image, organized by CF index.
+    """
     
     # Load dataset and model
     dataset_model_info = load_dataset_and_model(dataset)
@@ -1363,11 +1368,78 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
         print(f"  ⚠ {dataset}: Missing required data for CF comparison")
         return False
     
-    # Create subdirectories for each technique
-    dpg_cf_dir = os.path.join(dataset_viz_dir, 'dpg_counterfactuals')
-    dice_cf_dir = os.path.join(dataset_viz_dir, 'dice_counterfactuals')
-    os.makedirs(dpg_cf_dir, exist_ok=True)
-    os.makedirs(dice_cf_dir, exist_ok=True)
+    sample_df = pd.DataFrame([sample])
+    
+    # Determine max number of CFs to compare (minimum of available CFs)
+    max_cfs = min(len(dpg_cfs), len(dice_cfs), 10)  # Limit to first 10 pairs
+    
+    # Export combined counterfactual comparison images
+    combined_count = 0
+    combined_simple_count = 0
+    
+    for i in range(max_cfs):
+        try:
+            # Full comparison (3 plots) - combine both methods
+            dpg_cf = dpg_cfs[i]
+            dice_cf = dice_cfs[i]
+            
+            # Create combined comparison figure
+            fig = plot_sample_and_counterfactual_comparison(
+                model=model,
+                sample=sample,
+                sample_df=sample_df,
+                counterfactual=dpg_cf,
+                constraints=constraints,
+                class_colors_list=None,
+                generation=None
+            )
+            
+            if fig:
+                output_path = os.path.join(dataset_viz_dir, f'cf_comparison_{i+1}.png')
+                fig.savefig(output_path, dpi=150, bbox_inches='tight')
+                plt.close(fig)
+                # Create DiCE side
+                fig_dice = plot_sample_and_counterfactual_comparison(
+                    model=model,
+                    sample=sample,
+                    sample_df=sample_df,
+                    counterfactual=dice_cf,
+                    constraints=constraints,
+                    class_colors_list=None,
+                    generation=None
+                )
+                if fig_dice:
+                    output_path_dice = os.path.join(dataset_viz_dir, f'cf_comparison_{i+1}_dice.png')
+                    fig_dice.savefig(output_path_dice, dpi=150, bbox_inches='tight')
+                    plt.close(fig_dice)
+                combined_count += 1
+            
+            # Simple comparison (1 plot) - create combined side-by-side
+            fig_simple = plot_sample_and_counterfactual_comparison_combined(
+                model=model,
+                sample=sample,
+                sample_df=sample_df,
+                dpg_cf=dpg_cfs[i],
+                dice_cf=dice_cfs[i],
+                method_names=('DPG', 'DiCE'),
+                constraints=constraints,
+                class_colors_list=None,
+                generation=None
+            )
+            
+            if fig_simple:
+                output_path_simple = os.path.join(dataset_viz_dir, f'cf_comparison_simple_{i+1}.png')
+                fig_simple.savefig(output_path_simple, dpi=150, bbox_inches='tight')
+                plt.close(fig_simple)
+                combined_simple_count += 1
+        except Exception as e:
+            print(f"    Warning: Failed to create combined CF {i+1} comparison: {e}")
+    
+    if combined_count > 0 or combined_simple_count > 0:
+        print(f"  ✓ {dataset}: Exported {combined_simple_count} combined simple comparisons")
+        return True
+    
+    return False
     
     sample_df = pd.DataFrame([sample])
     
