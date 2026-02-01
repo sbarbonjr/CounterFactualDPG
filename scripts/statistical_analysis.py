@@ -207,6 +207,10 @@ def wilcoxon_statistical_test(df: pd.DataFrame) -> pd.DataFrame:
             alternative='two-sided'
         )
 
+        # Handle NaN p-value (occurs when all differences are zero)
+        if np.isnan(p):
+            p = 1.0
+
         diff = x_clean - y_clean
         median_diff = np.median(diff)
 
