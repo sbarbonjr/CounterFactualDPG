@@ -835,6 +835,205 @@ def plot_sample_and_counterfactual_comparison(model, sample, sample_df, counterf
     plt.close(fig)
     return fig
 
+def plot_sample_and_counterfactual_comparison_simple(model, sample, sample_df, counterfactual, constraints=None, class_colors_list=None, generation=None):
+    """
+    Simplified visualization showing only the feature comparison with arrows showing direction of change.
+    
+    Args:
+        model: Trained scikit-learn model
+        sample: Original sample as dictionary
+        sample_df: Original sample as DataFrame
+        counterfactual: Counterfactual sample as dictionary
+        constraints: Dictionary of constraints per class (optional)
+        class_colors_list: List of colors for classes (default: ['purple', 'green', 'orange'])
+        generation: Optional generation number to display in title (for per-generation visualizations)
+    """
+    if class_colors_list is None:
+        class_colors_list = ['purple', 'green', 'orange']
+    
+    predicted_class = model.predict(sample_df)[0]
+    counterfactual_class = model.predict(pd.DataFrame([counterfactual]))[0]
+    
+    # Calculate metrics
+    feature_list = list(sample.keys())
+    original_values = np.array(list(sample.values()))
+    counterfactual_values = np.array(list(counterfactual.values()))
+    changes = counterfactual_values - original_values
+    l2_distance = np.linalg.norm(changes)
+    l1_distance = np.sum(np.abs(changes))
+    
+    # Filter out features with zero change
+    # Only filter if there are more than 6 features
+    if len(feature_list) <= 6:
+        # Keep all features when 6 or fewer
+        feature_list_filtered = feature_list
+        original_values_filtered = original_values
+        counterfactual_values_filtered = counterfactual_values
+        changes_filtered = changes
+    else:
+        # Filter out unchanged features when more than 6
+        non_zero_mask = np.abs(changes) > 0.001
+        feature_list_filtered = [f for f, mask in zip(feature_list, non_zero_mask) if mask]
+        original_values_filtered = original_values[non_zero_mask]
+        counterfactual_values_filtered = counterfactual_values[non_zero_mask]
+        changes_filtered = changes[non_zero_mask]
+    
+    # Calculate figure height proportionally based on number of features
+    num_features = len(feature_list_filtered)
+    base_height = 6  # Base height for 5-6 features
+    if num_features > 6:
+        # Scale height: add 0.8 inches for each feature beyond 6
+        fig_height = base_height + 0.8 * (num_features - 6)
+    else:
+        fig_height = base_height
+    
+    # Create figure with single plot
+    fig, ax = plt.subplots(1, 1, figsize=(10, fig_height))
+    
+    # Combined Feature Comparison with Arrows
+    x_pos = np.arange(len(feature_list_filtered))
+    width = 0.35
+    
+    # Bars for original and counterfactual
+    bars1 = ax.barh(x_pos - width/2, original_values_filtered, width, 
+                     label='Original', color=class_colors_list[predicted_class], 
+                     alpha=0.7, edgecolor='black', linewidth=1.5)
+    bars2 = ax.barh(x_pos + width/2, counterfactual_values_filtered, width, 
+                     label='Counterfactual', color=class_colors_list[counterfactual_class], 
+                     alpha=0.7, edgecolor='black', linewidth=1.5)
+    
+    # Add arrows showing direction of change
+    for i, (orig, cf, change) in enumerate(zip(original_values_filtered, counterfactual_values_filtered, changes_filtered)):
+        if abs(change) > 0.01:  # Only show arrow if change is significant
+            arrow_color = 'darkgreen' if change < 0 else 'darkred'
+            # Arrow always points from original to counterfactual
+            ax.annotate('', xy=(cf, i + width/2), xytext=(orig, i - width/2),
+                        arrowprops=dict(arrowstyle='->', color=arrow_color, 
+                                      lw=2, alpha=0.6))
+            # Add change value
+            mid_point = (orig + cf) / 2
+            ax.text(mid_point, i, f'{change:+.2f}', 
+                    ha='center', va='bottom', fontsize=9, 
+                    fontweight='bold', color=arrow_color,
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
+    
+    # Add value labels on bars
+    for bars in [bars1, bars2]:
+        for bar in bars:
+            width_bar = bar.get_width()
+            ax.text(width_bar, bar.get_y() + bar.get_height()/2,
+                    f'{width_bar:.2f}', ha='left', va='center', 
+                    fontsize=9, fontweight='bold')
+    
+    # Add constraint indicators if constraints are provided
+    if constraints is not None:
+        # Get the x-axis limits to determine the plotting range
+        xlim = ax.get_xlim()
+        
+        # Plot constraints for both classes
+        for class_idx in [predicted_class, counterfactual_class]:
+            class_name = f'Class {class_idx}'
+            if class_name in constraints:
+                class_constraints = constraints[class_name]
+                
+                # Create a dictionary for easy lookup by feature name
+                constraint_dict = {c['feature']: c for c in class_constraints}
+                
+                # Determine vertical offset based on class
+                y_offset = -width/2 if class_idx == predicted_class else width/2
+                
+                for i, feature in enumerate(feature_list_filtered):
+                    # Try to match feature name - be more flexible with matching
+                    feature_key = None
+                    feature_normalized = feature.replace(' (cm)', '').replace('_', ' ').strip().lower()
+                    
+                    for key in constraint_dict.keys():
+                        key_normalized = key.replace('_', ' ').strip().lower()
+                        if key_normalized == feature_normalized or key == feature or key.replace('_', ' ') == feature:
+                            feature_key = key
+                            break
+                    
+                    if feature_key and feature_key in constraint_dict:
+                        c = constraint_dict[feature_key]
+                        min_val = c['min'] if c['min'] is not None else xlim[0]
+                        max_val = c['max'] if c['max'] is not None else xlim[1]
+                        
+                        # Draw constraint range as a horizontal line with markers
+                        constraint_color = class_colors_list[class_idx]
+                        alpha_constraint = 0.8  # Increased from 0.5
+                        
+                        # Draw the range line
+                        if c['min'] is not None and c['max'] is not None:
+                            # Both min and max
+                            ax.plot([min_val, max_val], [i + y_offset, i + y_offset], 
+                                   color=constraint_color, linewidth=6, alpha=alpha_constraint, 
+                                   linestyle='-', zorder=10)  # Higher zorder to draw on top
+                            # Add markers at boundaries
+                            ax.plot([min_val], [i + y_offset], marker='|', markersize=15, 
+                                   color=constraint_color, alpha=1.0, markeredgewidth=4, zorder=11)
+                            ax.plot([max_val], [i + y_offset], marker='|', markersize=15, 
+                                   color=constraint_color, alpha=1.0, markeredgewidth=4, zorder=11)
+                            # Add numerical labels for min and max
+                            # Position min label to the left of the boundary marker, max label to the right
+                            ax.text(min_val, i + y_offset + 0.15, f'{min_val:.2f}', 
+                                   ha='right', va='bottom', fontsize=8, 
+                                   color=constraint_color, weight='bold', style='italic',
+                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', 
+                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.5),
+                                   zorder=12)
+                            ax.text(max_val, i + y_offset - 0.15, f'{max_val:.2f}', 
+                                   ha='left', va='top', fontsize=8, 
+                                   color=constraint_color, weight='bold', style='italic',
+                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', 
+                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.5),
+                                   zorder=12)
+                        elif c['min'] is not None:
+                            # Only min constraint
+                            ax.plot([min_val, xlim[1]], [i + y_offset, i + y_offset], 
+                                   color=constraint_color, linewidth=6, alpha=alpha_constraint, 
+                                   linestyle='--', zorder=10)
+                            ax.plot([min_val], [i + y_offset], marker='|', markersize=15, 
+                                   color=constraint_color, alpha=1.0, markeredgewidth=4, zorder=11)
+                            # Add numerical label for min
+                            ax.text(min_val, i + y_offset - 0.2, f'min:{min_val:.2f}', 
+                                   ha='center', va='top', fontsize=8, 
+                                   color=constraint_color, weight='bold', style='italic',
+                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', 
+                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.5),
+                                   zorder=12)
+                        elif c['max'] is not None:
+                            # Only max constraint
+                            ax.plot([xlim[0], max_val], [i + y_offset, i + y_offset], 
+                                   color=constraint_color, linewidth=6, alpha=alpha_constraint, 
+                                   linestyle='--', zorder=10)
+                            ax.plot([max_val], [i + y_offset], marker='|', markersize=15, 
+                                   color=constraint_color, alpha=1.0, markeredgewidth=4, zorder=11)
+                            # Add numerical label for max
+                            ax.text(max_val, i + y_offset - 0.2, f'max:{max_val:.2f}', 
+                                   ha='center', va='top', fontsize=8, 
+                                   color=constraint_color, weight='bold', style='italic',
+                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', 
+                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.5),
+                                   zorder=12)
+    
+    ax.set_yticks(x_pos)
+    ax.set_yticklabels([f.replace(' (cm)', '').replace('_', ' ') for f in feature_list_filtered])
+    ax.set_xlabel('Feature Value', fontsize=12, fontweight='bold')
+    ax.set_title(f'Feature Comparison\nClass {predicted_class} → Class {counterfactual_class}', 
+                 fontsize=13, fontweight='bold')
+    ax.legend(loc='lower right', fontsize=10)
+    ax.grid(axis='x', alpha=0.3, linestyle='--')
+    ax.invert_yaxis()
+    
+    # Set main title with generation number if provided
+    if generation is not None:
+        plt.suptitle(f'Counterfactual Explanation Analysis - Generation {generation}', fontsize=16, fontweight='bold', y=0.98)
+    else:
+        plt.suptitle('Counterfactual Explanation Analysis', fontsize=16, fontweight='bold', y=0.98)
+    plt.tight_layout()
+    plt.close(fig)
+    return fig
+
 def plot_pairwise_with_counterfactual(model, dataset, target, sample, counterfactual):
     """
     Plot a Seaborn pairplot of the dataset, highlighting the original sample and counterfactual.

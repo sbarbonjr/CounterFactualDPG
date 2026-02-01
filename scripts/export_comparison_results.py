@@ -78,7 +78,8 @@ from utils.config_manager import load_config
 from CounterFactualVisualizer import (
     heatmap_techniques, 
     plot_pca_with_counterfactuals_comparison,
-    plot_sample_and_counterfactual_comparison
+    plot_sample_and_counterfactual_comparison,
+    plot_sample_and_counterfactual_comparison_simple
 )
 from utils.dataset_loader import load_dataset
 from utils.config_manager import DictConfig
@@ -1152,8 +1153,10 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
     
     # Export DPG counterfactuals
     dpg_count = 0
+    dpg_simple_count = 0
     for i, cf in enumerate(dpg_cfs[:10]):  # Limit to first 10
         try:
+            # Full comparison (3 plots)
             fig = plot_sample_and_counterfactual_comparison(
                 model=model,
                 sample=sample,
@@ -1169,13 +1172,32 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
                 fig.savefig(output_path, dpi=150, bbox_inches='tight')
                 plt.close(fig)
                 dpg_count += 1
+            
+            # Simple comparison (1 plot only)
+            fig_simple = plot_sample_and_counterfactual_comparison_simple(
+                model=model,
+                sample=sample,
+                sample_df=sample_df,
+                counterfactual=cf,
+                constraints=None,
+                class_colors_list=None,
+                generation=None
+            )
+            
+            if fig_simple:
+                output_path_simple = os.path.join(dpg_cf_dir, f'cf_comparison_simple_{i+1}.png')
+                fig_simple.savefig(output_path_simple, dpi=150, bbox_inches='tight')
+                plt.close(fig_simple)
+                dpg_simple_count += 1
         except Exception as e:
             print(f"    Warning: Failed to create DPG CF {i+1} comparison: {e}")
     
     # Export DiCE counterfactuals
     dice_count = 0
+    dice_simple_count = 0
     for i, cf in enumerate(dice_cfs[:10]):  # Limit to first 10
         try:
+            # Full comparison (3 plots)
             fig = plot_sample_and_counterfactual_comparison(
                 model=model,
                 sample=sample,
@@ -1191,11 +1213,29 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
                 fig.savefig(output_path, dpi=150, bbox_inches='tight')
                 plt.close(fig)
                 dice_count += 1
+            
+            # Simple comparison (1 plot only)
+            fig_simple = plot_sample_and_counterfactual_comparison_simple(
+                model=model,
+                sample=sample,
+                sample_df=sample_df,
+                counterfactual=cf,
+                constraints=None,
+                class_colors_list=None,
+                generation=None
+            )
+            
+            if fig_simple:
+                output_path_simple = os.path.join(dice_cf_dir, f'cf_comparison_simple_{i+1}.png')
+                fig_simple.savefig(output_path_simple, dpi=150, bbox_inches='tight')
+                plt.close(fig_simple)
+                dice_simple_count += 1
         except Exception as e:
             print(f"    Warning: Failed to create DiCE CF {i+1} comparison: {e}")
     
     if dpg_count > 0 or dice_count > 0:
         print(f"  ✓ {dataset}: Exported {dpg_count} DPG + {dice_count} DiCE counterfactual comparisons")
+        print(f"  ✓ {dataset}: Exported {dpg_simple_count} DPG + {dice_simple_count} DiCE simple comparisons")
         return True
     
     return False
