@@ -1,4 +1,3 @@
-# Kaggle dataset: https://www.kaggle.com/fedesoriano/stroke-prediction-dataset
 data:
   dataset: healthcare_dataset_stroke
   dataset_path: configs/healthcare_dataset_stroke/dataset.csv
@@ -30,9 +29,7 @@ methods:
       smoking_status: actionable
 model:
   type: RandomForestClassifier
-  n_estimators: 12
-  min_samples_split: 10
+  n_estimators: 4
   min_impurity_decrease: 0.0
   max_features: 0.3
-  max_depth: 6
-  criterion: entropy
+  max_depth: 3
