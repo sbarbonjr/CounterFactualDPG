@@ -1423,6 +1423,7 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
                 dice_cf=dice_cfs[i],
                 method_names=('DPG', 'DiCE'),
                 constraints=constraints,
+                restrictions=restrictions,
                 class_colors_list=None,
                 generation=i+1  # Pass CF index for title
             )

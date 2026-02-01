@@ -1104,7 +1104,7 @@ def plot_pairwise_with_counterfactual(model, dataset, target, sample, counterfac
 
     #plt.show()
 
-def plot_sample_and_counterfactual_comparison_combined(model, sample, sample_df, dpg_cf, dice_cf, method_names=('DPG', 'DiCE'), constraints=None, class_colors_list=None, generation=None):
+def plot_sample_and_counterfactual_comparison_combined(model, sample, sample_df, dpg_cf, dice_cf, method_names=('DPG', 'DiCE'), constraints=None, restrictions=None, class_colors_list=None, generation=None):
     """
     Combined visualization showing original sample with counterfactuals from two different methods
     in a single bar graph with three bars per feature.
@@ -1117,6 +1117,7 @@ def plot_sample_and_counterfactual_comparison_combined(model, sample, sample_df,
         dice_cf: DiCE counterfactual as dictionary
         method_names: Tuple of method names (default: ('DPG', 'DiCE'))
         constraints: Dictionary of constraints per class (optional)
+        restrictions: Dictionary of actionability restrictions per feature (optional)
         class_colors_list: List of colors for classes (default: ['purple', 'green', 'orange'])
         generation: Optional generation number to display in title
     """
@@ -1130,6 +1131,10 @@ def plot_sample_and_counterfactual_comparison_combined(model, sample, sample_df,
     # Get all features
     feature_list = list(sample.keys())
     
+    # Filter out features with 'no_change' actionability restriction
+    if restrictions is not None:
+        feature_list = [f for f in feature_list if restrictions.get(f) != 'no_change']
+    
     # Calculate figure height proportionally based on number of features
     num_features = len(feature_list)
     base_height = 6  # Base height for 5-6 features
@@ -1139,8 +1144,8 @@ def plot_sample_and_counterfactual_comparison_combined(model, sample, sample_df,
     else:
         fig_height = base_height
     
-    # Create single figure
-    fig, ax = plt.subplots(1, 1, figsize=(12, fig_height))
+    # Create single figure (wider to accommodate constraint labels)
+    fig, ax = plt.subplots(1, 1, figsize=(15, fig_height))
     
     # Get values for all three series
     original_values = np.array([sample[f] for f in feature_list])
@@ -1233,17 +1238,19 @@ def plot_sample_and_counterfactual_comparison_combined(model, sample, sample_df,
                                    color=constraint_color, alpha=1.0, markeredgewidth=4, zorder=11)
                             ax.plot([max_val], [i + y_offset], marker='|', markersize=15, 
                                    color=constraint_color, alpha=1.0, markeredgewidth=4, zorder=11)
-                            ax.text(min_val, i + y_offset + 0.15, f'{min_val:.2f}', 
-                                   ha='right', va='bottom', fontsize=8, 
+                            # Position constraint labels further from bars to avoid overlap
+                            label_offset = 0.35
+                            ax.text(min_val, i + y_offset + label_offset, f'{min_val:.2f}', 
+                                   ha='right', va='bottom', fontsize=7, 
                                    color=constraint_color, weight='bold', style='italic',
-                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', 
-                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.5),
+                                   bbox=dict(boxstyle='round,pad=0.2', facecolor='yellow', 
+                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.2),
                                    zorder=12)
-                            ax.text(max_val, i + y_offset - 0.15, f'{max_val:.2f}', 
-                                   ha='left', va='top', fontsize=8, 
+                            ax.text(max_val, i + y_offset - label_offset, f'{max_val:.2f}', 
+                                   ha='left', va='top', fontsize=7, 
                                    color=constraint_color, weight='bold', style='italic',
-                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', 
-                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.5),
+                                   bbox=dict(boxstyle='round,pad=0.2', facecolor='yellow', 
+                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.2),
                                    zorder=12)
                         elif c['min'] is not None:
                             ax.plot([min_val, xlim[1]], [i + y_offset, i + y_offset], 
@@ -1251,11 +1258,11 @@ def plot_sample_and_counterfactual_comparison_combined(model, sample, sample_df,
                                    linestyle='--', zorder=10)
                             ax.plot([min_val], [i + y_offset], marker='|', markersize=15, 
                                    color=constraint_color, alpha=1.0, markeredgewidth=4, zorder=11)
-                            ax.text(min_val, i + y_offset - 0.2, f'min:{min_val:.2f}', 
-                                   ha='center', va='top', fontsize=8, 
+                            ax.text(min_val, i + y_offset - 0.35, f'min:{min_val:.2f}', 
+                                   ha='center', va='top', fontsize=7, 
                                    color=constraint_color, weight='bold', style='italic',
-                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', 
-                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.5),
+                                   bbox=dict(boxstyle='round,pad=0.2', facecolor='yellow', 
+                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.2),
                                    zorder=12)
                         elif c['max'] is not None:
                             ax.plot([xlim[0], max_val], [i + y_offset, i + y_offset], 
@@ -1263,11 +1270,11 @@ def plot_sample_and_counterfactual_comparison_combined(model, sample, sample_df,
                                    linestyle='--', zorder=10)
                             ax.plot([max_val], [i + y_offset], marker='|', markersize=15, 
                                    color=constraint_color, alpha=1.0, markeredgewidth=4, zorder=11)
-                            ax.text(max_val, i + y_offset - 0.2, f'max:{max_val:.2f}', 
-                                   ha='center', va='top', fontsize=8, 
+                            ax.text(max_val, i + y_offset - 0.35, f'max:{max_val:.2f}', 
+                                   ha='center', va='top', fontsize=7, 
                                    color=constraint_color, weight='bold', style='italic',
-                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', 
-                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.5),
+                                   bbox=dict(boxstyle='round,pad=0.2', facecolor='yellow', 
+                                           edgecolor=constraint_color, alpha=0.9, linewidth=1.2),
                                    zorder=12)
     
     ax.set_yticks(x_pos)
