@@ -1069,13 +1069,18 @@ def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
         # Fetch restrictions if available
         restrictions = dpg_run_obj.config.get('restrictions')
         
+        # Fetch DPG per-class constraints (for visualization)
+        dpg_config = dpg_run_obj.config.get('dpg', {})
+        constraints = dpg_config.get('constraints') if dpg_config else None
+        
         # Cache the fetched data for PCA comparison and future local-only use
         _WANDB_DATA_CACHE[dataset] = {
             'sample': dpg_sample,
             'class': dpg_class,
             'dpg_cfs': dpg_cfs,
             'dice_cfs': dice_cfs,
-            'restrictions': restrictions
+            'restrictions': restrictions,
+            'constraints': constraints  # Add per-class min/max constraints
         }
         
         # Create heatmap comparing techniques
@@ -1135,6 +1140,7 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
                 
                 sample = dpg_data.get('original_sample')
                 restrictions = dpg_data.get('restrictions')
+                constraints = dpg_data.get('constraints')
                 
                 dpg_cfs = []
                 for viz in dpg_data.get('visualizations', []):
@@ -1160,6 +1166,7 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
             dpg_cfs = cached_data['dpg_cfs']
             dice_cfs = cached_data['dice_cfs']
             restrictions = cached_data.get('restrictions')
+            constraints = cached_data.get('constraints')
         else:
             print(f"  ⚠ {dataset}: Data not in cache, run heatmap generation first")
             return False
@@ -1187,7 +1194,7 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
                 sample=sample,
                 sample_df=sample_df,
                 counterfactual=cf,
-                constraints=None,
+                constraints=constraints,
                 class_colors_list=None,
                 generation=None
             )
@@ -1204,7 +1211,7 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
                 sample=sample,
                 sample_df=sample_df,
                 counterfactual=cf,
-                constraints=None,
+                constraints=constraints,
                 class_colors_list=None,
                 generation=None
             )
@@ -1228,7 +1235,7 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
                 sample=sample,
                 sample_df=sample_df,
                 counterfactual=cf,
-                constraints=None,
+                constraints=constraints,
                 class_colors_list=None,
                 generation=None
             )
@@ -1245,7 +1252,7 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
                 sample=sample,
                 sample_df=sample_df,
                 counterfactual=cf,
-                constraints=None,
+                constraints=constraints,
                 class_colors_list=None,
                 generation=None
             )
@@ -1707,13 +1714,16 @@ def export_comparison_summary(comparison_df):
 
 
 def count_actionability_constraints(dataset_name):
-    """Count the number of actionability constraints for a dataset.
+    """Count the number of actionability restrictions for a dataset.
+    
+    Only counts non-actionable constraints (non_decreasing, non_increasing, no_change).
+    Features with 'actionable' or None are not counted as restrictions.
     
     Args:
         dataset_name: Name of the dataset
         
     Returns:
-        Number of constraints or None if not found
+        Number of restrictions or None if not found
     """
     try:
         config_path = os.path.join(REPO_ROOT, 'configs', dataset_name, 'config.yaml')
@@ -1729,8 +1739,11 @@ def count_actionability_constraints(dataset_name):
         if not actionability:
             return 0
         
-        # Count constraints (exclude None values)
-        count = sum(1 for v in actionability.values() if v is not None)
+        # Count only non-actionable constraints (restrictions)
+        # Exclude 'actionable' and None as they represent no restriction
+        restriction_types = ['non_decreasing', 'non_increasing', 'no_change']
+        count = sum(1 for v in actionability.values() 
+                   if v is not None and v in restriction_types)
         return count
         
     except Exception as e:
@@ -1813,13 +1826,13 @@ def export_model_information(raw_df, comparison_df):
         f.write("\\begin{table}[ht]\n")
         f.write("  \\centering\n")
         f.write(f"  \\caption{{Overview of the {len(model_info_data)} benchmark datasets used in the experimental evaluation, ")
-        f.write("including the number of features, samples, classes, train/test accuracies, and actionability constraints ")
-        f.write("specified for each dataset.}}\n")
+        f.write("including the number of features, samples, classes, train/test split, accuracies, and actionability restrictions ")
+        f.write("specified for each dataset.}\n")
         f.write("  \\label{tab:datasets}\n")
         f.write("  \\small\n")
-        f.write("  \\begin{tabular}{lrrrrrp{3cm}}\n")
+        f.write("  \\begin{tabular}{lrrrlrrp{2.5cm}}\n")
         f.write("    \\toprule\n")
-        f.write("    Dataset & \\# Features & \\# Samples & \\# Classes & Train Acc. & Test Acc. & \\# Constraints \\\\\n")
+        f.write("    Dataset & \\# Features & \\# Samples & \\# Classes & Train/Test & Train Acc. & Test Acc. & Actionability Restrictions \\\\\n")
         f.write("    \\midrule\n")
         
         # Sort datasets alphabetically
@@ -1830,12 +1843,17 @@ def export_model_information(raw_df, comparison_df):
             num_features = info['Num Features']
             total_samples = info['Total Size']
             num_classes = info['Num Classes']
+            train_size = info['Train Size']
+            test_size = info['Test Size']
             train_acc = info['Train Accuracy']
             test_acc = info['Test Accuracy']
             
-            # Count actionability constraints
-            num_constraints = count_actionability_constraints(dataset)
-            constraints_str = str(num_constraints) if num_constraints is not None and num_constraints > 0 else "None"
+            # Format train/test split as ratio
+            train_test_split = f"{train_size}/{test_size}"
+            
+            # Count actionability restrictions (only non-actionable constraints)
+            num_restrictions = count_actionability_constraints(dataset)
+            restrictions_str = str(num_restrictions) if num_restrictions is not None and num_restrictions > 0 else "None"
             
             # Format numbers with thousands separator
             total_samples_str = f"{total_samples:,}"
@@ -1844,7 +1862,7 @@ def export_model_information(raw_df, comparison_df):
             dataset_latex = dataset.replace('_', '\\_')
             
             f.write(f"    {dataset_latex} & {num_features} & {total_samples_str} & {num_classes} & "
-                   f"{train_acc} & {test_acc} & {constraints_str} \\\\\n")
+                   f"{train_test_split} & {train_acc} & {test_acc} & {restrictions_str} \\\\\n")
         
         f.write("    \\bottomrule\n")
         f.write("  \\end{tabular}\n")
