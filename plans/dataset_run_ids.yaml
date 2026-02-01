@@ -41,3 +41,6 @@ datasets:
 obesity_levels:
     dice: 38ajzw5s
     dpg: 486q0lwp
+customer_personality_analysis:
+    dice: 8sbjngf4
+    dpg: jup8n3ip
