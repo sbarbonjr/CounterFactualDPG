@@ -1681,15 +1681,28 @@ def main():
             raw_df = metadata['raw_df']
             print(f"\n✓ Loaded {len(raw_df)} runs from disk")
         
-        # Apply priority_datasets filter in local-only mode
-        included_datasets = load_included_datasets()
-        if included_datasets is not None:
-            pre_filter_count = len(comparison_df)
-            comparison_df = comparison_df[comparison_df['dataset'].isin(included_datasets)]
-            if len(raw_df) > 0:
-                raw_df = raw_df[raw_df['dataset'].isin(included_datasets)]
-            print(f"✓ Applied priority_datasets filter: {pre_filter_count} -> {len(comparison_df)} datasets")
-            print(f"  Processing datasets: {sorted(comparison_df['dataset'].unique())}")
+        # Apply --ids filter in local-only mode
+        if args.ids:
+            print(f"\n🔍 Applying --ids filter in local-only mode")
+            run_ids_dict = load_run_ids_from_yaml(args.ids)
+            if run_ids_dict is not None:
+                datasets_to_include = list(run_ids_dict.keys())
+                pre_filter_count = len(comparison_df)
+                comparison_df = comparison_df[comparison_df['dataset'].isin(datasets_to_include)]
+                if len(raw_df) > 0:
+                    raw_df = raw_df[raw_df['dataset'].isin(datasets_to_include)]
+                print(f"✓ Applied --ids filter: {pre_filter_count} -> {len(comparison_df)} datasets")
+                print(f"  Processing datasets: {sorted(comparison_df['dataset'].unique())}")
+        # Apply priority_datasets filter in local-only mode (only if --ids not specified)
+        elif APPLY_EXCLUDED_DATASETS:
+            included_datasets = load_included_datasets()
+            if included_datasets is not None:
+                pre_filter_count = len(comparison_df)
+                comparison_df = comparison_df[comparison_df['dataset'].isin(included_datasets)]
+                if len(raw_df) > 0:
+                    raw_df = raw_df[raw_df['dataset'].isin(included_datasets)]
+                print(f"✓ Applied priority_datasets filter: {pre_filter_count} -> {len(comparison_df)} datasets")
+                print(f"  Processing datasets: {sorted(comparison_df['dataset'].unique())}")
     else:
         # Fetch and filter data from WandB
         raw_df = fetch_and_filter_data()
@@ -1706,10 +1719,12 @@ def main():
         comparison_df = create_comparison_table_small(raw_df)
     
     # Export all results
+    # Always export these to reflect any dataset filtering (even in local-only mode)
+    export_comparison_table(comparison_df)
+    export_method_metrics_tables(raw_df)
+    export_summary_statistics(comparison_df)
+    
     if not args.local_only:
-        export_comparison_table(comparison_df)
-        export_method_metrics_tables(raw_df)
-        export_summary_statistics(comparison_df)
         save_metadata(raw_df)
     
     # Always regenerate visualizations
@@ -1731,8 +1746,10 @@ def main():
     # export_radar_charts(comparison_df)
     export_dataset_visualizations(comparison_df, raw_df)
     
+    # Always export comparison summary (even in local-only mode, to reflect filtered datasets)
+    export_comparison_summary(comparison_df)
+    
     if not args.local_only:
-        export_comparison_summary(comparison_df)
         # Save WandB data cache for future local-only use
         if _WANDB_DATA_CACHE:
             save_wandb_data_cache(_WANDB_DATA_CACHE)
