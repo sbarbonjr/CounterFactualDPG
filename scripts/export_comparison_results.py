@@ -1414,7 +1414,7 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
                     plt.close(fig_dice)
                 combined_count += 1
             
-            # Simple comparison (1 plot) - create combined side-by-side
+            # Simple comparison (1 plot) - create combined bar graph
             fig_simple = plot_sample_and_counterfactual_comparison_combined(
                 model=model,
                 sample=sample,
@@ -1424,7 +1424,7 @@ def export_sample_cf_comparison(raw_df, dataset, dataset_viz_dir):
                 method_names=('DPG', 'DiCE'),
                 constraints=constraints,
                 class_colors_list=None,
-                generation=None
+                generation=i+1  # Pass CF index for title
             )
             
             if fig_simple:
