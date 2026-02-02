@@ -2201,9 +2201,9 @@ def plot_ridge_comparison(
     g.map(sns.kdeplot, "value", bw_adjust=0.5, clip_on=False, fill=True, alpha=0.6, linewidth=1.5, color=dataset_color)
     g.map(sns.kdeplot, "value", bw_adjust=0.5, clip_on=False, color="w", lw=2)
     
-    # Add horizontal reference line at y=0 to each axis
+    # Add horizontal reference line at y=0 to each axis (10% wider than data)
     for ax in g.axes.flat:
-        ax.axhline(y=0, color="black", linewidth=1, clip_on=False)
+        ax.plot([-0.1, 1.1], [0, 0], color="black", linewidth=1, clip_on=False)
     
     # Compute KDE for each feature to get y-values for markers
     # Use scipy's gaussian_kde with Scott's factor adjusted by 0.5 to match seaborn's bw_adjust=0.5
