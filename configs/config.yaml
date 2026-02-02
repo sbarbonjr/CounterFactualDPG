@@ -20,7 +20,7 @@ priority_datasets:
   - scene
   - us_crime
   - yeast_ml8
-  - obesity_levels
+  # - obesity_levels
   - customer_personality_analysis
   - healthcare_dataset_stroke
   - bank_marketing

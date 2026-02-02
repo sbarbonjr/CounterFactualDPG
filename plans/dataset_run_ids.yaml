@@ -38,9 +38,6 @@ datasets:
   yeast_ml8:
     dice: aers3zg7
     dpg: xmr7fj8q
-  obesity_levels:
-    dice: wkeet259
-    dpg: pc1y7vp8
   customer_personality_analysis:
     dice: 8sbjngf4
     dpg: jup8n3ip
