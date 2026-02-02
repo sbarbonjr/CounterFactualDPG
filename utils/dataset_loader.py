@@ -65,6 +65,9 @@ def determine_feature_types(features_df, config=None):
     return continuous_indices, categorical_indices, variable_indices
 
 
+
+
+
 def _load_csv_dataset(config, repo_root=None):
     """Generic CSV dataset loader driven by config options.
     
@@ -119,6 +122,22 @@ def _load_csv_dataset(config, repo_root=None):
     
     # Extract target
     target_column = config.data.target_column
+    
+    # DIABETES SPECIAL PREPROCESSING: Remove samples with any zero values
+    if dataset_name.lower() == 'diabetes':
+        # Get feature columns (all except target)
+        feature_cols = [col for col in df.columns if col != target_column]
+        
+        # Find rows with any zeros in feature columns (only check numeric columns)
+        original_count = len(df)
+        zero_mask = (df[feature_cols].select_dtypes(include=[np.number]) == 0).any(axis=1)
+        df = df[~zero_mask].copy()
+        filtered_count = len(df)
+        removed_count = original_count - filtered_count
+        
+        print(f"INFO: Diabetes preprocessing - Removed {removed_count} samples with zero values in features")
+        print(f"INFO: Diabetes preprocessing - Kept {filtered_count} samples")
+    
     labels = df[target_column].values
     features_df = df.drop(columns=[target_column])
     
