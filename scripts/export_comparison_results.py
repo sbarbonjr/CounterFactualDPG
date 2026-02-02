@@ -1600,6 +1600,22 @@ def export_pca_comparison(raw_df, dataset, dataset_viz_dir):
             dpg_cfs_df = pd.DataFrame(dpg_cfs[:5])  # Limit to first 5
             dice_cfs_df = pd.DataFrame(dice_cfs[:5])
             
+            # Validate that CF features match model's expected features
+            expected_features = set(dataset_model_info['feature_names'])
+            cf_features = set(dpg_cfs_df.columns)
+            if cf_features != expected_features:
+                missing_in_cf = expected_features - cf_features
+                extra_in_cf = cf_features - expected_features
+                print(f"  ⚠ {dataset}: Feature mismatch between model and cached CFs, skipping PCA comparison")
+                print(f"     Expected features (first 5): {list(expected_features)[:5]}")
+                print(f"     CF features (first 5): {list(cf_features)[:5]}")
+                if missing_in_cf:
+                    print(f"     Missing in CF: {list(missing_in_cf)[:5]}...")
+                if extra_in_cf:
+                    print(f"     Extra in CF: {list(extra_in_cf)[:5]}...")
+                print(f"     This usually means the WandB run has mismatched data. Check run configs.")
+                return False
+            
             # Predict classes for counterfactuals
             dpg_cf_classes = model.predict(dpg_cfs_df)
             dice_cf_classes = model.predict(dice_cfs_df)
@@ -1645,6 +1661,22 @@ def export_pca_comparison(raw_df, dataset, dataset_viz_dir):
         # Convert counterfactuals to DataFrames
         dpg_cfs_df = pd.DataFrame(dpg_cfs[:5])  # Limit to first 5
         dice_cfs_df = pd.DataFrame(dice_cfs[:5])
+        
+        # Validate that CF features match model's expected features
+        expected_features = set(dataset_model_info['feature_names'])
+        cf_features = set(dpg_cfs_df.columns)
+        if cf_features != expected_features:
+            missing_in_cf = expected_features - cf_features
+            extra_in_cf = cf_features - expected_features
+            print(f"  ⚠ {dataset}: Feature mismatch between model and cached CFs, skipping PCA comparison")
+            print(f"     Expected features (first 5): {list(expected_features)[:5]}")
+            print(f"     CF features (first 5): {list(cf_features)[:5]}")
+            if missing_in_cf:
+                print(f"     Missing in CF: {list(missing_in_cf)[:5]}...")
+            if extra_in_cf:
+                print(f"     Extra in CF: {list(extra_in_cf)[:5]}...")
+            print(f"     This usually means the WandB run has mismatched data. Check run configs.")
+            return False
         
         # Predict classes for counterfactuals
         dpg_cf_classes = model.predict(dpg_cfs_df)
