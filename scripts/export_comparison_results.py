@@ -2557,14 +2557,13 @@ def export_model_information(raw_df, comparison_df):
     with open(latex_path, 'w') as f:
         f.write("\\begin{table}[ht]\n")
         f.write("  \\centering\n")
-        f.write(f"  \\caption{{Overview of the {len(model_info_data)} benchmark datasets used in the experimental evaluation, ")
-        f.write("including the number of features, samples, classes, train/test split, accuracies, and actionability restrictions. ")
-        f.write("See Table~\\ref{tab:dpg-constraints} for detailed DPG constraints.}\n")
+        f.write(f"  \\caption{{Overview of the {len(model_info_data)} benchmark datasets employed in the experimental evaluation, ")
+        f.write("including the number of features, samples, classes, train/test split, accuracy (Acc), and number of actionability rules per dataset}\n")
         f.write("  \\label{tab:datasets}\n")
-        f.write("  \\small\n")
-        f.write("  \\begin{tabular}{lrrrlrrp{2cm}}\n")
+        f.write("  \\resizebox{\\textwidth}{!}{%\n")
+        f.write("  \\begin{tabular}{lrrrlrrp{1.8cm}}\n")
         f.write("    \\toprule\n")
-        f.write("    Dataset & \\# Features & \\# Samples & \\# Classes & Train/Test & Train Acc. & Test Acc. & Actionability \\\\\n")
+        f.write("    Dataset & Features & Samples & Classes & Train/Test & Train Acc. & Test Acc. & Actionability Rules \\\\\n")
         f.write("    \\midrule\n")
         
         # Sort datasets alphabetically
@@ -2597,7 +2596,8 @@ def export_model_information(raw_df, comparison_df):
                    f"{train_test_split} & {train_acc} & {test_acc} & {restrictions_str} \\\\\n")
         
         f.write("    \\bottomrule\n")
-        f.write("  \\end{tabular}\n")
+        f.write("  \\end{tabular}%\n")
+        f.write("  }\n")
         f.write("\\end{table}\n")
     
     print(f"✓ Exported LaTeX table to: {latex_path}")
