@@ -2262,13 +2262,13 @@ def plot_ridge_comparison(
                     min_norm = normalize(min_val, feat) if min_val is not None else -0.1
                     max_norm = normalize(max_val, feat) if max_val is not None else 1.1
                     
-                    # Draw shaded band for valid constraint region
-                    ax.axvspan(min_norm, max_norm, color=constraint_color, alpha=0.15, zorder=1)
-                    # Draw boundary lines at min and max
+                    # Draw shaded band for valid constraint region (limit height to avoid overlap)
+                    ax.axvspan(min_norm, max_norm, ymin=0, ymax=0.5, color=constraint_color, alpha=0.15, zorder=1)
+                    # Draw boundary lines at min and max (also limited in height)
                     if min_val is not None:
-                        ax.axvline(x=min_norm, color=constraint_color, linewidth=1.5, linestyle='--', alpha=0.8, zorder=5)
+                        ax.axvline(x=min_norm, ymin=0, ymax=0.5, color=constraint_color, linewidth=1.5, linestyle='--', alpha=0.8, zorder=5)
                     if max_val is not None:
-                        ax.axvline(x=max_norm, color=constraint_color, linewidth=1.5, linestyle='--', alpha=0.8, zorder=5)
+                        ax.axvline(x=max_norm, ymin=0, ymax=0.5, color=constraint_color, linewidth=1.5, linestyle='--', alpha=0.8, zorder=5)
                     has_constraints = True
     
     # Overlap the plots vertically for the ridge effect
