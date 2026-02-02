@@ -2206,12 +2206,15 @@ def plot_ridge_comparison(
         ax.axhline(y=0, color="black", linewidth=1, clip_on=False)
     
     # Compute KDE for each feature to get y-values for markers
+    # Use scipy's gaussian_kde with Scott's factor adjusted by 0.5 to match seaborn's bw_adjust=0.5
     from scipy.stats import gaussian_kde
     feature_kdes = {}
     for feat in feature_names:
         feat_values = df[df['feature'] == feat]['value'].values
         if len(feat_values) > 1 and np.std(feat_values) > 0:
-            kde = gaussian_kde(feat_values, bw_method=0.5)  # Match bw_adjust=0.5
+            kde = gaussian_kde(feat_values)
+            # Adjust bandwidth to match seaborn's bw_adjust=0.5
+            kde.set_bandwidth(kde.factor * 0.5)
             feature_kdes[feat] = kde
         else:
             feature_kdes[feat] = None
@@ -2237,7 +2240,7 @@ def plot_ridge_comparison(
             cf_y = kde(cf_val)[0] if kde else 0
             ax.scatter([cf_val], [cf_y], marker='s', s=60, color=method_2_color, edgecolor='white', linewidth=1, zorder=11, clip_on=False, alpha=0.8)
         
-        ax.set_xlim(-0.1, 1.1)  # Set consistent x-axis range with small margin
+        ax.set_xlim(0, 1)  # Set consistent x-axis range (0-1 normalized)
     
     # Draw DPG constraints as shaded valid region between min and max
     constraint_color = "#228B22"  # Forest green
@@ -2259,8 +2262,8 @@ def plot_ridge_comparison(
                     max_val = feat_constraints.get('max')
                     
                     # Normalize constraint values
-                    min_norm = normalize(min_val, feat) if min_val is not None else -0.1
-                    max_norm = normalize(max_val, feat) if max_val is not None else 1.1
+                    min_norm = normalize(min_val, feat) if min_val is not None else 0
+                    max_norm = normalize(max_val, feat) if max_val is not None else 1
                     
                     # Draw shaded band for valid constraint region (limit height to avoid overlap)
                     ax.axvspan(min_norm, max_norm, ymin=0, ymax=0.5, color=constraint_color, alpha=0.15, zorder=1)
@@ -2271,8 +2274,14 @@ def plot_ridge_comparison(
                         ax.axvline(x=max_norm, ymin=0, ymax=0.5, color=constraint_color, linewidth=1.5, linestyle='--', alpha=0.8, zorder=5)
                     has_constraints = True
     
-    # Overlap the plots vertically for the ridge effect
-    g.figure.subplots_adjust(hspace=-0.25)
+    # Overlap the plots vertically for the ridge effect (reduced overlap to prevent spillover)
+    g.figure.subplots_adjust(hspace=-0.15)
+    
+    # Limit y-axis height - cap at a reasonable fixed value to prevent overflow
+    for ax in g.axes.flat:
+        ylim = ax.get_ylim()
+        # Cap max height at 6.0 (higher value = shorter visual distribution)
+        ax.set_ylim(min(ylim[0], 0), min(ylim[1], 3.0))
     
     # Remove axes details
     g.set_titles("")
@@ -2282,11 +2291,11 @@ def plot_ridge_comparison(
     # Set x-axis label on the bottom plot only
     g.axes[-1, 0].set_xlabel("Normalized Value (0-1)", fontsize=11)
     
-    # Add feature names on the left
+    # Add feature names on the left with more margin
     for ax, feat in zip(g.axes.flat, feature_names):
         # Clean feature name for display
         clean_name = feat.replace(' (cm)', '').replace('_', ' ')
-        ax.text(-0.02, 0.2, clean_name, fontweight="bold", color="black",
+        ax.text(-0.08, 0.2, clean_name, fontweight="bold", color="black",
                 ha="right", va="center", transform=ax.transAxes, fontsize=10)
     
     # Add legend with readable styling
