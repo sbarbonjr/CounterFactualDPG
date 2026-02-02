@@ -65,39 +65,7 @@ def determine_feature_types(features_df, config=None):
     return continuous_indices, categorical_indices, variable_indices
 
 
-def _preprocess_diabetes_dataset(features_df):
-    """Special preprocessing for diabetes dataset: replace zeros with feature mean.
-    
-    In the diabetes dataset, zero values in certain features (like Glucose, BloodPressure, etc.)
-    represent missing data, not actual zeros. This function replaces those zeros with the
-    mean of non-zero values for each feature.
-    
-    Args:
-        features_df: DataFrame with diabetes features
-        
-    Returns:
-        DataFrame with zeros replaced by feature means
-    """
-    features_df_processed = features_df.copy()
-    
-    # Process each feature
-    for col in features_df_processed.columns:
-        # Only process numeric columns
-        if features_df_processed[col].dtype in ['float64', 'int64', 'float32', 'int32']:
-            # Find rows with zero values
-            zero_mask = features_df_processed[col] == 0
-            num_zeros = zero_mask.sum()
-            
-            if num_zeros > 0:
-                # Calculate mean of non-zero values
-                non_zero_values = features_df_processed[col][~zero_mask]
-                if len(non_zero_values) > 0:
-                    mean_value = non_zero_values.mean()
-                    # Replace zeros with mean
-                    features_df_processed.loc[zero_mask, col] = mean_value
-                    print(f"INFO: Diabetes preprocessing - Replaced {num_zeros} zeros in '{col}' with mean {mean_value:.2f}")
-    
-    return features_df_processed
+
 
 
 def _load_csv_dataset(config, repo_root=None):
@@ -154,13 +122,24 @@ def _load_csv_dataset(config, repo_root=None):
     
     # Extract target
     target_column = config.data.target_column
+    
+    # DIABETES SPECIAL PREPROCESSING: Remove samples with any zero values
+    if dataset_name.lower() == 'diabetes':
+        # Get feature columns (all except target)
+        feature_cols = [col for col in df.columns if col != target_column]
+        
+        # Find rows with any zeros in feature columns (only check numeric columns)
+        original_count = len(df)
+        zero_mask = (df[feature_cols].select_dtypes(include=[np.number]) == 0).any(axis=1)
+        df = df[~zero_mask].copy()
+        filtered_count = len(df)
+        removed_count = original_count - filtered_count
+        
+        print(f"INFO: Diabetes preprocessing - Removed {removed_count} samples with zero values in features")
+        print(f"INFO: Diabetes preprocessing - Kept {filtered_count} samples")
+    
     labels = df[target_column].values
     features_df = df.drop(columns=[target_column])
-    
-    # DIABETES SPECIAL PREPROCESSING: Replace zeros with feature means
-    if dataset_name.lower() == 'diabetes':
-        print("INFO: Applying diabetes-specific preprocessing (replacing zeros with feature means)")
-        features_df = _preprocess_diabetes_dataset(features_df)
     
     label_encoders = {}
     
