@@ -1161,7 +1161,7 @@ def plot_sample_and_counterfactual_comparison_combined(model, sample, sample_df,
     
     # Define colors: Original (class color), DPG (orange), DiCE (blue)
     original_color = class_colors_list[predicted_class]
-    dpg_color = '#FC8600'  # Orange for DPG
+    dpg_color = '#CC0000'  # Orange for DPG
     dice_color = '#006DAC'  # Blue for DiCE
     
     # Bars for original, DPG CF, and DiCE CF
@@ -1564,7 +1564,7 @@ def plot_pca_with_counterfactuals_comparison(
     counterfactuals_df_1, cf_predicted_classes_1,
     counterfactuals_df_2, cf_predicted_classes_2,
     method_1_name='Method 1', method_2_name='Method 2',
-    method_1_color="#FC8600", method_2_color="#006DAC"
+    method_1_color="#CC0000", method_2_color="#006DAC"
 ):
     """
     Plot a PCA visualization comparing counterfactuals from two different methods.
@@ -2072,7 +2072,7 @@ def plot_ridge_comparison(
     cf_list_1, 
     cf_list_2, 
     technique_names=('DPG', 'DiCE'),
-    method_1_color="#FC8600", 
+    method_1_color="#CC0000", 
     method_2_color="#006DAC",
     sample_color="#333333",
     dataset_df=None,
@@ -2201,11 +2201,23 @@ def plot_ridge_comparison(
     for ax in g.axes.flat:
         ax.axhline(y=0, color="black", linewidth=1, clip_on=False)
     
-    # Apply sample marker to each facet (using normalized values)
+    # Apply sample marker and counterfactual markers to each facet (using normalized values)
     for ax, feat in zip(g.axes.flat, feature_names):
+        # Original sample marker
         sample_val = normalize(sample[feat], feat)
         ax.axvline(x=sample_val, color=sample_color, linewidth=2.5, linestyle='--', alpha=0.8, zorder=10)
         ax.scatter([sample_val], [0], marker='o', s=100, color=sample_color, edgecolor='white', linewidth=1.5, zorder=15, clip_on=False)
+        
+        # Plot counterfactuals from method 1 (DPG) - triangles
+        for cf in cf_list_1:
+            cf_val = normalize(cf[feat], feat)
+            ax.scatter([cf_val], [0], marker='v', s=80, color=method_1_color, edgecolor='white', linewidth=1, zorder=12, clip_on=False, alpha=0.8)
+        
+        # Plot counterfactuals from method 2 (DiCE) - squares
+        for cf in cf_list_2:
+            cf_val = normalize(cf[feat], feat)
+            ax.scatter([cf_val], [0], marker='s', s=60, color=method_2_color, edgecolor='white', linewidth=1, zorder=11, clip_on=False, alpha=0.8)
+        
         ax.set_xlim(-0.1, 1.1)  # Set consistent x-axis range with small margin
     
     # Overlap the plots vertically for the ridge effect
@@ -2233,6 +2245,12 @@ def plot_ridge_comparison(
         Line2D([0], [0], marker='o', color=sample_color, markerfacecolor=sample_color, markersize=10, 
                markeredgecolor='white', markeredgewidth=1.5, linestyle='--', 
                linewidth=2, label='Original Sample'),
+        Line2D([0], [0], marker='v', color='w', markerfacecolor=method_1_color, markersize=10,
+               markeredgecolor='white', markeredgewidth=1, linestyle='None',
+               label=f'{technique_names[0]} CFs'),
+        Line2D([0], [0], marker='s', color='w', markerfacecolor=method_2_color, markersize=9,
+               markeredgecolor='white', markeredgewidth=1, linestyle='None',
+               label=f'{technique_names[1]} CFs'),
     ]
     legend = g.figure.legend(handles=legend_elements, loc='upper right', fontsize=10, 
                              framealpha=1.0, facecolor='white', edgecolor='gray',
@@ -2241,7 +2259,7 @@ def plot_ridge_comparison(
         text.set_color('black')
     
     # Add title
-    g.figure.suptitle('Feature Distribution: Dataset Overview', 
+    g.figure.suptitle(f'Feature Distribution: {technique_names[0]} vs {technique_names[1]} Counterfactuals', 
                       fontsize=14, fontweight='bold', y=1.02)
     
     fig = g.figure

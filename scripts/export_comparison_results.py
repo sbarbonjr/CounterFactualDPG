@@ -1244,7 +1244,7 @@ def export_constraints_with_first_cfs(raw_df, dataset, dataset_viz_dir):
         # Overlay markers matching PCA comparison style
         # DPG: triangle down (v), orange edge
         # DiCE: square (s), blue edge
-        dpg_color = "#FC8600"  # Orange (matching PCA)
+        dpg_color = "#CC0000"  # Orange (matching PCA)
         dice_color = "#006DAC"  # Blue (matching PCA)
         marker_size = 150
         linewidth = 2.5
@@ -1891,7 +1891,7 @@ def export_ridge_comparison(raw_df, dataset, dataset_viz_dir):
             cf_list_1=dpg_cfs,
             cf_list_2=dice_cfs,
             technique_names=('DPG', 'DiCE'),
-            method_1_color="#FC8600",  # Orange for DPG
+            method_1_color="#CC0000",  # Orange for DPG
             method_2_color="#006DAC",  # Blue for DiCE
             dataset_df=dataset_df
         )
