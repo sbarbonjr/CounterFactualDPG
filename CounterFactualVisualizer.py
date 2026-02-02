@@ -2291,7 +2291,7 @@ def plot_ridge_comparison(
     for ax, feat in zip(g.axes.flat, feature_names):
         # Clean feature name for display
         clean_name = feat.replace(' (cm)', '').replace('_', ' ')
-        ax.text(-0.08, 0.2, clean_name, fontweight="bold", color="black",
+        ax.text(-0.10, 0.2, clean_name, fontweight="bold", color="black",
                 ha="right", va="center", transform=ax.transAxes, fontsize=10)
     
     from matplotlib.lines import Line2D
