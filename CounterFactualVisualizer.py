@@ -2160,10 +2160,9 @@ def plot_ridge_comparison(
     g.map(sns.kdeplot, "value", bw_adjust=0.5, clip_on=False, fill=True, alpha=0.6, linewidth=1.5)
     g.map(sns.kdeplot, "value", bw_adjust=0.5, clip_on=False, color="w", lw=2)
     
-    # Add horizontal reference line at y=0
-    def add_baseline(data, **kwargs):
-        plt.axhline(y=0, color="black", linewidth=1, clip_on=False)
-    g.map(add_baseline)
+    # Add horizontal reference line at y=0 to each axis
+    for ax in g.axes.flat:
+        ax.axhline(y=0, color="black", linewidth=1, clip_on=False)
     
     # Add original sample marker
     def add_sample_marker(data, feature=None, **kwargs):

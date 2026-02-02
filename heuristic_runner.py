@@ -42,25 +42,51 @@ class DistanceBasedHOF:
     This ensures the HOF contains candidates that are:
     - Close to the original (for good counterfactuals)
     - Diverse from each other (for meaningful selection later)
+    - Valid according to target class constraints (validated before entry)
     """
     
-    def __init__(self, maxsize, original_features, feature_names, diversity_weight=0.5):
+    def __init__(self, maxsize, original_features, feature_names, diversity_weight=0.5,
+                 constraint_validator=None, target_class=None, sample=None, original_class=None, verbose=False):
         self.maxsize = maxsize
         self.original_features = original_features
         self.feature_names = feature_names
         self.diversity_weight = diversity_weight  # Balance between diversity (1.0) and proximity (0.0)
+        self.constraint_validator = constraint_validator
+        self.target_class = target_class
+        self.sample = sample
+        self.original_class = original_class
+        self.verbose = verbose
         self.items = []
     
     def update(self, population):
-        """Update HOF with individuals, maintaining diversity while keeping good proximity."""
+        """Update HOF with individuals, maintaining diversity while keeping good proximity.
+        
+        CRITICAL: Validates target class constraints BEFORE adding to HOF.
+        Samples that violate any constraint are rejected and never enter the HOF.
+        """
         # Collect all valid candidates
         new_candidates = []
+        rejected_constraint_count = 0
+        
         for ind in population:
             # Skip invalid fitness individuals
             if not hasattr(ind, 'fitness') or not ind.fitness.valid:
                 continue
             if ind.fitness.values[0] >= INVALID_FITNESS:
                 continue
+            
+            # CRITICAL: Validate target class constraints BEFORE adding to HOF
+            if self.constraint_validator is not None and self.target_class is not None and self.sample is not None:
+                cf_dict = dict(ind) if not isinstance(ind, dict) else ind
+                is_valid, penalty = self.constraint_validator.validate_constraints(
+                    cf_dict, self.sample, self.target_class, 
+                    original_class=self.original_class, strict_mode=False
+                )
+                if not is_valid:
+                    rejected_constraint_count += 1
+                    if self.verbose:
+                        print(f"[HOF] Rejected candidate: violates constraints (penalty={penalty:.4f})")
+                    continue
             
             # Calculate distance to original
             ind_array = np.array([ind[f] for f in self.feature_names])
@@ -83,6 +109,9 @@ class DistanceBasedHOF:
             
             if not is_dup:
                 new_candidates.append((distance, dict(ind), ind_array))
+        
+        if self.verbose and rejected_constraint_count > 0:
+            print(f"[HOF] Rejected {rejected_constraint_count} candidates for constraint violations (before HOF entry)")
         
         # Merge with existing items
         all_candidates = []
@@ -344,11 +373,17 @@ class HeuristicRunner:
 
         # Create HOF using diversity-aware ranking
         # Use larger capacity to preserve diverse candidates, pass diversity_lambda for balancing
+        # CRITICAL: Pass constraint_validator to filter out constraint-violating candidates BEFORE they enter HOF
         hof = DistanceBasedHOF(
             maxsize=internal_num_results * 6,  # Larger pool for diversity
             original_features=original_features,
             feature_names=feature_names,
-            diversity_weight=self.diversity_lambda  # Use same lambda for HOF diversity
+            diversity_weight=self.diversity_lambda,  # Use same lambda for HOF diversity
+            constraint_validator=self.constraint_validator,
+            target_class=target_class,
+            sample=sample,
+            original_class=original_class,
+            verbose=self.verbose
         )
         hof.update(population)
 
