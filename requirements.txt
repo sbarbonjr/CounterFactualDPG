@@ -22,3 +22,4 @@ GitPython
 # type stubs for better IDE support
 types-seaborn
 pandas-stubs
+matplotlib-stubs
