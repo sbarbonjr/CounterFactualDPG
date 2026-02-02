@@ -18,3 +18,7 @@ jupyter
 tqdm
 nbstripout
 GitPython
+
+# type stubs for better IDE support
+types-seaborn
+pandas-stubs
