@@ -2077,6 +2077,8 @@ def plot_ridge_comparison(
     sample_color="#333333",
     dataset_df=None,
     dataset_color="#7B68EE",
+    constraints=None,
+    target_class=None,
     figsize=None
 ):
     """
@@ -2096,6 +2098,8 @@ def plot_ridge_comparison(
         sample_color (str): Color for the original sample marker (default: dark gray).
         dataset_df (pd.DataFrame, optional): Full dataset DataFrame to show distribution.
         dataset_color (str): Color for the dataset distribution (default: purple).
+        constraints (dict, optional): DPG constraints dict with format {class: {feature: {'min': val, 'max': val}}}.
+        target_class (int, optional): Target class for constraints. If None, uses first class in constraints.
         figsize (tuple, optional): Figure size. If None, calculated based on number of features.
     
     Returns:
@@ -2219,7 +2223,6 @@ def plot_ridge_comparison(
         # Original sample marker
         sample_val = normalize(sample[feat], feat)
         sample_y = kde(sample_val)[0] if kde else 0
-        ax.axvline(x=sample_val, color=sample_color, linewidth=2.5, linestyle='--', alpha=0.8, zorder=10)
         ax.scatter([sample_val], [sample_y], marker='o', s=100, color=sample_color, edgecolor='white', linewidth=1.5, zorder=15, clip_on=False)
         
         # Plot counterfactuals from method 1 (DPG) - triangles
@@ -2235,6 +2238,40 @@ def plot_ridge_comparison(
             ax.scatter([cf_val], [cf_y], marker='s', s=60, color=method_2_color, edgecolor='white', linewidth=1, zorder=11, clip_on=False, alpha=0.8)
         
         ax.set_xlim(-0.1, 1.1)  # Set consistent x-axis range with small margin
+    
+    # Draw DPG constraints (min/max bounds) as vertical lines
+    constraint_color = "#228B22"  # Forest green
+    has_constraints = False
+    if constraints:
+        # Determine which class constraints to use
+        if target_class is not None:
+            class_key = str(target_class)
+        else:
+            # Use first available class
+            class_key = list(constraints.keys())[0] if constraints else None
+        
+        if class_key and class_key in constraints:
+            class_constraints = constraints[class_key]
+            for ax, feat in zip(g.axes.flat, feature_names):
+                if feat in class_constraints:
+                    feat_constraints = class_constraints[feat]
+                    min_val = feat_constraints.get('min')
+                    max_val = feat_constraints.get('max')
+                    
+                    # Normalize constraint values
+                    if min_val is not None:
+                        min_norm = normalize(min_val, feat)
+                        # Draw min constraint as left-pointing triangle at baseline
+                        ax.axvline(x=min_norm, color=constraint_color, linewidth=2, linestyle='-', alpha=0.7, zorder=5)
+                        ax.scatter([min_norm], [0], marker='<', s=100, color=constraint_color, edgecolor='white', linewidth=1, zorder=16, clip_on=False)
+                        has_constraints = True
+                    
+                    if max_val is not None:
+                        max_norm = normalize(max_val, feat)
+                        # Draw max constraint as right-pointing triangle at baseline
+                        ax.axvline(x=max_norm, color=constraint_color, linewidth=2, linestyle='-', alpha=0.7, zorder=5)
+                        ax.scatter([max_norm], [0], marker='>', s=100, color=constraint_color, edgecolor='white', linewidth=1, zorder=16, clip_on=False)
+                        has_constraints = True
     
     # Overlap the plots vertically for the ridge effect
     g.figure.subplots_adjust(hspace=-0.25)
@@ -2258,9 +2295,9 @@ def plot_ridge_comparison(
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], color=dataset_color, lw=4, alpha=0.6, label='Dataset Distribution'),
-        Line2D([0], [0], marker='o', color=sample_color, markerfacecolor=sample_color, markersize=10, 
-               markeredgecolor='white', markeredgewidth=1.5, linestyle='--', 
-               linewidth=2, label='Original Sample'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor=sample_color, markersize=10, 
+               markeredgecolor='white', markeredgewidth=1.5, linestyle='None', 
+               label='Original Sample'),
         Line2D([0], [0], marker='v', color='w', markerfacecolor=method_1_color, markersize=10,
                markeredgecolor='white', markeredgewidth=1, linestyle='None',
                label=f'{technique_names[0]} CFs'),
@@ -2268,6 +2305,18 @@ def plot_ridge_comparison(
                markeredgecolor='white', markeredgewidth=1, linestyle='None',
                label=f'{technique_names[1]} CFs'),
     ]
+    # Add constraint legend entries if constraints were drawn
+    if has_constraints:
+        legend_elements.append(
+            Line2D([0], [0], marker='<', color=constraint_color, markerfacecolor=constraint_color, markersize=10,
+                   markeredgecolor='white', markeredgewidth=1, linestyle='-',
+                   linewidth=2, label='DPG Min Bound')
+        )
+        legend_elements.append(
+            Line2D([0], [0], marker='>', color=constraint_color, markerfacecolor=constraint_color, markersize=10,
+                   markeredgecolor='white', markeredgewidth=1, linestyle='-',
+                   linewidth=2, label='DPG Max Bound')
+        )
     legend = g.figure.legend(handles=legend_elements, loc='upper right', fontsize=10, 
                              framealpha=1.0, facecolor='white', edgecolor='gray',
                              bbox_to_anchor=(0.98, 0.98))
