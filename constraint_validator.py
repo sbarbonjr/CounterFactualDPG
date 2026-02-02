@@ -126,7 +126,7 @@ class ConstraintValidator:
             return False
 
     def validate_constraints(
-        self, S_prime, sample, target_class, original_class=None, strict_mode=True
+        self, S_prime, sample, target_class, original_class=None, strict_mode=True, weak_constraints=True
     ):
         """
         Validate if the modified sample S_prime meets all constraints for the specified target class.
@@ -138,6 +138,8 @@ class ConstraintValidator:
             original_class (int, optional): The original class (for overlap analysis).
             strict_mode (bool): If True, penalize values in non-target class bounds.
                                If False (relaxed mode), only check target class constraints.
+            weak_constraints (bool): If True, extend constraint bounds to include original value.
+                               E.g., if original=5 and target constraint=[7,10], accept range [5,10].
 
         Returns:
             (bool, float): Tuple of whether the changes are valid and a penalty score.
@@ -157,50 +159,61 @@ class ConstraintValidator:
             validity_str = "valid" if is_cf_valid else "invalid"
             validity_sign = "✓" if is_cf_valid else "✗"
             print(f"[VERBOSE-DPG] Attempting to validate a {validity_str} counterfactual against constraints.     -  {validity_sign}")
-            print(f"[VERBOSE-DPG] Validating constraints for target class {target_class}")
+            print(f"[VERBOSE-DPG] Validating constraints for target class {target_class} (weak_constraints={weak_constraints})")
 
         for feature, new_value in S_prime.items():
             original_value = sample.get(feature)
 
-            # Check if the feature value has changed
-            if new_value != original_value:
-                # Validate numerical constraints specific to the target class
-                matching_constraint = next(
-                    (
-                        condition
-                        for condition in class_constraints
-                        if self._features_match(condition["feature"], feature)
-                    ),
-                    None,
-                )
+            # Validate ALL features against target class constraints
+            matching_constraint = next(
+                (
+                    condition
+                    for condition in class_constraints
+                    if self._features_match(condition["feature"], feature)
+                ),
+                None,
+            )
 
-                if matching_constraint:
-                    min_val = matching_constraint.get("min")
-                    max_val = matching_constraint.get("max")
+            if matching_constraint:
+                min_val = matching_constraint.get("min")
+                max_val = matching_constraint.get("max")
+                changed = new_value != original_value
 
-                    delta = new_value - original_value
+                # In weak_constraints mode, extend bounds to include original value
+                # E.g., original=5, constraint=[7,10] -> effective range [5,10]
+                effective_min = min_val
+                effective_max = max_val
+                if weak_constraints and original_value is not None:
+                    if min_val is not None:
+                        effective_min = min(min_val, original_value)
+                    if max_val is not None:
+                        effective_max = max(max_val, original_value)
+
+                if self.verbose:
+                    delta = new_value - original_value if original_value is not None else 0
+                    in_bounds = "✓" if (effective_min is None or new_value >= effective_min) and (effective_max is None or new_value <= effective_max) else "✗"
+                    change_marker = " (changed)" if changed else " (unchanged)"
+                    weak_marker = f" [weak: {effective_min}, {effective_max}]" if weak_constraints and (effective_min != min_val or effective_max != max_val) else ""
+                    print(f"[VERBOSE-DPG]   {feature}: {original_value:.4f} → {new_value:.4f} (Δ={delta:+.4f}) [{min_val}, {max_val}]{weak_marker} {in_bounds}{change_marker}")
+
+                # Check if the new value violates min constraint (using effective bounds)
+                if effective_min is not None and new_value < effective_min:
+                    valid_change = False
+                    violation = abs(new_value - effective_min)
+                    penalty += violation
                     if self.verbose:
-                        in_bounds = "✓" if (min_val is None or new_value >= min_val) and (max_val is None or new_value <= max_val) else "✗"
-                        print(f"[VERBOSE-DPG]   {feature}: {original_value:.4f} → {new_value:.4f} (Δ={delta:+.4f}) [{min_val}, {max_val}] {in_bounds}")
+                        print(f"[VERBOSE-DPG]     Min violation: {new_value:.4f} < {effective_min:.4f}, penalty += {violation:.4f}")
 
-                    # Check if the new value violates min constraint
-                    if min_val is not None and new_value < min_val:
-                        valid_change = False
-                        violation = abs(new_value - min_val)
-                        penalty += violation
-                        if self.verbose:
-                            print(f"[VERBOSE-DPG]     Min violation: {new_value:.4f} < {min_val:.4f}, penalty += {violation:.4f}")
-
-                    # Check if the new value violates max constraint
-                    if max_val is not None and new_value > max_val:
-                        valid_change = False
-                        violation = abs(new_value - max_val)
-                        penalty += violation
-                        if self.verbose:
-                            print(f"[VERBOSE-DPG]     Max violation: {new_value:.4f} > {max_val:.4f}, penalty += {violation:.4f}")
-                elif self.verbose and new_value != original_value:
-                    delta = new_value - original_value
-                    print(f"[VERBOSE-DPG]   {feature}: {original_value:.4f} → {new_value:.4f} (Δ={delta:+.4f}) [no constraint]")
+                # Check if the new value violates max constraint (using effective bounds)
+                if effective_max is not None and new_value > effective_max:
+                    valid_change = False
+                    violation = abs(new_value - effective_max)
+                    penalty += violation
+                    if self.verbose:
+                        print(f"[VERBOSE-DPG]     Max violation: {new_value:.4f} > {effective_max:.4f}, penalty += {violation:.4f}")
+            elif self.verbose and new_value != original_value:
+                delta = new_value - original_value
+                print(f"[VERBOSE-DPG]   {feature}: {original_value:.4f} → {new_value:.4f} (Δ={delta:+.4f}) [no constraint]")
 
         # In relaxed mode, skip non-target class penalty (used when constraints overlap significantly)
         if not strict_mode:

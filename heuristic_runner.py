@@ -80,7 +80,7 @@ class DistanceBasedHOF:
                 cf_dict = dict(ind) if not isinstance(ind, dict) else ind
                 is_valid, penalty = self.constraint_validator.validate_constraints(
                     cf_dict, self.sample, self.target_class, 
-                    original_class=self.original_class, strict_mode=False
+                    original_class=self.original_class, strict_mode=False, weak_constraints=True
                 )
                 if not is_valid:
                     rejected_constraint_count += 1
@@ -760,7 +760,7 @@ class HeuristicRunner:
             # Validate target class constraints - reject CFs that violate any constraint
             if self.constraint_validator is not None:
                 is_valid_constraint, constraint_penalty = self.constraint_validator.validate_constraints(
-                    cf_dict, sample, target_class, original_class=original_class, strict_mode=False
+                    cf_dict, sample, target_class, original_class=original_class, strict_mode=False, weak_constraints=True
                 )
                 if not is_valid_constraint:
                     if self.verbose:

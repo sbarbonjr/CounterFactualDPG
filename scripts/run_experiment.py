@@ -85,6 +85,7 @@ except ImportError:
 from CounterFactualModel import CounterFactualModel
 from ConstraintParser import ConstraintParser
 from CounterFactualExplainer import CounterFactualExplainer
+from constraint_validator import ConstraintValidator
 
 # Import comprehensive metrics
 try:
@@ -365,14 +366,38 @@ def run_single_sample(
             cf_df_for_prediction = pd.DataFrame(all_counterfactuals)
             all_cf_predicted_classes = model.predict(cf_df_for_prediction)
             
+            # Create a validator for constraint checking (backup validation)
+            validator = ConstraintValidator(
+                model=model,
+                constraints=constraints,
+                dict_non_actionable=dict_non_actionable,
+                feature_names=getattr(model, "feature_names_in_", None),
+                verbose=False,
+            )
+            
             # Process each counterfactual
             for cf_idx, counterfactual in enumerate(all_counterfactuals):
                 # Get predicted class for this counterfactual
                 cf_predicted_class = int(all_cf_predicted_classes[cf_idx])
                 
-                # Only count as valid if it achieved the target class
-                if cf_predicted_class == TARGET_CLASS:
-                    valid_counterfactuals += 1
+                # CRITICAL: Skip CFs that don't predict the target class
+                # This acts as a backup filter in case generation-time filtering missed some
+                if cf_predicted_class != TARGET_CLASS:
+                    print(f"WARNING run_experiment: Skipping CF {cf_idx} - predicts class {cf_predicted_class}, expected target class {TARGET_CLASS}")
+                    continue
+                
+                # CRITICAL: Validate target class constraints
+                # Skip CFs that violate any constraint for the target class
+                is_valid, penalty = validator.validate_constraints(
+                    counterfactual, ORIGINAL_SAMPLE, TARGET_CLASS,
+                    original_class=ORIGINAL_SAMPLE_PREDICTED_CLASS, strict_mode=False, weak_constraints=True
+                )
+                if not is_valid:
+                    print(f"WARNING run_experiment: Skipping CF {cf_idx} - violates target class constraints (penalty={penalty:.4f})")
+                    continue
+                
+                # Count valid counterfactual
+                valid_counterfactuals += 1
 
                 # Calculate final best fitness
                 best_fitness = best_fitness_list[-1] if best_fitness_list else 0.0
