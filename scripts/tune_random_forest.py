@@ -45,6 +45,15 @@ from utils.config_manager import load_config
 from ConstraintParser import ConstraintParser
 from constraint_scorer import compute_constraint_score
 
+# Import DPG visualization if available
+try:
+    from DPG.dpg import plot_dpg_constraints_overview
+    import matplotlib.pyplot as plt
+    DPG_PKG_AVAILABLE = True
+except ImportError:
+    DPG_PKG_AVAILABLE = False
+    print("Warning: DPG package not available for visualization. Install with requirements in DPG/")
+
 # =============================================================================
 # RANDOMFOREST HYPERPARAMETER SEARCH SPACE
 # Common parameters for classification problems
@@ -95,7 +104,7 @@ PARAM_DISTRIBUTIONS = {
 }
 
 # Default RandomizedSearchCV settings
-DEFAULT_N_ITER = 100  # Number of parameter combinations to try
+DEFAULT_N_ITER = 10  # Number of parameter combinations to try
 DEFAULT_CV = 10  # Number of cross-validation folds
 DEFAULT_SCORING = ['accuracy']  # Default scoring metrics (list for multi-metric support)
 DEFAULT_REFIT = 'accuracy'  # Default metric to use for selecting best model
@@ -317,6 +326,12 @@ Examples:
         help='Verbosity level for RandomizedSearchCV (default: 2)'
     )
     
+    parser.add_argument(
+        '--export-constraints',
+        action='store_true',
+        help='Export constraints (text, JSON, visualization) for each hyperparameter combination tested'
+    )
+    
     return parser.parse_args()
 
 
@@ -387,6 +402,142 @@ def update_config_with_model_params(config_path: str, best_params: dict) -> None
     
     # Save the updated config back to the file (only model section is modified)
     save_config(config_path, config)
+
+
+def save_constraints_text(constraints, output_path, constraint_score=None):
+    """Save constraints to a text file in a human-readable format.
+    
+    Args:
+        constraints: Dictionary mapping class labels to feature constraints
+        output_path: Path to save the text file
+        constraint_score: Optional constraint separation score to include
+    """
+    with open(output_path, "w") as f:
+        f.write("DPG Constraints\n")
+        f.write("=" * 80 + "\n\n")
+        
+        if constraint_score is not None:
+            f.write(f"Constraint Separation Score: {constraint_score:.4f}\n")
+            f.write(f"(Score range: 0=complete overlap, 1=perfect separation)\n\n")
+        
+        if not constraints:
+            f.write("No constraints extracted.\n")
+            return
+        
+        for class_label, features in constraints.items():
+            f.write(f"Class: {class_label}\n")
+            f.write("-" * 40 + "\n")
+            
+            if isinstance(features, list):
+                for feature_constraint in features:
+                    feature = feature_constraint.get("feature", "unknown")
+                    min_val = feature_constraint.get("min", None)
+                    max_val = feature_constraint.get("max", None)
+                    
+                    constraint_str = f"  {feature}: "
+                    if min_val is not None and max_val is not None:
+                        constraint_str += f"{min_val:.4f} < x <= {max_val:.4f}"
+                    elif min_val is not None:
+                        constraint_str += f"x > {min_val:.4f}"
+                    elif max_val is not None:
+                        constraint_str += f"x <= {max_val:.4f}"
+                    else:
+                        constraint_str += "unconstrained"
+                    
+                    f.write(constraint_str + "\n")
+            
+            f.write("\n")
+
+
+def save_constraints_json(constraints, output_path):
+    """Save constraints to a JSON file.
+    
+    Args:
+        constraints: Dictionary mapping class labels to feature constraints
+        output_path: Path to save the JSON file
+    """
+    with open(output_path, "w") as f:
+        json.dump(constraints, f, indent=2, sort_keys=True)
+
+
+def export_constraints_for_params(model, X_train, y_train, feature_names, 
+                                   output_dir, run_id, dataset_name, 
+                                   dpg_config=None, constraint_score=None):
+    """Extract and export constraints for a fitted model.
+    
+    Args:
+        model: Fitted sklearn model
+        X_train: Training features
+        y_train: Training labels
+        feature_names: List of feature names
+        output_dir: Directory to save outputs
+        run_id: Unique identifier for this run
+        dataset_name: Name of the dataset
+        dpg_config: Optional DPG configuration
+        constraint_score: Optional pre-computed constraint score
+    """
+    # Extract constraints
+    dpg_result = ConstraintParser.extract_constraints_from_dataset(
+        model=model,
+        train_features=X_train,
+        train_labels=y_train,
+        feature_names=feature_names,
+        dpg_config=dpg_config
+    )
+    
+    constraints = dpg_result.get('constraints', {})
+    if not constraints:
+        print(f"    WARNING: No constraints extracted for run {run_id}")
+        return
+    
+    # Normalize constraints
+    normalized_constraints = ConstraintParser.normalize_constraints(constraints)
+    
+    # Compute constraint score if not provided
+    if constraint_score is None and normalized_constraints:
+        try:
+            n_total_features = len(feature_names)
+            n_total_classes = len(np.unique(y_train))
+            score_result = compute_constraint_score(
+                normalized_constraints,
+                n_total_features=n_total_features,
+                n_total_classes=n_total_classes,
+                verbose=False
+            )
+            constraint_score = score_result['score']
+        except Exception:
+            pass
+    
+    # Save text file
+    text_path = output_dir / f"{run_id}.txt"
+    save_constraints_text(constraints, text_path, constraint_score=constraint_score)
+    
+    # Save JSON file
+    json_path = output_dir / f"{run_id}.json"
+    save_constraints_json(normalized_constraints, json_path)
+    
+    # Generate visualization if available
+    if normalized_constraints and DPG_PKG_AVAILABLE:
+        try:
+            n_classes = len(np.unique(y_train))
+            class_colors_list = [
+                "purple", "green", "orange", "red", "blue", "yellow", "pink", "cyan"
+            ][:n_classes]
+            
+            viz_path = output_dir / f"{run_id}.png"
+            constraints_fig = plot_dpg_constraints_overview(
+                normalized_constraints=normalized_constraints,
+                feature_names=feature_names,
+                class_colors_list=class_colors_list,
+                output_path=str(viz_path),
+                title=f"DPG Constraints - {dataset_name} - {run_id}",
+                constraint_score=constraint_score
+            )
+            
+            if constraints_fig:
+                plt.close(constraints_fig)
+        except Exception as exc:
+            print(f"    WARNING: Failed to generate visualization for run {run_id}: {exc}")
 
 
 def evaluate_model(model, X_test, y_test, multiclass: bool = False) -> dict:
@@ -691,6 +842,87 @@ def main():
     # Update the dataset's config.yaml file with best parameters
     update_config_with_model_params(config_path, random_search.best_params_)
     print(f"Config file updated with best parameters: {config_path}")
+    
+    # Export constraints for all parameter combinations if requested
+    if args.export_constraints:
+        print("\n" + "=" * 70)
+        print("EXPORTING CONSTRAINTS FOR ALL PARAMETER COMBINATIONS")
+        print("=" * 70)
+        
+        # Create constraints output directory
+        constraints_dir = REPO_ROOT / "outputs" / "constraints" / args.dataset
+        constraints_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Output directory: {constraints_dir}")
+        
+        # Get DPG config from dataset config if available
+        raw_dpg_config = getattr(config.counterfactual, "config", None) if hasattr(config, 'counterfactual') else None
+        dpg_config = None
+        if raw_dpg_config is not None:
+            if hasattr(raw_dpg_config, "to_dict"):
+                raw_dpg_config = raw_dpg_config.to_dict()
+            elif hasattr(raw_dpg_config, "_config"):
+                raw_dpg_config = raw_dpg_config._config
+            
+            dpg_config = {
+                "dpg": {
+                    "default": {
+                        "perc_var": raw_dpg_config.get("perc_var", 0.0000001),
+                        "decimal_threshold": raw_dpg_config.get("decimal_threshold", 3),
+                        "n_jobs": raw_dpg_config.get("n_jobs", -1),
+                    },
+                    "visualization": raw_dpg_config.get("visualization", {}),
+                }
+            }
+        
+        # Iterate through all tested parameter combinations
+        cv_results = random_search.cv_results_
+        n_combinations = len(cv_results['params'])
+        
+        print(f"\nExporting constraints for {n_combinations} parameter combinations...")
+        
+        for idx, params in enumerate(cv_results['params']):
+            # Create a unique run_id from the combination index
+            run_id = f"{timestamp}_comb_{idx:04d}"
+            
+            print(f"\n[{idx+1}/{n_combinations}] Processing combination {idx}:")
+            print(f"  Parameters: {params}")
+            
+            # Create and fit model with these parameters
+            model = RandomForestClassifier(
+                **params,
+                random_state=args.random_state,
+                n_jobs=args.n_jobs
+            )
+            model.fit(X_train, y_train)
+            
+            # Get the CV score for this combination (if available)
+            cv_score = None
+            if len(scoring_metrics) == 1:
+                cv_score = cv_results['mean_test_score'][idx]
+            elif refit_metric in scoring_metrics:
+                score_key = f'mean_test_{refit_metric}'
+                if score_key in cv_results:
+                    cv_score = cv_results[score_key][idx]
+            
+            print(f"  CV Score ({refit_metric}): {cv_score:.4f}" if cv_score is not None else "")
+            
+            # Export constraints
+            try:
+                export_constraints_for_params(
+                    model=model,
+                    X_train=X_train,
+                    y_train=y_train,
+                    feature_names=feature_names,
+                    output_dir=constraints_dir,
+                    run_id=run_id,
+                    dataset_name=args.dataset,
+                    dpg_config=dpg_config
+                )
+                print(f"  Exported: {run_id}.txt, {run_id}.json, {run_id}.png")
+            except Exception as exc:
+                print(f"  ERROR: Failed to export constraints: {exc}")
+        
+        print(f"\nConstraint export complete! All artifacts saved to: {constraints_dir}")
     
     # Print config snippet for easy copy-paste
     print("\n" + "=" * 70)
