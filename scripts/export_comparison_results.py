@@ -2688,6 +2688,101 @@ def export_model_information(raw_df, comparison_df):
     
     print(f"✓ Exported DPG constraints table to: {latex_constraints_path}")
     
+    # Export individual LaTeX files per dataset
+    individual_constraints_dir = os.path.join(OUTPUT_DIR, 'dpg_constraints_tex')
+    os.makedirs(individual_constraints_dir, exist_ok=True)
+    
+    print(f"  Exporting individual .tex files per dataset...")
+    
+    for info in sorted_data:
+        dataset = info['Dataset']
+        dataset_latex = dataset.replace('_', '\\_')
+        safe_name = dataset.replace('/', '_').replace(' ', '_')
+        
+        # Get DPG constraints for this dataset
+        constraints = get_dpg_constraints_data(dataset)
+        
+        if not constraints:
+            continue
+        
+        # Write individual LaTeX file for this dataset
+        individual_path = os.path.join(individual_constraints_dir, f"{safe_name}_dpg_constraints.tex")
+        with open(individual_path, 'w') as f:
+            f.write(f"% DPG Constraints for {dataset} dataset\n")
+            f.write("% This file shows min/max bounds learned by DPG for each feature and class\n")
+            f.write("% These constraints define valid regions in the feature space for each class\n")
+            f.write("% and are used to guide counterfactual generation.\n\n")
+            
+            # Start landscape page for this dataset
+            f.write("\\begin{landscape}\n")
+            f.write("\\begin{table}[ht]\n")
+            f.write("  \\centering\n")
+            f.write(f"  \\caption{{DPG-learned constraints (min/max bounds) for {dataset_latex} dataset. ")
+            f.write("These constraints define valid regions in the feature space for each class ")
+            f.write("and are used to guide counterfactual generation.}\n")
+            f.write(f"  \\label{{tab:dpg-constraints-{dataset}}}\n")
+            f.write("  \\small\n")
+            
+            # Build table with classes as columns
+            classes = sorted(constraints.keys())
+            num_classes = len(classes)
+            
+            # Column specification: Feature name + (min, max) pair for each class
+            col_spec = "l" + "rr" * num_classes
+            f.write(f"  \\begin{{tabular}}{{{col_spec}}}\n")
+            f.write("    \\toprule\n")
+            
+            # Header row 1: Feature and class labels
+            header1 = "    Feature"
+            for class_label in classes:
+                class_latex = str(class_label).replace('_', '\\_')
+                header1 += f" & \\multicolumn{{2}}{{c}}{{{class_latex}}}"
+            header1 += " \\\\\n"
+            f.write(header1)
+            
+            # Header row 2: Min/Max labels under each class
+            header2 = "    "
+            for _ in classes:
+                header2 += " & Min & Max"
+            header2 += " \\\\\n"
+            f.write(header2)
+            f.write("    \\midrule\n")
+            
+            # Collect all features across all classes
+            all_features = set()
+            for class_constraints in constraints.values():
+                all_features.update(class_constraints.keys())
+            
+            # Write data rows (one per feature)
+            for feature in sorted(all_features):
+                feature_latex = feature.replace('_', '\\_')
+                row = f"    {feature_latex}"
+                
+                for class_label in classes:
+                    class_constraints = constraints[class_label]
+                    bounds = class_constraints.get(feature, {})
+                    
+                    min_val = bounds.get('min')
+                    max_val = bounds.get('max')
+                    
+                    # Format values nicely
+                    min_str = f"{min_val:.2f}" if min_val is not None else "---"
+                    max_str = f"{max_val:.2f}" if max_val is not None else "---"
+                    
+                    row += f" & {min_str} & {max_str}"
+                
+                row += " \\\\\n"
+                f.write(row)
+            
+            f.write("    \\bottomrule\n")
+            f.write("  \\end{tabular}\n")
+            f.write("\\end{table}\n")
+            f.write("\\end{landscape}\n")
+        
+        print(f"    ✓ {dataset}: {individual_path}")
+    
+    print(f"\n✓ Exported individual DPG constraints .tex files to: {individual_constraints_dir}")
+    
     # Also export a summary statistics file
     summary_path = os.path.join(OUTPUT_DIR, 'rf_model_summary.txt')
     with open(summary_path, 'w') as f:
