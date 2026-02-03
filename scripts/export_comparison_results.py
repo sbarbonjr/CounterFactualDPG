@@ -1895,6 +1895,13 @@ def export_ridge_comparison(raw_df, dataset, dataset_viz_dir):
     sample_df = pd.DataFrame([sample])
     original_class = model.predict(sample_df)[0]
     
+    # Predict target class from the first DPG counterfactual
+    if dpg_cfs and len(dpg_cfs) > 0:
+        cf_df = pd.DataFrame([dpg_cfs[0]])
+        target_class = model.predict(cf_df)[0]
+    else:
+        target_class = None
+    
     try:
         # Create ridge plot
         fig = plot_ridge_comparison(
@@ -1907,6 +1914,7 @@ def export_ridge_comparison(raw_df, dataset, dataset_viz_dir):
             dataset_df=dataset_df,
             constraints=dpg_constraints,
             target=target,
+            target_class=target_class,
             original_class=original_class,
             show_per_class_distribution=True,
             show_original_class_constraints=True

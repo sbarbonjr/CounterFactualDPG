@@ -2356,9 +2356,17 @@ def plot_ridge_comparison(
         
         if class_key and class_key in constraints:
             class_constraints = constraints[class_key]
+            # Handle both list and dict formats
+            if isinstance(class_constraints, list):
+                constraint_dict = {c['feature']: c for c in class_constraints}
+            elif isinstance(class_constraints, dict):
+                constraint_dict = {k: {'min': v.get('min'), 'max': v.get('max')} for k, v in class_constraints.items()}
+            else:
+                constraint_dict = {}
+            
             for ax, feat in zip(g.axes.flat, feature_names):
-                if feat in class_constraints:
-                    feat_constraints = class_constraints[feat]
+                if feat in constraint_dict:
+                    feat_constraints = constraint_dict[feat]
                     min_val = feat_constraints.get('min')
                     max_val = feat_constraints.get('max')
                     
@@ -2436,9 +2444,17 @@ def plot_ridge_comparison(
             original_class_key = f'Class {original_class}'
             if original_class_key in constraints:
                 original_class_constraints = constraints[original_class_key]
+                # Handle both list and dict formats
+                if isinstance(original_class_constraints, list):
+                    orig_constraint_dict = {c['feature']: c for c in original_class_constraints}
+                elif isinstance(original_class_constraints, dict):
+                    orig_constraint_dict = {k: {'min': v.get('min'), 'max': v.get('max')} for k, v in original_class_constraints.items()}
+                else:
+                    orig_constraint_dict = {}
+                
                 for ax, feat in zip(g.axes.flat, feature_names):
-                    if feat in original_class_constraints:
-                        feat_constraints = original_class_constraints[feat]
+                    if feat in orig_constraint_dict:
+                        feat_constraints = orig_constraint_dict[feat]
                         min_val = feat_constraints.get('min')
                         max_val = feat_constraints.get('max')
                         
