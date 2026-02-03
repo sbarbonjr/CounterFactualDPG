@@ -979,8 +979,10 @@ def run_single_sample(
                         heatmap_fig
                     ]
 
-                    # Save counterfactual-level visualizations locally
-                    if getattr(config.output, "save_visualization_images", False):
+                    # Save counterfactual-level visualizations locally (when save_visualizations is True)
+                    # This ensures heatmaps and comparisons are always saved when visualization is enabled
+                    save_viz_images = getattr(config.output, "save_visualization_images", True)  # Changed default to True
+                    if save_viz_images:
                         os.makedirs(sample_dir, exist_ok=True)
 
                        
@@ -1071,6 +1073,12 @@ def run_single_sample(
                                         })
 
                         wandb.log(log_dict)
+
+                    # Close figures after saving and logging to free memory
+                    if comparison_fig:
+                        plt.close(comparison_fig)
+                    if heatmap_fig:
+                        plt.close(heatmap_fig)
 
                     # Generate and log explainer metrics
                     explainer = CounterFactualExplainer(

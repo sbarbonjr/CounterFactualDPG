@@ -1334,7 +1334,7 @@ def plot_sample_and_counterfactual_heatmap(sample, class_sample, counterfactual,
     cf_df = pd.DataFrame([counterfactual], index=['Counterfactual'])
 
     # Calculate differences
-    differences = (cf_df.loc['Counterfactual'] - sample_df.loc['Original']).to_frame('Difference').T
+    differences = (cf_df.loc['Counterfactual'] - sample_df.loc['Original Sample']).to_frame('Difference').T
 
     # Combine all data
     full_df = pd.concat([sample_df, differences, cf_df])
@@ -1388,7 +1388,8 @@ def plot_sample_and_counterfactual_heatmap(sample, class_sample, counterfactual,
                 ha='center', va='center', weight='bold', rotation=30,
                 transform=fig.transFigure, zorder=100)
     
-    plt.close(fig)
+    # Don't close the figure here - let the caller close it after saving/logging
+    # plt.close(fig)
     return fig
 
 # Example usage
