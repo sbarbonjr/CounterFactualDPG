@@ -17,7 +17,7 @@ Outputs are saved to: outputs/comparison_results/
 - visualizations/comparison_numeric_small.csv: Small numeric values CSV
 - radar_charts.png: Radar charts for datasets
 - visualizations/<dataset>/: Per-dataset visualizations including:
-  - heatmap_techniques.png: Heatmap comparing DPG vs DiCE counterfactuals
+  - heatmap_techniques.pdf: Heatmap comparing DPG vs DiCE counterfactuals
   - pca_comparison.png: PCA plot comparing both methods' counterfactuals (requires dataset/model)
   - radar.png: Radar chart for the dataset
   - bar_*.png: Bar charts for each metric
@@ -912,8 +912,8 @@ def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
             )
             
             if fig:
-                output_path = os.path.join(dataset_viz_dir, 'heatmap_techniques.png')
-                fig.savefig(output_path, dpi=150, bbox_inches='tight')
+                output_path = os.path.join(dataset_viz_dir, 'heatmap_techniques.pdf')
+                fig.savefig(output_path, bbox_inches='tight')
                 plt.close(fig)
                 print(f"  ✓ {dataset}: Exported heatmap_techniques (from local data) and with restrictions: {restrictions is not None}")
                 return True
@@ -1098,8 +1098,8 @@ def export_heatmap_techniques(raw_df, dataset, dataset_viz_dir):
         )
         
         if fig:
-            output_path = os.path.join(dataset_viz_dir, 'heatmap_techniques.png')
-            fig.savefig(output_path, dpi=150, bbox_inches='tight')
+            output_path = os.path.join(dataset_viz_dir, 'heatmap_techniques.pdf')
+            fig.savefig(output_path, bbox_inches='tight')
             plt.close(fig)
             print(f"  ✓ {dataset}: Exported heatmap_techniques comparison")
             return True
