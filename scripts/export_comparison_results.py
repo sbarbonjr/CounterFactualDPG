@@ -1917,7 +1917,8 @@ def export_ridge_comparison(raw_df, dataset, dataset_viz_dir):
             target_class=target_class,
             original_class=original_class,
             show_per_class_distribution=True,
-            show_original_class_constraints=False
+            show_overall_distribution=False,
+            show_original_class_constraints=True
         )
         
         if fig:
