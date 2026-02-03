@@ -2080,14 +2080,16 @@ def plot_ridge_comparison(
     constraints=None,
     target_class=None,
     showExtendedConstraints=False,
-    figsize=None
+    figsize=None,
+    target=None,
+    show_per_class_distribution=True,
+    class_colors_list=None
 ):
     """
     Plot a ridge plot (joy plot) comparing the original sample with counterfactuals
     from two different techniques. Each row represents a different feature.
     
-    Currently plots the full dataset distribution. Counterfactual data is prepared
-    but not plotted yet (for future use).
+    Shows the full dataset distribution and optionally per-class distributions overlaid.
     
     Args:
         sample (dict): Original sample values.
@@ -2103,6 +2105,9 @@ def plot_ridge_comparison(
         target_class (int, optional): Target class for constraints. If None, uses first class in constraints.
         showExtendedConstraints (bool, optional): Whether to show orange extended constraints when original sample is outside DPG constraints. Default False.
         figsize (tuple, optional): Figure size. If None, calculated based on number of features.
+        target (array-like, optional): Class labels for each sample in dataset_df. Required for per-class distributions.
+        show_per_class_distribution (bool, optional): Whether to show per-class distributions. Default True.
+        class_colors_list (list, optional): List of colors for each class. If None, uses default palette.
     
     Returns:
         matplotlib.figure.Figure: The generated ridge plot figure.
@@ -2110,6 +2115,10 @@ def plot_ridge_comparison(
     # Get feature names sorted alphabetically
     feature_names = sorted(sample.keys())
     n_features = len(feature_names)
+    
+    # Default class colors if not provided
+    if class_colors_list is None:
+        class_colors_list = ['purple', 'green', 'orange', 'red', 'blue', 'yellow', 'pink', 'cyan']
     
     # Calculate figure size if not provided
     if figsize is None:
@@ -2175,22 +2184,38 @@ def plot_ridge_comparison(
         print("Warning: No dataset_df provided, cannot create ridge plot")
         return None
     
+    # Check if we can show per-class distributions
+    can_show_per_class = show_per_class_distribution and target is not None and len(target) == len(dataset_df)
+    
+    if show_per_class_distribution and not can_show_per_class:
+        print("Warning: Cannot show per-class distributions. Either target is None or length mismatch with dataset_df.")
+        print(f"  dataset_df length: {len(dataset_df)}, target length: {len(target) if target is not None else 'None'}")
+    
     dataset_rows = []
-    for feat in feature_names:
-        if feat in dataset_df.columns:
-            for val in dataset_df[feat].dropna():
-                dataset_rows.append({
-                    'feature': feat,
-                    'value': normalize(val, feat),
-                    'type': 'Dataset'
-                })
+    for idx, row in enumerate(dataset_df.itertuples()):
+        for feat in feature_names:
+            if feat in dataset_df.columns:
+                val = getattr(row, feat.replace(' ', '_').replace('(', '').replace(')', '').replace('-', '_'), None)
+                if val is None:
+                    # Try direct column access
+                    val = dataset_df.iloc[idx][feat]
+                
+                if pd.notna(val):
+                    row_data = {
+                        'feature': feat,
+                        'value': normalize(val, feat),
+                        'type': 'Dataset'
+                    }
+                    if can_show_per_class:
+                        row_data['class'] = int(target[idx])
+                    dataset_rows.append(row_data)
     
     df = pd.DataFrame(dataset_rows)
     
     # Set up the plot style
     sns.set_theme(style="white", rc={"axes.facecolor": (0, 0, 0, 0)})
     
-    # Initialize the FacetGrid with features as rows (dataset distribution)
+    # Initialize the FacetGrid with features as rows
     g = sns.FacetGrid(
         df,
         row="feature", 
@@ -2199,9 +2224,57 @@ def plot_ridge_comparison(
         row_order=feature_names
     )
     
-    # Draw the densities with filled KDE (single color for dataset)
-    g.map(sns.kdeplot, "value", bw_adjust=0.5, clip_on=False, fill=True, alpha=0.6, linewidth=1.5, color=dataset_color)
-    g.map(sns.kdeplot, "value", bw_adjust=0.5, clip_on=False, color="w", lw=2)
+    if can_show_per_class:
+        # Manually plot per-class distributions on each axis
+        unique_classes = sorted(df['class'].unique())
+        
+        for ax, feat in zip(g.axes.flat, feature_names):
+            # Get data for this feature
+            feat_df = df[df['feature'] == feat]
+            
+            # Plot each class
+            for class_idx in unique_classes:
+                class_color = class_colors_list[class_idx % len(class_colors_list)]
+                class_data = feat_df[feat_df['class'] == class_idx]['value']
+                
+                if len(class_data) > 1:
+                    # Draw filled KDE for this class
+                    sns.kdeplot(
+                        data=class_data,
+                        bw_adjust=0.5,
+                        clip_on=False,
+                        fill=True,
+                        alpha=0.4,
+                        linewidth=1.5,
+                        color=class_color,
+                        ax=ax
+                    )
+                    # Draw outline
+                    sns.kdeplot(
+                        data=class_data,
+                        bw_adjust=0.5,
+                        clip_on=False,
+                        color=class_color,
+                        lw=1.5,
+                        alpha=0.8,
+                        ax=ax
+                    )
+            
+            # Also draw the overall dataset distribution (lighter, as background)
+            sns.kdeplot(
+                data=feat_df['value'],
+                bw_adjust=0.5,
+                clip_on=False,
+                fill=True,
+                alpha=0.2,
+                linewidth=0.8,
+                color=dataset_color,
+                ax=ax
+            )
+    else:
+        # Draw only the overall densities (original behavior)
+        g.map(sns.kdeplot, "value", bw_adjust=0.5, clip_on=False, fill=True, alpha=0.6, linewidth=1.5, color=dataset_color)
+        g.map(sns.kdeplot, "value", bw_adjust=0.5, clip_on=False, color="w", lw=2)
     
     # Add horizontal reference line at y=0 to each axis (10% wider than data)
     for ax in g.axes.flat:
@@ -2211,6 +2284,8 @@ def plot_ridge_comparison(
     # Use scipy's gaussian_kde with Scott's factor adjusted by 0.5 to match seaborn's bw_adjust=0.5
     from scipy.stats import gaussian_kde
     feature_kdes = {}
+    feature_kdes_per_class = {}  # Store per-class KDEs
+    
     for feat in feature_names:
         feat_values = df[df['feature'] == feat]['value'].values
         if len(feat_values) > 1 and np.std(feat_values) > 0:
@@ -2220,6 +2295,19 @@ def plot_ridge_comparison(
             feature_kdes[feat] = kde
         else:
             feature_kdes[feat] = None
+        
+        # Compute per-class KDEs if available
+        if can_show_per_class:
+            feature_kdes_per_class[feat] = {}
+            unique_classes = sorted(df['class'].unique())
+            for class_idx in unique_classes:
+                class_values = df[(df['feature'] == feat) & (df['class'] == class_idx)]['value'].values
+                if len(class_values) > 1 and np.std(class_values) > 0:
+                    class_kde = gaussian_kde(class_values)
+                    class_kde.set_bandwidth(class_kde.factor * 0.5)
+                    feature_kdes_per_class[feat][class_idx] = class_kde
+                else:
+                    feature_kdes_per_class[feat][class_idx] = None
     
     # Apply sample marker and counterfactual markers to each facet (using normalized values)
     for ax, feat in zip(g.axes.flat, feature_names):
@@ -2352,7 +2440,6 @@ def plot_ridge_comparison(
     
     from matplotlib.lines import Line2D
     legend_elements = [
-        Line2D([0], [0], color=dataset_color, lw=4, alpha=0.6, label='Dataset Distribution'),
         Line2D([0], [0], marker='o', color='w', markerfacecolor=sample_color, markersize=10, 
                markeredgecolor='white', markeredgewidth=1.5, linestyle='None', 
                label='Original Sample'),
@@ -2363,6 +2450,26 @@ def plot_ridge_comparison(
                markeredgecolor='white', markeredgewidth=1, linestyle='None',
                label=f'{technique_names[1]} CFs'),
     ]
+    
+    # Add dataset distribution legend entry
+    if can_show_per_class:
+        # Show per-class entries
+        unique_classes = sorted(df['class'].unique())
+        for class_idx in unique_classes:
+            class_color = class_colors_list[class_idx % len(class_colors_list)]
+            legend_elements.append(
+                Line2D([0], [0], color=class_color, lw=4, alpha=0.6, label=f'Class {class_idx} Distribution')
+            )
+        # Add overall dataset as background
+        legend_elements.append(
+            Line2D([0], [0], color=dataset_color, lw=3, alpha=0.3, label='Overall Distribution')
+        )
+    else:
+        # Show only overall dataset
+        legend_elements.append(
+            Line2D([0], [0], color=dataset_color, lw=4, alpha=0.6, label='Dataset Distribution')
+        )
+    
     # Add constraint legend entries if constraints were drawn
     if has_constraints:
         from matplotlib.patches import Patch

@@ -1888,6 +1888,7 @@ def export_ridge_comparison(raw_df, dataset, dataset_viz_dir):
         return False
     
     dataset_df = dataset_model_info['dataset']
+    target = dataset_model_info['target']
     
     try:
         # Create ridge plot
@@ -1899,7 +1900,9 @@ def export_ridge_comparison(raw_df, dataset, dataset_viz_dir):
             method_1_color="#CC0000",  # Orange for DPG
             method_2_color="#006DAC",  # Blue for DiCE
             dataset_df=dataset_df,
-            constraints=dpg_constraints
+            constraints=dpg_constraints,
+            target=target,
+            show_per_class_distribution=True
         )
         
         if fig:
