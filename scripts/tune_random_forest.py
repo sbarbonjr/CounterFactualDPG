@@ -460,6 +460,27 @@ def save_constraints_json(constraints, output_path):
         json.dump(constraints, f, indent=2, sort_keys=True)
 
 
+def save_config_with_params(base_config_path: str, params: dict, output_path: str) -> None:
+    """Create a full config.yaml file with specific hyperparameters.
+    
+    Args:
+        base_config_path: Path to the original config.yaml file
+        params: Dictionary of hyperparameters to use in the model section
+        output_path: Path where to save the new config file
+    """
+    # Load the original config
+    with open(base_config_path, 'r') as f:
+        config = yaml.safe_load(f) or {}
+    
+    # Replace the model section with the specific parameters
+    config['model'] = {'type': 'RandomForestClassifier'}
+    for param, value in params.items():
+        config['model'][param] = value
+    
+    # Save to the specified output path
+    save_config(output_path, config)
+
+
 def export_constraints_for_params(model, X_train, y_train, feature_names, 
                                    output_dir, run_id, dataset_name, 
                                    dpg_config=None, constraint_score=None):
@@ -921,6 +942,18 @@ def main():
                 print(f"  Exported: {run_id}.txt, {run_id}.json, {run_id}.png")
             except Exception as exc:
                 print(f"  ERROR: Failed to export constraints: {exc}")
+            
+            # Save full config.yaml with these hyperparameters
+            try:
+                config_output_path = constraints_dir / f"{run_id}.yaml"
+                save_config_with_params(
+                    base_config_path=config_path,
+                    params=params,
+                    output_path=str(config_output_path)
+                )
+                print(f"  Saved config: {run_id}.yaml")
+            except Exception as exc:
+                print(f"  ERROR: Failed to save config: {exc}")
         
         print(f"\nConstraint export complete! All artifacts saved to: {constraints_dir}")
     
