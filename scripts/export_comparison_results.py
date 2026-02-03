@@ -1889,6 +1889,11 @@ def export_ridge_comparison(raw_df, dataset, dataset_viz_dir):
     
     dataset_df = dataset_model_info['dataset']
     target = dataset_model_info['target']
+    model = dataset_model_info['model']
+    
+    # Predict the original class from the sample
+    sample_df = pd.DataFrame([sample])
+    original_class = model.predict(sample_df)[0]
     
     try:
         # Create ridge plot
@@ -1902,7 +1907,9 @@ def export_ridge_comparison(raw_df, dataset, dataset_viz_dir):
             dataset_df=dataset_df,
             constraints=dpg_constraints,
             target=target,
-            show_per_class_distribution=True
+            original_class=original_class,
+            show_per_class_distribution=True,
+            show_original_class_constraints=True
         )
         
         if fig:

@@ -2079,6 +2079,8 @@ def plot_ridge_comparison(
     dataset_color="#7B68EE",
     constraints=None,
     target_class=None,
+    original_class=None,
+    show_original_class_constraints=False,
     showExtendedConstraints=False,
     figsize=None,
     target=None,
@@ -2104,6 +2106,8 @@ def plot_ridge_comparison(
         dataset_color (str): Color for the dataset distribution (default: purple).
         constraints (dict, optional): DPG constraints dict with format {class: {feature: {'min': val, 'max': val}}}.
         target_class (int, optional): Target class for constraints. If None, uses first class in constraints.
+        original_class (int, optional): Original sample's class. Required for show_original_class_constraints.
+        show_original_class_constraints (bool, optional): Whether to show constraints from the original class. Default False.
         showExtendedConstraints (bool, optional): Whether to show orange extended constraints when original sample is outside DPG constraints. Default False.
         figsize (tuple, optional): Figure size. If None, calculated based on number of features.
         target (array-like, optional): Class labels for each sample in dataset_df. Required for per-class distributions.
@@ -2337,13 +2341,15 @@ def plot_ridge_comparison(
         ax.set_xlim(0, 1)  # Set consistent x-axis range (0-1 normalized)
     
     # Draw DPG constraints as shaded valid region between min and max
-    constraint_color = "#228B22"  # Forest green
+    constraint_color = "#228B22"  # Forest green for target class
+    original_constraint_color = "#4169E1"  # Royal blue for original class
     orange_color = "#FF8C00"  # Dark orange for out-of-constraint indicator
     has_constraints = False
+    has_original_constraints = False
     if constraints:
-        # Determine which class constraints to use
+        # Determine which class constraints to use for target class
         if target_class is not None:
-            class_key = str(target_class)
+            class_key = f'Class {target_class}'
         else:
             # Use first available class
             class_key = list(constraints.keys())[0] if constraints else None
@@ -2366,13 +2372,16 @@ def plot_ridge_comparison(
                     if min_val is not None:
                         ax.axvline(x=min_norm, ymin=0.1, ymax=0.7, color=constraint_color, linewidth=1.5, linestyle='--', alpha=0.8, zorder=5)
                         # Add triangle pointing inward (to the right) from min constraint
-                        ax.scatter([min_norm + 0.008], [0.5], marker='>', s=80, 
-                                  color=constraint_color, alpha=1.0, zorder=6)
+                        # Use axis coordinates (transform) for y-position to match axvline ymin/ymax
+                        ax.scatter([min_norm + 0.008], [0.4], marker='>', s=80, 
+                                  color=constraint_color, alpha=1.0, zorder=6, 
+                                  transform=ax.get_xaxis_transform())
                     if max_val is not None:
                         ax.axvline(x=max_norm, ymin=0.1, ymax=0.7, color=constraint_color, linewidth=1.5, linestyle='--', alpha=0.8, zorder=5)
                         # Add triangle pointing inward (to the left) from max constraint
-                        ax.scatter([max_norm - 0.008], [0.5], marker='<', s=80, 
-                                  color=constraint_color, alpha=1.0, zorder=6)
+                        ax.scatter([max_norm - 0.008], [0.4], marker='<', s=80, 
+                                  color=constraint_color, alpha=1.0, zorder=6, 
+                                  transform=ax.get_xaxis_transform())
                     
                     # Draw orange boundary region when original sample is outside constraints
                     if showExtendedConstraints:
@@ -2421,6 +2430,41 @@ def plot_ridge_comparison(
                                       color=orange_color, linewidth=1.5, linestyle='--', alpha=0.8, zorder=6)
 
                         has_constraints = True
+        
+        # Draw constraints from original class if requested
+        if show_original_class_constraints and original_class is not None:
+            original_class_key = f'Class {original_class}'
+            if original_class_key in constraints:
+                original_class_constraints = constraints[original_class_key]
+                for ax, feat in zip(g.axes.flat, feature_names):
+                    if feat in original_class_constraints:
+                        feat_constraints = original_class_constraints[feat]
+                        min_val = feat_constraints.get('min')
+                        max_val = feat_constraints.get('max')
+                        
+                        # Normalize constraint values
+                        min_norm = normalize(min_val, feat) if min_val is not None else 0
+                        max_norm = normalize(max_val, feat) if max_val is not None else 1
+                        
+                        # Draw shaded band for original class constraint region (at top)
+                        # Use ymin=0.75, ymax=0.95 to place it at the top, distinct from target class constraints
+                        ax.axvspan(min_norm, max_norm, ymin=0.75, ymax=0.95, color=original_constraint_color, alpha=0.2, zorder=1)
+                        # Draw boundary lines at min and max
+                        if min_val is not None:
+                            ax.axvline(x=min_norm, ymin=0.75, ymax=0.95, color=original_constraint_color, linewidth=1.5, linestyle=':', alpha=0.8, zorder=5)
+                            # Add triangle pointing inward (to the right) from min constraint
+                            # Use axis coordinates (transform) for y-position to match axvline ymin/ymax (midpoint = 0.85)
+                            ax.scatter([min_norm + 0.008], [0.85], marker='>', s=60, 
+                                      color=original_constraint_color, alpha=1.0, zorder=6, 
+                                      transform=ax.get_xaxis_transform())
+                        if max_val is not None:
+                            ax.axvline(x=max_norm, ymin=0.75, ymax=0.95, color=original_constraint_color, linewidth=1.5, linestyle=':', alpha=0.8, zorder=5)
+                            # Add triangle pointing inward (to the left) from max constraint
+                            ax.scatter([max_norm - 0.008], [0.85], marker='<', s=60, 
+                                      color=original_constraint_color, alpha=1.0, zorder=6, 
+                                      transform=ax.get_xaxis_transform())
+                        
+                        has_original_constraints = True
     
     # Overlap the plots vertically for the ridge effect (reduced overlap to prevent spillover)
     g.figure.subplots_adjust(hspace=-0.15)
@@ -2481,7 +2525,7 @@ def plot_ridge_comparison(
         from matplotlib.patches import Patch
         legend_elements.append(
             Patch(facecolor=constraint_color, alpha=0.15, edgecolor=constraint_color,
-                  linestyle='--', linewidth=1.5, label='DPG Constraints')
+                  linestyle='--', linewidth=1.5, label='Target Class Constraints')
         )
         # Add orange constraint legend for extended constraints (only if shown)
         if showExtendedConstraints:
@@ -2490,7 +2534,15 @@ def plot_ridge_comparison(
                       linestyle='--', linewidth=1.5, label='Extended DPG Constraints')
             )
     
-    # Always show DPG Constraints legend entry when constraints parameter is provided
+    # Add original class constraints legend if shown
+    if has_original_constraints:
+        from matplotlib.patches import Patch
+        legend_elements.append(
+            Patch(facecolor=original_constraint_color, alpha=0.2, edgecolor=original_constraint_color,
+                  linestyle=':', linewidth=1.5, label='Original Class Constraints')
+        )
+    
+    # Always show DPG Constraints legend entry when constraints parameter is provided (but no constraints drawn)
     elif constraints:
         from matplotlib.patches import Patch
         legend_elements.append(
