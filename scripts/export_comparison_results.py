@@ -514,28 +514,37 @@ def fetch_multiple_runs(dataset, method, max_runs):
     
     print(f"\nFetching last {max_runs} runs for dataset={dataset}, method={method}...")
     
-    # Query WandB for runs with this dataset
+    # Query WandB for all finished runs (no dataset filter since config key varies)
     all_runs = api.runs(
         f"{WANDB_ENTITY}/{WANDB_PROJECT}",
         filters={
-            "state": "finished",
-            "config.data.dataset_name": dataset
+            "state": "finished"
         },
         order="-created_at",
-        per_page=500
+        per_page=1000
     )
     
     runs_found = 0
+    runs_checked = 0
+    
     for run in all_runs:
         if runs_found >= max_runs:
             break
+        
+        runs_checked += 1
         
         config = run.config
         if 'data' not in config:
             continue
         
-        # Check if this is the right method
+        # Check if this is the right dataset (try both config keys)
         data_config = config['data']
+        run_dataset = data_config.get('dataset_name') or data_config.get('dataset')
+        
+        if run_dataset != dataset:
+            continue
+        
+        # Check if this is the right method
         run_method = data_config.get('method', '').lower()
         
         # Also check run name as fallback
@@ -595,10 +604,12 @@ def fetch_multiple_runs(dataset, method, max_runs):
         runs_found += 1
         print(f"  ✓ Run {runs_found}/{max_runs}: {run.id} ({run.created_at})")
     
-    print(f"\n✓ Fetched {runs_found} runs")
+    print(f"\n✓ Fetched {runs_found} runs (checked {runs_checked} total runs)")
     
     if runs_found == 0:
-        print("❌ No runs found")
+        print(f"❌ No runs found for dataset='{dataset}' and method='{method}'")
+        print(f"   Tip: Check that the dataset name and method are spelled correctly")
+        print(f"   Available datasets can be found in the configs/ directory")
         return pd.DataFrame()
     
     return pd.DataFrame(runs_data)
