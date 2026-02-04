@@ -2564,7 +2564,7 @@ def plot_ridge_comparison(
         from matplotlib.patches import Patch
         legend_elements.append(
             Patch(facecolor=constraint_color, alpha=0.15, edgecolor=constraint_color,
-                  linestyle='--', linewidth=1.5, label='DPG Constraints')
+                  linestyle='--', linewidth=1.5, label='DPG Class 1 Constraints')
         )
 
     legend = g.figure.legend(handles=legend_elements, loc='upper right', fontsize=10, 
