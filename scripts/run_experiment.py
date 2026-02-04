@@ -1982,7 +1982,7 @@ def main():
 
     # Load config with method selection
     print(f"INFO: Loading config from {args.config}")
-    config = load_config(args.config, method=args.method)
+    config = load_config(args.config, method=args.method, repo_root=str(REPO_ROOT))
 
     # Apply overrides
     if args.overrides:
