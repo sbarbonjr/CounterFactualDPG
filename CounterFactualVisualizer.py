@@ -2501,7 +2501,7 @@ def plot_ridge_comparison(
         # Clean feature name for display
         clean_name = feat.replace(' (cm)', '').replace('_', ' ')
         ax.text(-0.10, 0.2, clean_name, fontweight="bold", color="black",
-                ha="right", va="center", transform=ax.transAxes, fontsize=10)
+                ha="right", va="center", transform=ax.transAxes, fontsize=10, zorder=25)
     
     from matplotlib.lines import Line2D
     legend_elements = [
@@ -2577,11 +2577,25 @@ def plot_ridge_comparison(
     g.figure.suptitle(f'Feature Distribution: {technique_names[0]} vs {technique_names[1]} Counterfactuals', 
                       fontsize=14, fontweight='bold', y=1.02)
     
-    # Add background-colored rectangle on the right to align horizontal bars
+    # Add background-colored rectangles on both sides to align horizontal bars
     from matplotlib.patches import Rectangle
     fig_background_color = g.figure.get_facecolor()
     for ax in g.axes.flat:
-        alignment_rect = Rectangle(
+        # Left alignment rectangle
+        left_rect = Rectangle(
+            xy=(-0.2, 0), 
+            width=0.11, 
+            height=0.5,
+            transform=ax.transAxes,
+            facecolor=fig_background_color,
+            edgecolor='none',
+            zorder=20,
+            clip_on=False
+        )
+        ax.add_patch(left_rect)
+        
+        # Right alignment rectangle
+        right_rect = Rectangle(
             xy=(1.07, 0), 
             width=0.1, 
             height=1.0,
@@ -2591,7 +2605,7 @@ def plot_ridge_comparison(
             zorder=20,
             clip_on=False
         )
-        ax.add_patch(alignment_rect)
+        ax.add_patch(right_rect)
     
     fig = g.figure
     plt.close(fig)
