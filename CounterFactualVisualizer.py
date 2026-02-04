@@ -2320,7 +2320,13 @@ def plot_ridge_comparison(
     
     # Apply sample marker and counterfactual markers to each facet (using normalized values)
     for ax, feat in zip(g.axes.flat, feature_names):
-        kde = feature_kdes.get(feat)
+        # Determine which KDE to use for positioning markers
+        if not show_overall_distribution and can_show_per_class and target_class is not None:
+            # Use target class KDE when overall distribution is not shown
+            kde = feature_kdes_per_class.get(feat, {}).get(target_class)
+        else:
+            # Use overall dataset KDE
+            kde = feature_kdes.get(feat)
         
         # Original sample marker
         sample_val = normalize(sample[feat], feat)
@@ -2331,13 +2337,13 @@ def plot_ridge_comparison(
         for cf in cf_list_1:
             cf_val = normalize(cf[feat], feat)
             cf_y = kde(cf_val)[0] if kde else 0
-            ax.scatter([cf_val], [cf_y + 0.5], marker='v', s=90, color=method_1_color, edgecolor='white', linewidth=1, zorder=12, clip_on=False, alpha=0.9)
+            ax.scatter([cf_val], [cf_y + 0.7], marker='v', s=90, color=method_1_color, edgecolor='white', linewidth=1, zorder=12, clip_on=False, alpha=0.9)
         
         # Plot counterfactuals from method 2 (DiCE) - squares
         for cf in cf_list_2:
             cf_val = normalize(cf[feat], feat)
             cf_y = kde(cf_val)[0] if kde else 0
-            ax.scatter([cf_val], [cf_y - 0.5], marker='^', s=90, color=method_2_color, edgecolor='white', linewidth=1, zorder=11, clip_on=False, alpha=0.8)
+            ax.scatter([cf_val], [cf_y - 0.7], marker='^', s=90, color=method_2_color, edgecolor='white', linewidth=1, zorder=11, clip_on=False, alpha=0.8)
         
         ax.set_xlim(0, 1)  # Set consistent x-axis range (0-1 normalized)
     
@@ -2384,12 +2390,14 @@ def plot_ridge_comparison(
                         # Use axis coordinates (transform) for y-position to match axvline ymin/ymax
                         ax.scatter([min_norm + 0.008], [0.4], marker='>', s=80, 
                                   color=constraint_color, alpha=1.0, zorder=6, 
+                                  edgecolor='white'
                                   transform=ax.get_xaxis_transform())
                     if max_val is not None:
                         ax.axvline(x=max_norm, ymin=0.1, ymax=0.7, color=constraint_color, linewidth=1.5, linestyle='--', alpha=0.8, zorder=5)
                         # Add triangle pointing inward (to the left) from max constraint
                         ax.scatter([max_norm - 0.008], [0.4], marker='<', s=80, 
                                   color=constraint_color, alpha=1.0, zorder=6, 
+                                  edgecolor='white',
                                   transform=ax.get_xaxis_transform())
                     
                     # Draw orange boundary region when original sample is outside constraints
