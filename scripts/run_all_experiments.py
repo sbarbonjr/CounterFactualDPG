@@ -35,6 +35,9 @@ Usage:
   
   # Run multiple experiments in parallel
   python scripts/run_all_experiments.py --parallel 4
+  
+  # Run experiments for each config file in a directory
+  python scripts/run_all_experiments.py --config-dir outputs/constraints/diabetes
 """
 
 from __future__ import annotations
@@ -163,8 +166,9 @@ class ExperimentStatus(Enum):
 
 @dataclass
 class Experiment:
-    dataset: str
-    method: str
+    dataset: Optional[str] = None
+    method: Optional[str] = None
+    config: Optional[str] = None
     status: ExperimentStatus = ExperimentStatus.PENDING
     process: Optional[subprocess.Popen] = None
     start_time: Optional[float] = None
@@ -176,6 +180,11 @@ class Experiment:
     
     @property
     def key(self) -> str:
+        if self.config:
+            # For config file mode, use the config filename as key
+            import pathlib
+            config_path = pathlib.Path(self.config)
+            return config_path.stem  # filename without .yaml
         return f"{self.dataset}/{self.method}"
     
     @property
@@ -244,50 +253,59 @@ class ExperimentRunner:
         self.pending_queue: List[str] = []
         
         for exp_dict in experiments:
-            exp = Experiment(dataset=exp_dict['dataset'], method=exp_dict['method'])
+            exp = Experiment(
+                dataset=exp_dict.get('dataset'),
+                method=exp_dict.get('method'),
+                config=exp_dict.get('config')
+            )
             self.experiments[exp.key] = exp
             
-            # Check status from persistent status file
-            persistent_status, status_info = get_experiment_status(
-                exp.dataset, exp.method, self.output_dir
-            )
-            
-            if persistent_status == PersistentStatus.FINISHED:
-                # Already completed successfully - skip only if skip_existing is True
-                if self.skip_existing:
-                    exp.status = ExperimentStatus.SKIPPED
-                    if status_info and status_info.start_time:
-                        exp.start_time = status_info.start_time
-                        exp.end_time = status_info.end_time
-                else:
-                    # Add to queue to re-run
-                    self.pending_queue.append(exp.key)
-            elif persistent_status == PersistentStatus.RUNNING:
-                # Another process is running this experiment - track it
-                if status_info and status_info.pid and is_process_running(status_info.pid):
-                    exp.status = ExperimentStatus.EXTERNAL_RUNNING
-                    exp.external_pid = status_info.pid
-                    exp.start_time = status_info.start_time
-                    # Start a thread to read its logs
-                    self._start_external_log_reader(exp)
-                else:
-                    # Process died - it's actually an error, add to queue
-                    if not monitor_only:
-                        self.pending_queue.append(exp.key)
-            elif persistent_status == PersistentStatus.ERROR:
-                # Previous run errored - we should retry unless monitor_only
-                if monitor_only:
-                    exp.status = ExperimentStatus.FAILED
-                    if status_info:
-                        exp.start_time = status_info.start_time
-                        exp.end_time = status_info.end_time
-                        exp.last_log_line = status_info.error_message or "Error"
-                else:
-                    self.pending_queue.append(exp.key)
+            # Check status from persistent status file (skip in config mode as we use config file as unique ID)
+            if exp.config:
+                # In config mode, we should track completed based on config file existence
+                # For now, skip this checks since each config file is unique
+                self.pending_queue.append(exp.key)
             else:
-                # No status or unknown - add to queue unless monitor_only
-                if not monitor_only:
-                    self.pending_queue.append(exp.key)
+                persistent_status, status_info = get_experiment_status(
+                    exp.dataset, exp.method, self.output_dir
+                )
+            
+                if persistent_status == PersistentStatus.FINISHED:
+                    # Already completed successfully - skip only if skip_existing is True
+                    if self.skip_existing:
+                        exp.status = ExperimentStatus.SKIPPED
+                        if status_info and status_info.start_time:
+                            exp.start_time = status_info.start_time
+                            exp.end_time = status_info.end_time
+                    else:
+                        # Add to queue to re-run
+                        self.pending_queue.append(exp.key)
+                elif persistent_status == PersistentStatus.RUNNING:
+                    # Another process is running this experiment - track it
+                    if status_info and status_info.pid and is_process_running(status_info.pid):
+                        exp.status = ExperimentStatus.EXTERNAL_RUNNING
+                        exp.external_pid = status_info.pid
+                        exp.start_time = status_info.start_time
+                        # Start a thread to read its logs
+                        self._start_external_log_reader(exp)
+                    else:
+                        # Process died - it's actually an error, add to queue
+                        if not self.monitor_only:
+                            self.pending_queue.append(exp.key)
+                elif persistent_status == PersistentStatus.ERROR:
+                    # Previous run errored - we should retry unless monitor_only
+                    if monitor_only:
+                        exp.status = ExperimentStatus.FAILED
+                        if status_info:
+                            exp.start_time = status_info.start_time
+                            exp.end_time = status_info.end_time
+                            exp.last_log_line = status_info.error_message or "Error"
+                    else:
+                        self.pending_queue.append(exp.key)
+                else:
+                    # No status or unknown - add to queue unless monitor_only
+                    if not self.monitor_only:
+                        self.pending_queue.append(exp.key)
     
     def _start_external_log_reader(self, exp: Experiment):
         """Start a thread to read logs from an external experiment's log file."""
@@ -343,9 +361,14 @@ class ExperimentRunner:
         cmd = [
             sys.executable,
             str(REPO_ROOT / 'scripts' / 'run_experiment.py'),
-            '--dataset', exp.dataset,
-            '--method', exp.method,
         ]
+        
+        if exp.config:
+            # Config file mode: use --config flag
+            cmd.extend(['--config', exp.config])
+        else:
+            # Normal mode: use --dataset and --method flags
+            cmd.extend(['--dataset', exp.dataset, '--method', exp.method])
         
         if self.verbose:
             cmd.append('--verbose')
@@ -904,9 +927,21 @@ def run_experiment_simple(
     cmd = [
         sys.executable,
         str(REPO_ROOT / 'scripts' / 'run_experiment.py'),
-        '--dataset', dataset,
-        '--method', method,
     ]
+    
+    # In config mode, dataset and method may be None
+    # Use config file directly if provided
+    if dataset is None and method is None:
+        # This is a hint that we're in config mode - but actually this function shouldn't be called
+        # Return early with error
+        return {
+            'success': False,
+            'message': "run_experiment_simple should not be called in config mode",
+            'experiment_key': 'unknown',
+            'cmd': ''
+        }
+    
+    cmd.extend(['--dataset', dataset, '--method', method])
     
     if verbose:
         cmd.append('--verbose')
@@ -1073,96 +1108,152 @@ def main():
                        help='Monitor mode: only show running experiments, do not start new ones')
     parser.add_argument('--priority-only', action='store_true',
                        help='Only run experiments for datasets in priority_datasets list from config.yaml')
+    parser.add_argument('--config-dir', type=str, default=None,
+                       help='Path to directory containing YAML config files (runs one experiment per config file)')
     
     args = parser.parse_args()
+    
+    # Config dir mode: run one experiment per YAML file in the directory
+    config_dir_mode = args.config_dir is not None
+    if config_dir_mode:
+        if args.datasets or args.methods or args.priority_only:
+            print("WARNING: --config-dir is specified; ignoring --datasets, --methods, and --priority-only")
+        
+        config_dir_path = pathlib.Path(args.config_dir)
+        if not config_dir_path.exists():
+            print(f"ERROR: Config directory not found: {args.config_dir}")
+            return 1
+        if not config_dir_path.is_dir():
+            print(f"ERROR: Config path is not a directory: {args.config_dir}")
+            return 1
+        
+        # Find all YAML files in the directory
+        yaml_files = sorted(config_dir_path.glob('*.yaml'))
+        yaml_files += sorted(config_dir_path.glob('*.yml'))
+        yaml_files = sorted(set(yaml_files))  # Remove duplicates
+        
+        if not yaml_files:
+            print(f"ERROR: No YAML config files found in {args.config_dir}")
+            return 1
+        
+        print(f"Found {len(yaml_files)} config files in {args.config_dir}")
+        
+        # Build experiments list for config files
+        experiments = []
+        for yaml_file in yaml_files:
+            # Use the config file path directly (relative to repo root for cleaner display)
+            experiments.append({'config': str(yaml_file.relative_to(REPO_ROOT))})
+        
+        # Set up a custom dataset name for display
+        dataset_name = config_dir_path.name
     
     configs_dir = REPO_ROOT / 'configs'
     output_dir = REPO_ROOT / 'outputs'
     
-    # Load global config to get excluded datasets and priority datasets
-    config_file = REPO_ROOT / 'configs' / 'config.yaml'
+    # Load global config to get excluded datasets and priority datasets (only in non-config-dir mode)
     excluded_datasets = []
     priority_datasets = []
-    if config_file.exists():
-        try:
-            with open(config_file, 'r') as f:
-                config = yaml.safe_load(f)
-                excluded_datasets = config.get('excluded_datasets', [])
-                priority_datasets = config.get('priority_datasets', [])
-        except Exception:
-            # If config loading fails, just use empty list
-            excluded_datasets = []
-            priority_datasets = []
+    if not config_dir_mode:
+        # Load global config to get excluded datasets and priority datasets
+        config_file = REPO_ROOT / 'configs' / 'config.yaml'
+        if config_file.exists():
+            try:
+                with open(config_file, 'r') as f:
+                    config = yaml.safe_load(f)
+                    excluded_datasets = config.get('excluded_datasets', [])
+                    priority_datasets = config.get('priority_datasets', [])
+            except Exception:
+                # If config loading fails, just use empty list
+                excluded_datasets = []
+                priority_datasets = []
     
     # Get datasets
-    if args.datasets:
-        datasets = args.datasets
-        all_datasets = set(get_all_datasets(configs_dir))
-        invalid_datasets = set(datasets) - all_datasets
-        if invalid_datasets:
-            print(f"ERROR: Invalid datasets: {invalid_datasets}")
-            print(f"Available datasets: {sorted(all_datasets)}")
-            return 1
-    else:
-        datasets = get_all_datasets(configs_dir)
-    
-    # Filter for priority datasets if --priority-only flag is set
-    if args.priority_only:
-        if not priority_datasets:
-            print("ERROR: --priority-only flag used but no priority_datasets defined in config.yaml")
-            return 1
-        priority_set = set(priority_datasets)
-        original_count = len(datasets)
-        datasets = [d for d in datasets if d in priority_set]
-        filtered_count = original_count - len(datasets)
-        if filtered_count > 0:
-            print(f"Priority mode: running only {len(datasets)} priority dataset(s): {sorted(datasets)}")
-            print(f"Skipped {filtered_count} non-priority dataset(s)")
-        if not datasets:
-            print("ERROR: No valid priority datasets found")
-            return 1
-    
-    # Filter out excluded datasets
-    if excluded_datasets:
-        excluded_set = set(excluded_datasets)
-        original_count = len(datasets)
-        datasets = [d for d in datasets if d not in excluded_set]
-        filtered_count = original_count - len(datasets)
-        if filtered_count > 0:
-            print(f"Excluded {filtered_count} dataset(s): {sorted(excluded_set & set(datasets + excluded_datasets))}")
-    
-    if args.limit:
-        datasets = datasets[:args.limit]
-    
-    methods = args.methods
+    if not config_dir_mode:
+        if args.datasets:
+            datasets = args.datasets
+            all_datasets = set(get_all_datasets(configs_dir))
+            invalid_datasets = set(datasets) - all_datasets
+            if invalid_datasets:
+                print(f"ERROR: Invalid datasets: {invalid_datasets}")
+                print(f"Available datasets: {sorted(all_datasets)}")
+                return 1
+        else:
+            datasets = get_all_datasets(configs_dir)
+        
+        # Filter for priority datasets if --priority-only flag is set
+        if args.priority_only:
+            if not priority_datasets:
+                print("ERROR: --priority-only flag used but no priority_datasets defined in config.yaml")
+                return 1
+            priority_set = set(priority_datasets)
+            original_count = len(datasets)
+            datasets = [d for d in datasets if d in priority_set]
+            filtered_count = original_count - len(datasets)
+            if filtered_count > 0:
+                print(f"Priority mode: running only {len(datasets)} priority dataset(s): {sorted(datasets)}")
+                print(f"Skipped {filtered_count} non-priority dataset(s)")
+            if not datasets:
+                print("ERROR: No valid priority datasets found")
+                return 1
+        
+        # Filter out excluded datasets
+        if excluded_datasets:
+            excluded_set = set(excluded_datasets)
+            original_count = len(datasets)
+            datasets = [d for d in datasets if d not in excluded_set]
+            filtered_count = original_count - len(datasets)
+            if filtered_count > 0:
+                print(f"Excluded {filtered_count} dataset(s): {sorted(excluded_set & set(datasets + excluded_datasets))}")
+        
+        if args.limit:
+            datasets = datasets[:args.limit]
     
     # Build experiments list with iris first (baseline/smallest dataset)
     # Then randomize remaining datasets, keeping all methods together per dataset
+    # Skip this if using config-dir mode (experiments already built)
     import random
     
-    experiments = []
-    
-    # Add iris experiments first if iris is in the datasets list
-    if 'iris' in datasets:
-        for method in methods:
-            experiments.append({'dataset': 'iris', 'method': method})
-    
-    # Get remaining datasets (excluding iris) and shuffle them randomly
-    remaining_datasets = [d for d in datasets if d != 'iris']
-    random.shuffle(remaining_datasets)
-    
-    # Add experiments for each shuffled dataset with all methods together
-    for dataset in remaining_datasets:
-        for method in methods:
-            experiments.append({'dataset': dataset, 'method': method})
+    if not config_dir_mode:
+        # Dataset/method mode: build experiments from datasets and methods
+        methods = args.methods
+        
+        experiments = []
+        
+        # Add iris experiments first if iris is in the datasets list
+        if 'iris' in datasets:
+            for method in methods:
+                experiments.append({'dataset': 'iris', 'method': method})
+        
+        # Get remaining datasets (excluding iris) and shuffle them randomly
+        remaining_datasets = [d for d in datasets if d != 'iris']
+        random.shuffle(remaining_datasets)
+        
+        # Add experiments for each shuffled dataset with all methods together
+        for dataset in remaining_datasets:
+            for method in methods:
+                experiments.append({'dataset': dataset, 'method': method})
+    else:
+        # Config-dir mode: experiments already built above
+        pass
     
     # Print header
     print("=" * 60)
-    print("COUNTERFACTUAL EXPERIMENTS BATCH RUNNER")
+    if config_dir_mode:
+        print("CONFIG DIR MODE")
+        config_source = f"Config directory: {args.config_dir}"
+        dataset_display = f"Directory name: {dataset_name}"
+        method_display = "YAML configs"
+    else:
+        print("COUNTERFACTUAL EXPERIMENTS BATCH RUNNER")
+        config_source = f"Datasets: {len(datasets)}"
+        dataset_display = f"Datasets: {datasets if len(datasets) <= 5 else f'{len(datasets)} datasets'}"
+        method_display = f"Methods: {methods}"
     print("=" * 60)
     print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Datasets: {len(datasets)}")
-    print(f"Methods: {methods}")
+    print(f"{config_source}")
+    if not config_dir_mode:
+        print(f"{dataset_display}")
+    print(f"{method_display}")
     print(f"Total experiments: {len(experiments)}")
     print(f"Parallel workers: {args.parallel if args.parallel else 'sequential'}")
     print(f"Monitor only: {args.monitor}")
@@ -1219,37 +1310,91 @@ def main():
         
         # Track experiments for report generation
         for exp_dict in experiments:
-            exp_obj = Experiment(dataset=exp_dict['dataset'], method=exp_dict['method'])
+            exp_obj = Experiment(
+                dataset=exp_dict.get('dataset'),
+                method=exp_dict.get('method'),
+                config=exp_dict.get('config')
+            )
             experiments_dict[exp_obj.key] = exp_obj
         
-        for i, exp in enumerate(experiments, 1):
-            dataset = exp['dataset']
-            method = exp['method']
-            experiment_key = f"{dataset}/{method}"
-            exp_obj = experiments_dict[experiment_key]
+        for i, exp_dict in enumerate(experiments, 1):
+            # Determine experiment type based on what's in exp_dict
+            if 'config' in exp_dict:
+                # Config file mode - get the exp object by constructing the key manually
+                config_path = pathlib.Path(exp_dict['config'])
+                config_key = config_path.stem  # This is how Experiment.key computes it
+                exp_obj = experiments_dict[config_key]
+                cmd = [
+                    sys.executable,
+                    str(REPO_ROOT / 'scripts' / 'run_experiment.py'),
+                    '--config', exp_dict['config'],
+                ]
+                if args.verbose:
+                    cmd.append('--verbose')
+                if args.offline:
+                    cmd.append('--offline')
+                for override in args.overrides:
+                    cmd.extend(['--set', override])
+                experiment_key = exp_dict['config']
+            else:
+                # Normal dataset/method mode
+                dataset = exp_dict['dataset']
+                method = exp_dict['method']
+                exp_obj = experiments_dict[f"{dataset}/{method}"]
+                cmd = [
+                    sys.executable,
+                    str(REPO_ROOT / 'scripts' / 'run_experiment.py'),
+                    '--dataset', dataset,
+                    '--method', method,
+                ]
+                if args.verbose:
+                    cmd.append('--verbose')
+                if args.offline:
+                    cmd.append('--offline')
+                for override in args.overrides:
+                    cmd.extend(['--set', override])
+                experiment_key = f"{dataset}/{method}"
             
             print(f"\n[{i}/{len(experiments)}] {experiment_key}")
             print("-" * 40)
             
-            # Use status-based check
-            status, _ = get_experiment_status(dataset, method, output_dir)
-            if args.skip_existing and status == PersistentStatus.FINISHED:
-                print(f"  Skipping (completed successfully)")
-                exp_obj.status = ExperimentStatus.SKIPPED
-                results['skipped'].append(experiment_key)
+            if args.dry_run:
+                print(f"  [DRY RUN] Would run: {' '.join(cmd)}")
+                results['success'].append(experiment_key)
                 continue
             
+            # Run the command
             print(f"  Running...")
             exp_obj.start_time = time.time()
-            result = run_experiment_simple(
-                dataset=dataset,
-                method=method,
-                verbose=args.verbose,
-                offline=args.offline,
-                overrides=args.overrides,
-                dry_run=args.dry_run
-            )
-            exp_obj.end_time = time.time()
+            try:
+                result = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True)
+                elapsed_time = time.time() - exp_obj.start_time
+                exp_obj.end_time = exp_obj.start_time + elapsed_time
+                
+                if result.returncode == 0:
+                    print(f"  ✓ Completed in {elapsed_time:.1f}s")
+                    exp_obj.status = ExperimentStatus.COMPLETED
+                    results['success'].append(experiment_key)
+                else:
+                    print(f"  ✗ Failed: {result.stderr[:200]}")
+                    exp_obj.status = ExperimentStatus.FAILED
+                    exp_obj.last_log_line = result.stderr[:200] if result.stderr else "Unknown error"
+                    exp_obj.return_code = result.returncode
+                    results['failed'].append(experiment_key)
+                    
+                    if not args.continue_on_error:
+                        print("\nERROR: Stopping. Use --continue-on-error to keep going.")
+                        break
+            except Exception as e:
+                exp_obj.status = ExperimentStatus.FAILED
+                exp_obj.end_time = time.time()
+                exp_obj.last_log_line = str(e)
+                results['failed'].append(experiment_key)
+                print(f"  ✗ Exception: {e}")
+                
+                if not args.continue_on_error:
+                    print("\nERROR: Stopping. Use --continue-on-error to keep going.")
+                    break
             
             if result['success']:
                 print(f"  ✓ {result['message']}")
