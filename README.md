@@ -34,6 +34,52 @@ source .venv/bin/activate
 pip install -r ./requirements.txt
 ```
 
+## Usage
+
+### Running Experiments
+
+Run counterfactual generation experiments using the `run_experiment.py` script:
+
+```bash
+# Basic usage with dataset and method
+python scripts/run_experiment.py --dataset german_credit --method dpg
+python scripts/run_experiment.py --dataset iris --method dice
+
+# Specify a custom config file
+python scripts/run_experiment.py --config configs/german_credit/config.yaml --method dpg
+
+# Override configuration parameters
+python scripts/run_experiment.py --config configs/iris/config.yaml \
+    --set counterfactual.population_size=50 \
+    --set experiment_params.seed=123
+
+# Resume a previous WandB run
+python scripts/run_experiment.py --resume <wandb_run_id>
+
+# Run in offline mode (no WandB sync)
+python scripts/run_experiment.py --config configs/iris/config.yaml --offline
+```
+
+### Exporting Results
+
+Generate comparison tables and visualizations using the `export_comparison_results.py` script:
+
+```bash
+# Full export (fetches from WandB)
+python scripts/export_comparison_results.py
+
+# Regenerate visualizations from existing local data only
+python scripts/export_comparison_results.py --local-only
+
+# Fetch specific run IDs from a YAML file
+python scripts/export_comparison_results.py --ids plans/dataset_run_ids.yaml
+
+# Fetch multiple runs for a specific dataset and method
+python scripts/export_comparison_results.py --dataset diabetes --method dpg --multiple-max 300
+```
+
+Results are exported to `outputs/_comparison_results/`, including comparison tables, winner heatmaps, radar charts, and per-dataset visualizations.
+
 ## Optional: Clean Notebook Outputs
 
 nbstripout is recommended to keep notebooks clean of output cells. Install globally and enable as a git hook:
