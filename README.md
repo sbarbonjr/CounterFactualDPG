@@ -85,7 +85,7 @@ Results are exported to `outputs/_comparison_results/`, including comparison tab
 The repository includes several helper scripts for batch processing and configuration management:
 
 - `run_all_experiments`: Run experiments across multiple datasets in parallel
-- `tune_random_forest`: Hyperparameter tuning for classification models
+- `tune_random_forest`: Hyperparameter tuning for classification models with standard metrics and custom scoring based on DPG constraint quality
 - `run_constraint_extraction`: Extract and analyze DPG constraints separately
 - Additional utilities for configuration generation and data organization
 
