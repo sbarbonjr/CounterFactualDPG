@@ -80,6 +80,17 @@ python scripts/export_comparison_results.py --dataset diabetes --method dpg --mu
 
 Results are exported to `outputs/_comparison_results/`, including comparison tables, winner heatmaps, radar charts, and per-dataset visualizations.
 
+## Additional Scripts
+
+The repository includes several helper scripts for batch processing and configuration management:
+
+- `run_all_experiments`: Run experiments across multiple datasets in parallel
+- `tune_random_forest`: Hyperparameter tuning for classification models
+- `run_constraint_extraction`: Extract and analyze DPG constraints separately
+- Additional utilities for configuration generation and data organization
+
+Run individual scripts with `--help` for usage options.
+
 ## Optional: Clean Notebook Outputs
 
 nbstripout is recommended to keep notebooks clean of output cells. Install globally and enable as a git hook:
