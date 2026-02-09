@@ -1,0 +1,9 @@
+metric,n_datasets_used,median_diff(DPG - DiCE),wilcoxon_stat,p_value_raw,effect_size_sign,p_value_holm
+plausibility_nbr_cf,16,5.048,4.0,0.0023,0.8571,0.0186
+avg_nbr_changes,16,-0.1,22.0,0.0309,-0.6,0.2161
+count_diversity_all,16,-0.058,22.0,0.0555,-0.2857,0.3332
+accuracy_knn_sklearn,16,-0.1,17.0,0.0808,-0.6667,0.404
+distance_mh,16,-0.6796,39.0,0.1439,-0.375,0.5754
+runtime,16,7.7208,43.0,0.2114,0.5,0.6343
+perc_valid_cf_all,16,0.0,0.0,1.0,0.0,1.0
+perc_actionable_cf_all,16,0.0,0.0,1.0,0.0,1.0

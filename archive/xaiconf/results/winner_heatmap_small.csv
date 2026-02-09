@@ -1,0 +1,17 @@
+Dataset,perc_valid_cf_all,perc_actionable_cf_all,distance_mh,avg_nbr_changes,count_diversity_all,accuracy_knn_sklearn,plausibility_nbr_cf,runtime
+abalone,Tie,Tie,DiCE,DPG,DiCE,DiCE,DiCE,DiCE
+bank_marketing,Tie,Tie,DPG,DiCE,DPG,DiCE,DiCE,DiCE
+customer_personality_analysis,Tie,Tie,DPG,DPG,Tie,Tie,DiCE,DiCE
+diabetes,Tie,Tie,DPG,Tie,DPG,DiCE,DiCE,DiCE
+ecoli,Tie,Tie,DPG,DiCE,DPG,DiCE,DiCE,DiCE
+education_dataset,Tie,Tie,DiCE,DPG,Tie,DiCE,DiCE,DiCE
+energy_dataset,Tie,Tie,DPG,DPG,DiCE,DPG,DiCE,DiCE
+healthcare_dataset_stroke,Tie,Tie,DPG,DPG,DiCE,DPG,Tie,DPG
+iris,Tie,Tie,DPG,DPG,DiCE,Tie,DPG,DiCE
+isolet,Tie,Tie,DiCE,DPG,DiCE,DiCE,DiCE,DiCE
+libras_move,Tie,Tie,DPG,DPG,DiCE,Tie,DiCE,DPG
+mammography,Tie,Tie,DiCE,DPG,DPG,DiCE,DiCE,DiCE
+satimage,Tie,Tie,DPG,DiCE,DPG,DiCE,DiCE,DiCE
+scene,Tie,Tie,DiCE,DPG,DiCE,DiCE,DiCE,DPG
+us_crime,Tie,Tie,DPG,DPG,DiCE,DiCE,DiCE,DiCE
+yeast_ml8,Tie,Tie,DPG,DPG,DiCE,Tie,Tie,DPG

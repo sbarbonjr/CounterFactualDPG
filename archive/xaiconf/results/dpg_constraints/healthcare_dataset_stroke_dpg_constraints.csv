@@ -1,0 +1,12 @@
+class,feature,min,max
+Class 0,id,2418.5,2418.5
+Class 0,age,50.5,76.5
+Class 0,bmi,20.25,45.3
+Class 0,work_type,3.5,3.5
+Class 0,ever_married,0.5,0.5
+Class 0,hypertension,0.5,0.5
+Class 0,heart_disease,0.5,0.5
+Class 0,avg_glucose_level,75.105,172.185
+Class 1,age,32.0,
+Class 1,bmi,,20.25
+Class 1,avg_glucose_level,162.045,162.58

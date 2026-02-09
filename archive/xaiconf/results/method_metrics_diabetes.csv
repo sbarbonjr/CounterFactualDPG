@@ -1,0 +1,3 @@
+technique,perc_valid_cf_all ↑,distance_mh ↓,perc_actionable_cf_all ↑,plausibility_nbr_cf ↓,runtime ↓,count_diversity_all ↑,avg_nbr_changes ↓,accuracy_knn_sklearn ↑,Link
+dice,1.0,10.305998349317788,1.0,5.751164130511239,0.08112740516662598,0.26,0.675,0.8,https://wandb.ai/mllab-ts-universit-di-trieste/CounterFactualDPG/runs/j69ldjbu
+dpg,1.0,3.2104928855492183,1.0,6.055496515416389,4.130602112505585,0.295,0.675,0.6,https://wandb.ai/mllab-ts-universit-di-trieste/CounterFactualDPG/runs/9aecmenw

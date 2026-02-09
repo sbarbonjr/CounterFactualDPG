@@ -1,0 +1,10 @@
+class,feature,min,max
+Class 0,petal width (cm),,0.8
+Class 0,petal length (cm),,2.6
+Class 0,sepal length (cm),,5.45
+Class 1,petal width (cm),0.7,1.75
+Class 1,petal length (cm),2.45,5.05
+Class 1,sepal length (cm),5.45,6.05
+Class 2,petal width (cm),0.7,
+Class 2,petal length (cm),2.45,
+Class 2,sepal length (cm),5.45,
