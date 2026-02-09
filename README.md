@@ -1,19 +1,30 @@
 # CounterFactualDPG
 
-For Linux/Mac Users:
-  ```bash
-  # Create a virtual environment
-  python -m venv .venv
+A counterfactual explanation framework built on top of DPG. This project implements counterfactual generation methods for machine learning models, providing tools for explanation generation, evaluation, and visualization across multiple datasets.
 
-  # Activate the virtual environment
-  source .venv/bin/activate
+## Project Relations
 
-  # Install DPG
-  pip install -r ./requirements.txt
-  ```
-nbstripout is recommended to keep notebooks clean of output cells. This one is better installed globally, then enabled as a hook in the repository:
+- **Parent Project**: [DPG](https://github.com/Meta-Group/DPG) - Direct Policy Gradient optimization framework
+- **Sibling Project**: [DPG-augmentation](https://github.com/Meta-Group/DPG-augmentation) - Data augmentation techniques for DPG
 
-  ```bash
-  pip install nbstripout
-  nbstripout --install
+## Installation
+
+```bash
+# Create a virtual environment
+python -m venv .venv
+
+# Activate the virtual environment
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r ./requirements.txt
+```
+
+## Optional: Clean Notebook Outputs
+
+nbstripout is recommended to keep notebooks clean of output cells. Install globally and enable as a git hook:
+
+```bash
+pip install nbstripout
+nbstripout --install
 ```
